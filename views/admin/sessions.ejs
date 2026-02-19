@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sessões &mdash; Admin BP</title>
+  <%- include('_head') %>
+</head>
+<body>
+  <%- include('_nav', { page: pageObj }) %>
+
+  <main class="container">
+    <h2 class="page-title">Sessões de acesso</h2>
+
+    <p class="meta"><%= total %> sessão(ões) no total &mdash; página <%= pageLabel %> de <%= totalPages || 1 %></p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Usuário</th>
+            <th>IP</th>
+            <th>MAC</th>
+            <th>Início</th>
+            <th>Expira em</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (sessions.length === 0) { %>
+            <tr><td colspan="6" style="text-align:center;color:#9ca3af">Nenhuma sessão registrada.</td></tr>
+          <% } %>
+          <% sessions.forEach(s => { %>
+            <tr>
+              <td><%= s.nome %></td>
+              <td><%= s.ip %></td>
+              <td><%= s.mac %></td>
+              <td><%= s.started_at %></td>
+              <td><%= s.expires_at %></td>
+              <td>
+                <% if (s.status === 'Ativa') { %>
+                  <span class="badge badge-green">Ativa</span>
+                <% } else { %>
+                  <span class="badge badge-gray">Expirada</span>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <% if (page > 0) { %>
+        <a href="/admin/sessions?page=<%= page - 1 %>">&larr; Anterior</a>
+      <% } %>
+      <span class="current">Página <%= pageLabel %></span>
+      <% if (page + 1 < totalPages) { %>
+        <a href="/admin/sessions?page=<%= page + 1 %>">Próxima &rarr;</a>
+      <% } %>
+    </div>
+  </main>
+
+  <%- include('_footer') %>
+</body>
+</html>

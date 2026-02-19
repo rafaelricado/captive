@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Hospital BP</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: sans-serif;
+      background: #f0f4f8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,.10);
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 380px;
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .logo h1 { font-size: 1.3rem; color: #0d4e8b; }
+    .logo p  { font-size: .85rem; color: #6b7280; margin-top: 4px; }
+    label { display: block; font-size: .875rem; color: #374151; margin-bottom: 6px; font-weight: 500; }
+    .field { margin-bottom: 16px; }
+    input[type="text"], input[type="password"] {
+      width: 100%; padding: 10px 12px;
+      border: 1px solid #d1d5db; border-radius: 8px;
+      font-size: 1rem; outline: none;
+      transition: border-color .15s;
+    }
+    input[type="text"]:focus, input[type="password"]:focus { border-color: #0d4e8b; }
+    button {
+      margin-top: 20px; width: 100%; padding: 11px;
+      background: #0d4e8b; color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 1rem; font-weight: 600;
+      cursor: pointer; transition: background .15s;
+    }
+    button:hover { background: #093d6e; }
+    .error {
+      background: #fee2e2; border: 1px solid #fca5a5;
+      color: #b91c1c; border-radius: 8px;
+      padding: 10px 14px; font-size: .875rem;
+      margin-bottom: 18px;
+    }
+    footer { text-align: center; font-size: .75rem; color: #9ca3af; margin-top: 28px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <h1>Painel Administrativo</h1>
+      <p>Hospital Beneficiente Portuguesa</p>
+    </div>
+
+    <% if (error) { %>
+      <div class="error"><%= error %></div>
+    <% } %>
+
+    <form method="POST" action="/admin/login">
+      <div class="field">
+        <label for="username">Usuário</label>
+        <input type="text" id="username" name="username" value="<%= username %>" autofocus required autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="password">Senha</label>
+        <input type="password" id="password" name="password" required autocomplete="current-password">
+      </div>
+      <button type="submit">Entrar</button>
+    </form>
+
+    <footer>BP TI &mdash; Acesso restrito</footer>
+  </div>
+</body>
+</html>

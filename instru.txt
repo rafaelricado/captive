@@ -1,0 +1,10 @@
+Instruções para aplicação:
+
+Preciso de um sistema para ser captive portal
+Será usado Mikrotik
+Autenticação deve ter um cadastro de pessoa fisica no qual deve conter Informação de Nome Completo, CPF com validador, e-mail, Endereço Completo utilizando CEP para autocompletar o cadastro para depois ser completado com Numero
+Adicionar obrigatoriedade do numero de telefone, apos o usuario se autenticar ele poderá utilizar internet
+ter configuração para expirar o tempo de acesso. como padrão deve vir com 2 dias apos isso o usuario deve ser reautenticar
+no rodapé deve ter a informação do nome da empresa Hospital Beneficiente Portuguesa
+e colocar que foi desenvolvido por BP TI
+toda insfraestrutura será local portanto preciso local, irei utilizar o ubuntu.

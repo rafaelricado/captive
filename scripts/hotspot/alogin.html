@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta http-equiv="pragma" content="no-cache">
+<meta http-equiv="expires" content="-1">
+<title>Conectado</title>
+<!--
+  Pagina exibida pelo Mikrotik apos login bem-sucedido.
+  Redireciona para a URL original ou para a pagina de sucesso do portal.
+  EDITE PORTAL_SERVER se necessario.
+-->
+<script>
+(function() {
+  var PORTAL_SERVER = "http://192.168.1.10:3000";
+  var linkOrig = "$(link-orig)";
+
+  var dest = (linkOrig && linkOrig.indexOf("http") === 0)
+    ? linkOrig
+    : PORTAL_SERVER + "/success";
+
+  window.location.replace(dest);
+})();
+</script>
+</head>
+<body>
+<center>Conectado! Redirecionando...</center>
+</body>
+</html>

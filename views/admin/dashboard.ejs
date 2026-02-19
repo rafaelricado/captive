@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard &mdash; Admin BP</title>
+  <%- include('_head') %>
+</head>
+<body>
+  <%- include('_nav', { page }) %>
+
+  <main class="container">
+    <h2 class="page-title">Dashboard</h2>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-value"><%= totalUsers %></div>
+        <div class="card-label">Total de usuários</div>
+      </div>
+      <div class="card card-green">
+        <div class="card-value"><%= activeSessions %></div>
+        <div class="card-label">Sessões ativas agora</div>
+      </div>
+      <div class="card">
+        <div class="card-value"><%= novosHoje %></div>
+        <div class="card-label">Novos cadastros hoje</div>
+      </div>
+      <div class="card">
+        <div class="card-value"><%= novosSemana %></div>
+        <div class="card-label">Novos cadastros esta semana</div>
+      </div>
+    </div>
+
+    <div class="quick-links">
+      <a href="/admin/users" class="btn-outline">Ver lista de usuários &rarr;</a>
+      <a href="/admin/sessions" class="btn-outline">Ver sessões &rarr;</a>
+    </div>
+  </main>
+
+  <%- include('_footer') %>
+</body>
+</html>

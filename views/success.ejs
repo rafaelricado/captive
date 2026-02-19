@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conectado - Hospital Beneficiente Portuguesa</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo-area">
+        <h1>Wi-Fi Visitantes</h1>
+        <p class="subtitle">Hospital Beneficiente Portuguesa</p>
+      </div>
+    </header>
+
+    <div class="success-card">
+      <div class="success-icon">&#10003;</div>
+      <h2>Conectado com sucesso!</h2>
+      <p>Bem-vindo(a), <strong><%= nome %></strong>!</p>
+      <p>Sua conexao Wi-Fi foi liberada.</p>
+      <p class="session-info">Sua sessao expira em <strong>2 dias</strong>. Apos esse periodo, sera necessario autenticar novamente.</p>
+
+      <% if (linkOrig && /^https?:\/\//i.test(linkOrig)) { %>
+        <a href="<%= linkOrig %>" class="btn btn-primary">Continuar navegando</a>
+      <% } else { %>
+        <p class="redirect-info">Voce ja pode navegar na internet normalmente.</p>
+      <% } %>
+    </div>
+
+    <footer>
+      <p class="footer-empresa">Hospital Beneficiente Portuguesa</p>
+      <p class="footer-dev">Desenvolvido por BP TI</p>
+    </footer>
+  </div>
+</body>
+</html>

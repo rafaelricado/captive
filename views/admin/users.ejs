@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Usuários &mdash; Admin BP</title>
+  <%- include('_head') %>
+</head>
+<body>
+  <%- include('_nav', { page: pageObj }) %>
+
+  <main class="container">
+    <h2 class="page-title">Usuários cadastrados</h2>
+
+    <p class="meta"><%= total %> usuário(s) no total &mdash; página <%= pageLabel %> de <%= totalPages || 1 %></p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Nome completo</th>
+            <th>CPF</th>
+            <th>E-mail</th>
+            <th>Telefone</th>
+            <th>Cidade/UF</th>
+            <th>Cadastro</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (users.length === 0) { %>
+            <tr><td colspan="6" style="text-align:center;color:#9ca3af">Nenhum usuário cadastrado.</td></tr>
+          <% } %>
+          <% users.forEach(u => { %>
+            <tr>
+              <td><%= u.nome_completo %></td>
+              <td><%= u.cpf %></td>
+              <td><%= u.email %></td>
+              <td><%= u.telefone %></td>
+              <td><%= u.cidade %></td>
+              <td><%= u.created_at %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <% if (page > 0) { %>
+        <a href="/admin/users?page=<%= page - 1 %>">&larr; Anterior</a>
+      <% } %>
+      <span class="current">Página <%= pageLabel %></span>
+      <% if (page + 1 < totalPages) { %>
+        <a href="/admin/users?page=<%= page + 1 %>">Próxima &rarr;</a>
+      <% } %>
+    </div>
+  </main>
+
+  <%- include('_footer') %>
+</body>
+</html>

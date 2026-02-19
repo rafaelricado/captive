@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta http-equiv="pragma" content="no-cache">
+<meta http-equiv="expires" content="-1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redirecionando para o portal...</title>
+<!--
+  Captive Portal - Hospital Beneficiente Portuguesa - BP TI
+
+  Este arquivo e servido pelo Mikrotik Hotspot.
+  As variaveis $(mac), $(ip), $(link-orig) sao substituidas
+  automaticamente pelo RouterOS antes de enviar ao cliente.
+
+  EDITE APENAS a linha "var PORTAL_SERVER" abaixo,
+  colocando o IP e porta do servidor Ubuntu.
+-->
+<style>
+  body { font-family: sans-serif; text-align: center; padding: 40px; background: #f0f4f8; }
+  p { color: #555; }
+  a { color: #0d4e8b; }
+</style>
+<script>
+(function() {
+  // ==================================================
+  // EDITE AQUI: IP e porta do servidor Captive Portal
+  var PORTAL_SERVER = "http://192.168.1.10:3000";
+  // ==================================================
+
+  // Variaveis substituidas pelo Mikrotik Hotspot (nao edite)
+  var mac      = "$(mac)";
+  var ip       = "$(ip)";
+  var username = "$(username)";
+  var linkOrig = "$(link-orig)";
+
+  // Monta URL de redirecionamento
+  var url = PORTAL_SERVER
+    + "/?mac="      + encodeURIComponent(mac)
+    + "&ip="        + encodeURIComponent(ip)
+    + "&username="  + encodeURIComponent(username)
+    + "&link-orig=" + encodeURIComponent(linkOrig);
+
+  // Atualiza o link manual antes de redirecionar
+  document.addEventListener("DOMContentLoaded", function() {
+    var link = document.getElementById("manual-link");
+    if (link) link.href = url;
+  });
+
+  // Redireciona imediatamente
+  window.location.replace(url);
+})();
+</script>
+</head>
+<body>
+  <p>Redirecionando para o portal de autenticacao...</p>
+  <p><small>Se nao for redirecionado automaticamente,
+    <a id="manual-link" href="#">clique aqui</a>.
+  </small></p>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "captive-portal-bp",
+  "version": "1.0.0",
+  "description": "Captive Portal - Hospital Beneficiente Portuguesa",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "ejs": "^3.1.10",
+    "express": "^4.21.0",
+    "node-cron": "^3.0.3",
+    "pg": "^8.13.0",
+    "pg-hstore": "^2.3.4",
+    "node-routeros": "^1.6.0",
+    "sequelize": "^6.37.0",
+    "express-session": "^1.18.0"
+  }
+}
