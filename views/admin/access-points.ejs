@@ -218,7 +218,7 @@
               </td>
               <td id="checked-<%= ap.id %>"><%= ap.last_checked_at %></td>
               <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-                <button type="button" class="btn-hist" onclick="showHistory('<%= ap.id %>', <%- JSON.stringify(ap.name) %>)">Histórico</button>
+                <button type="button" class="btn-hist" data-id="<%= ap.id %>" data-name="<%= ap.name %>">Histórico</button>
                 <form method="POST" action="/admin/access-points/<%= ap.id %>/delete"
                       onsubmit="return confirm('Remover ' + <%- JSON.stringify(ap.name) %> + ' do monitoramento?')">
                   <button type="submit" class="btn-del">Remover</button>
@@ -257,6 +257,17 @@
   </main>
 
   <%- include('_footer') %>
+
+  <!-- Modal de histórico de latência (antes do script para que getElementById funcione) -->
+  <div class="modal-overlay hidden" id="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Histórico</h3>
+        <button class="modal-close" onclick="closeModal()">&#215;</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
 
   <script>
     // Formata data ISO para pt-BR
@@ -397,20 +408,17 @@
       document.getElementById('modal-overlay').classList.add('hidden');
     }
 
+    // Botões de histórico: usa data attributes para evitar problemas de escape HTML no onclick
+    document.querySelectorAll('.btn-hist').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        showHistory(this.dataset.id, this.dataset.name);
+      });
+    });
+
+    // Fechar modal clicando fora
     document.getElementById('modal-overlay').addEventListener('click', function(e) {
       if (e.target === this) closeModal();
     });
   </script>
-
-  <!-- Modal de histórico de latência -->
-  <div class="modal-overlay hidden" id="modal-overlay">
-    <div class="modal">
-      <div class="modal-header">
-        <h3 id="modal-title">Histórico</h3>
-        <button class="modal-close" onclick="closeModal()">&#215;</button>
-      </div>
-      <div class="modal-body" id="modal-body"></div>
-    </div>
-  </div>
 </body>
 </html>
