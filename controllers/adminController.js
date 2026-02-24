@@ -35,7 +35,9 @@ function startOfDay() {
 
 function startOfWeek() {
   const d = new Date();
-  d.setDate(d.getDate() - d.getDay());
+  const day = d.getDay(); // 0=Dom, 1=Seg, ..., 6=Sáb
+  const diff = day === 0 ? 6 : day - 1; // dias desde a segunda-feira
+  d.setDate(d.getDate() - diff);
   d.setHours(0, 0, 0, 0);
   return d;
 }
@@ -209,7 +211,7 @@ exports.deleteUser = async (req, res) => {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.redirect('/admin/users');
 
-    await mikrotikService.removeUser(user.cpf);
+    await mikrotikService.removeUser(user.cpf, true); // fullDelete: remove hotspot user (LGPD)
     await Session.destroy({ where: { user_id: user.id } });
     await user.destroy();
 

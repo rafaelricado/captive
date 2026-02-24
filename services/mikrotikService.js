@@ -2,6 +2,7 @@ const { RouterOSAPI } = require('node-routeros');
 
 let api = null;
 let apiConnected = false;
+let connectingPromise = null; // previne múltiplas conexões simultâneas (race condition)
 
 // Remove caracteres especiais que podem causar problemas no campo comment do RouterOS
 function sanitizeComment(str) {
@@ -11,26 +12,35 @@ function sanitizeComment(str) {
 async function getApi() {
   if (api && apiConnected) return api;
 
-  apiConnected = false;
-  api = new RouterOSAPI({
-    host: process.env.MIKROTIK_HOST,
-    user: process.env.MIKROTIK_USER,
-    password: process.env.MIKROTIK_PASS,
-    port: parseInt(process.env.MIKROTIK_PORT || '8728', 10),
-    timeout: 10
+  // Se já há uma tentativa de conexão em andamento, aguarda ela terminar
+  if (connectingPromise) return connectingPromise;
+
+  connectingPromise = (async () => {
+    apiConnected = false;
+    api = new RouterOSAPI({
+      host: process.env.MIKROTIK_HOST,
+      user: process.env.MIKROTIK_USER,
+      password: process.env.MIKROTIK_PASS,
+      port: parseInt(process.env.MIKROTIK_PORT || '8728', 10),
+      timeout: 10
+    });
+
+    try {
+      await api.connect();
+      apiConnected = true;
+      console.log('[Mikrotik] Conectado ao RouterOS v7');
+      return api;
+    } catch (err) {
+      console.error('[Mikrotik] Erro ao conectar:', err.message);
+      api = null;
+      apiConnected = false;
+      throw err;
+    }
+  })().finally(() => {
+    connectingPromise = null;
   });
 
-  try {
-    await api.connect();
-    apiConnected = true;
-    console.log('[Mikrotik] Conectado ao RouterOS v7');
-    return api;
-  } catch (err) {
-    console.error('[Mikrotik] Erro ao conectar:', err.message);
-    api = null;
-    apiConnected = false;
-    throw err;
-  }
+  return connectingPromise;
 }
 
 async function authorizeUser(mac, ip, cpf, nomeCompleto) {
@@ -90,7 +100,15 @@ async function authorizeUser(mac, ip, cpf, nomeCompleto) {
   }
 }
 
-async function removeUser(cpf) {
+/**
+ * Remove o acesso do usuário no Mikrotik.
+ *
+ * @param {string} cpf - CPF do usuário (11 dígitos)
+ * @param {boolean} fullDelete - Se true, remove também o usuário do hotspot (usar em exclusão por LGPD).
+ *                               Se false (padrão), remove apenas o IP binding (sessão encerrada/expirada —
+ *                               o usuário pode voltar a se autenticar pelo portal).
+ */
+async function removeUser(cpf, fullDelete = false) {
   try {
     const conn = await getApi();
 
@@ -103,6 +121,19 @@ async function removeUser(cpf) {
       await conn.write('/ip/hotspot/ip-binding/remove', [
         `=.id=${binding['.id']}`
       ]);
+    }
+
+    // Remoção completa: remove o usuário do hotspot (exclusão por LGPD / admin)
+    if (fullDelete) {
+      const hotspotUsers = await conn.write('/ip/hotspot/user/print', [
+        `?name=${cpf}`
+      ]);
+      for (const u of hotspotUsers) {
+        await conn.write('/ip/hotspot/user/remove', [
+          `=.id=${u['.id']}`
+        ]);
+      }
+      console.log(`[Mikrotik] Usuário hotspot removido: ${cpf}`);
     }
 
     console.log(`[Mikrotik] Autorizações removidas para: ${cpf}`);

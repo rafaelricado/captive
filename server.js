@@ -28,6 +28,12 @@ const adminRoutes = require('./routes/admin');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Confia em um nível de proxy reverso (nginx) para X-Forwarded-For e X-Forwarded-Proto
+// Necessário para rate limiting correto e flag Secure no cookie quando atrás do nginx
+if (process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', 1);
+}
+
 // Cabeçalhos de segurança HTTP
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -56,6 +62,7 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
+    secure: process.env.HTTPS_ENABLED === 'true', // ativar quando nginx+SSL estiver ativo
     sameSite: 'lax',          // Proteção CSRF: bloqueia envio cross-origin
     maxAge: 8 * 60 * 60 * 1000 // 8 horas
   }

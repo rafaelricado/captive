@@ -81,7 +81,7 @@
               <td><%= u.created_at %></td>
               <td>
                 <form method="POST" action="/admin/users/<%= u.id %>/delete"
-                      onsubmit="return confirm('Excluir permanentemente os dados de <%= u.nome_completo.replace(/'/g, '') %>?\n\nEsta ação não pode ser desfeita.')">
+                      onsubmit="return confirm('Excluir permanentemente os dados de ' + <%- JSON.stringify(u.nome_completo) %> + '?\n\nEsta ação não pode ser desfeita.')">
                   <button type="submit" class="btn-delete">Excluir</button>
                 </form>
               </td>

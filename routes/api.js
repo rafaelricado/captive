@@ -14,7 +14,7 @@ const authLimiter = rateLimit({
     const { mac, ip, linkOrig } = req.body;
     try {
       const [orgName, orgLogo, bgColor1, bgColor2] = await Promise.all([
-        Setting.get('organization_name', 'Hospital Beneficiente Portuguesa'),
+        Setting.get('organization_name', 'Captive Portal'),
         Setting.get('organization_logo', ''),
         Setting.get('portal_bg_color_1', '#0d4e8b'),
         Setting.get('portal_bg_color_2', '#1a7bc4')
@@ -34,8 +34,17 @@ const authLimiter = rateLimit({
   }
 });
 
+// Limita consulta de CEP: 60 requisições a cada 10 minutos por IP
+const cepLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Muitas consultas. Aguarde alguns minutos.' }
+});
+
 router.post('/register', authLimiter, apiController.register);
 router.post('/login', authLimiter, apiController.login);
-router.get('/cep/:cep', apiController.consultaCep);
+router.get('/cep/:cep', cepLimiter, apiController.consultaCep);
 
 module.exports = router;
