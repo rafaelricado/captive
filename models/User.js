@@ -73,6 +73,10 @@ const User = sequelize.define('User', {
   nome_mae: {
     type: DataTypes.STRING,
     allowNull: true  // obrigatório apenas para menores de 18 anos (validado no controller)
+  },
+  lgpd_accepted_at: {
+    type: DataTypes.DATE,
+    allowNull: true  // null = usuários anteriores à implementação da LGPD
   }
 }, {
   tableName: 'users',

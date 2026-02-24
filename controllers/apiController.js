@@ -41,7 +41,7 @@ exports.register = async (req, res) => {
     nome_completo, cpf, email, telefone,
     cep, logradouro, bairro, cidade, estado,
     numero, complemento, mac, ip, linkOrig,
-    data_nascimento, nome_mae
+    data_nascimento, nome_mae, lgpd_consent
   } = req.body;
 
   const renderError = async (error) => {
@@ -50,6 +50,8 @@ exports.register = async (req, res) => {
   };
 
   try {
+    if (!lgpd_consent) return await renderError('Você deve aceitar a Política de Privacidade para continuar.');
+
     if (!cpf) return await renderError('CPF é obrigatório.');
     const cpfClean = cpf.replace(/\D/g, '');
 
@@ -90,7 +92,8 @@ exports.register = async (req, res) => {
         numero: numero.trim(),
         complemento: complemento ? complemento.trim() : null,
         data_nascimento: dataNascISO,
-        nome_mae: idade < 18 ? nome_mae.trim() : null
+        nome_mae: idade < 18 ? nome_mae.trim() : null,
+        lgpd_accepted_at: new Date()
       });
       user = existingUser;
       isNewUser = false;
@@ -105,7 +108,8 @@ exports.register = async (req, res) => {
         numero: numero.trim(),
         complemento: complemento ? complemento.trim() : null,
         data_nascimento: dataNascISO,
-        nome_mae: idade < 18 ? nome_mae.trim() : null
+        nome_mae: idade < 18 ? nome_mae.trim() : null,
+        lgpd_accepted_at: new Date()
       });
     }
 

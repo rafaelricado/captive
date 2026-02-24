@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sessões &mdash; Captive Portal</title>
   <%- include('_head') %>
+  <style>
+    .btn-terminate {
+      padding: 4px 10px; background: none; border: 1px solid #ef4444;
+      color: #ef4444; border-radius: 6px; font-size: .78rem; cursor: pointer;
+    }
+    .btn-terminate:hover { background: #ef4444; color: #fff; }
+  </style>
 </head>
 <body>
   <%- include('_nav', { page: pageObj }) %>
@@ -24,11 +31,12 @@
             <th>Início</th>
             <th>Expira em</th>
             <th>Status</th>
+            <th>Ação</th>
           </tr>
         </thead>
         <tbody>
           <% if (sessions.length === 0) { %>
-            <tr><td colspan="6" style="text-align:center;color:#9ca3af">Nenhuma sessão registrada.</td></tr>
+            <tr><td colspan="7" style="text-align:center;color:#9ca3af">Nenhuma sessão registrada.</td></tr>
           <% } %>
           <% sessions.forEach(s => { %>
             <tr>
@@ -42,6 +50,16 @@
                   <span class="badge badge-green">Ativa</span>
                 <% } else { %>
                   <span class="badge badge-gray">Expirada</span>
+                <% } %>
+              </td>
+              <td>
+                <% if (s.status === 'Ativa') { %>
+                  <form method="POST" action="/admin/sessions/<%= s.id %>/terminate"
+                        onsubmit="return confirm('Encerrar a sessão de <%= s.nome.replace(/\'/g, '') %>?')">
+                    <button type="submit" class="btn-terminate">Encerrar</button>
+                  </form>
+                <% } else { %>
+                  &mdash;
                 <% } %>
               </td>
             </tr>

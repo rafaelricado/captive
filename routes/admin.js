@@ -42,10 +42,10 @@ const upload = multer({
 // Middleware: injeta configurações de marca em res.locals para todas as rotas admin
 router.use(async (req, res, next) => {
   try {
-    res.locals.orgName = await Setting.get('organization_name', 'Hospital Beneficiente Portuguesa');
+    res.locals.orgName = await Setting.get('organization_name', 'Captive Portal');
     res.locals.orgLogo = await Setting.get('organization_logo', '');
   } catch (_) {
-    res.locals.orgName = 'Hospital Beneficiente Portuguesa';
+    res.locals.orgName = 'Captive Portal';
     res.locals.orgLogo = '';
   }
   next();
@@ -59,7 +59,10 @@ router.post('/logout', adminController.logout);
 // Painel (protegido)
 router.get('/', adminAuth, adminController.dashboard);
 router.get('/users', adminAuth, adminController.users);
+router.get('/users/export', adminAuth, adminController.exportUsers);
+router.post('/users/:id/delete', adminAuth, adminController.deleteUser);
 router.get('/sessions', adminAuth, adminController.sessions);
+router.post('/sessions/:id/terminate', adminAuth, adminController.terminateSession);
 
 // Configurações (protegido)
 router.get('/settings', adminAuth, adminController.showSettings);

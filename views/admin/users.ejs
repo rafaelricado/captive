@@ -5,6 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Usuários &mdash; Captive Portal</title>
   <%- include('_head') %>
+  <style>
+    .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .search-form { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 240px; }
+    .search-form input[type="text"] {
+      flex: 1; padding: 8px 12px; border: 1px solid #d1d5db;
+      border-radius: 8px; font-size: .875rem; color: #1f2937;
+    }
+    .search-form input[type="text"]:focus { outline: none; border-color: #0d4e8b; box-shadow: 0 0 0 3px rgba(13,78,139,.12); }
+    .btn-search {
+      padding: 8px 16px; background: #0d4e8b; color: #fff;
+      border: none; border-radius: 8px; font-size: .875rem; cursor: pointer;
+    }
+    .btn-search:hover { background: #0a3d6e; }
+    .link-clear { font-size: .8rem; color: #6b7280; white-space: nowrap; }
+    .btn-export {
+      padding: 8px 16px; background: #15803d; color: #fff;
+      border-radius: 8px; font-size: .875rem; text-decoration: none; white-space: nowrap;
+    }
+    .btn-export:hover { background: #166534; }
+    .btn-delete {
+      padding: 4px 10px; background: none; border: 1px solid #ef4444;
+      color: #ef4444; border-radius: 6px; font-size: .78rem; cursor: pointer;
+    }
+    .btn-delete:hover { background: #ef4444; color: #fff; }
+  </style>
 </head>
 <body>
   <%- include('_nav', { page: pageObj }) %>
@@ -12,7 +37,18 @@
   <main class="container">
     <h2 class="page-title">Usuários cadastrados</h2>
 
-    <p class="meta"><%= total %> usuário(s) no total &mdash; página <%= pageLabel %> de <%= totalPages || 1 %></p>
+    <div class="toolbar">
+      <form method="GET" action="/admin/users" class="search-form">
+        <input type="text" name="search" value="<%= search %>" placeholder="Buscar por nome, CPF ou e-mail...">
+        <button type="submit" class="btn-search">Buscar</button>
+        <% if (search) { %>
+          <a href="/admin/users" class="link-clear">Limpar</a>
+        <% } %>
+      </form>
+      <a href="/admin/users/export" class="btn-export">Exportar CSV</a>
+    </div>
+
+    <p class="meta"><%= total %> usuário(s)<% if (search) { %> encontrado(s) para "<%= search %>"<% } else { %> no total<% } %> &mdash; página <%= pageLabel %> de <%= totalPages || 1 %></p>
 
     <div class="table-wrap">
       <table>
@@ -26,11 +62,12 @@
             <th>Telefone</th>
             <th>Cidade/UF</th>
             <th>Cadastro</th>
+            <th>Ação</th>
           </tr>
         </thead>
         <tbody>
           <% if (users.length === 0) { %>
-            <tr><td colspan="8" style="text-align:center;color:#9ca3af">Nenhum usuário cadastrado.</td></tr>
+            <tr><td colspan="9" style="text-align:center;color:#9ca3af">Nenhum usuário encontrado.</td></tr>
           <% } %>
           <% users.forEach(u => { %>
             <tr>
@@ -42,6 +79,12 @@
               <td><%= u.telefone %></td>
               <td><%= u.cidade %></td>
               <td><%= u.created_at %></td>
+              <td>
+                <form method="POST" action="/admin/users/<%= u.id %>/delete"
+                      onsubmit="return confirm('Excluir permanentemente os dados de <%= u.nome_completo.replace(/'/g, '') %>?\n\nEsta ação não pode ser desfeita.')">
+                  <button type="submit" class="btn-delete">Excluir</button>
+                </form>
+              </td>
             </tr>
           <% }) %>
         </tbody>
@@ -50,11 +93,11 @@
 
     <div class="pagination">
       <% if (page > 0) { %>
-        <a href="/admin/users?page=<%= page - 1 %>">&larr; Anterior</a>
+        <a href="/admin/users?page=<%= page - 1 %><%= search ? '&search=' + encodeURIComponent(search) : '' %>">&larr; Anterior</a>
       <% } %>
       <span class="current">Página <%= pageLabel %></span>
       <% if (page + 1 < totalPages) { %>
-        <a href="/admin/users?page=<%= page + 1 %>">Próxima &rarr;</a>
+        <a href="/admin/users?page=<%= page + 1 %><%= search ? '&search=' + encodeURIComponent(search) : '' %>">Próxima &rarr;</a>
       <% } %>
     </div>
   </main>

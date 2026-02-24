@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { Op } = require('sequelize');
 const { User, Session, Setting } = require('../models');
+const mikrotikService = require('../services/mikrotikService');
 
 // Comparação de strings em tempo constante (previne timing attacks)
 function safeEqual(a, b) {
@@ -128,14 +129,25 @@ exports.users = async (req, res) => {
   try {
     const page = Math.max(0, parseInt(req.query.page || '0', 10) || 0);
     const offset = page * PAGE_SIZE;
+    const search = (req.query.search || '').trim();
+
+    const where = search ? {
+      [Op.or]: [
+        { nome_completo: { [Op.iLike]: `%${search}%` } },
+        { cpf: { [Op.iLike]: `%${search}%` } },
+        { email: { [Op.iLike]: `%${search}%` } }
+      ]
+    } : {};
 
     const { count, rows } = await User.findAndCountAll({
+      where,
       order: [['created_at', 'DESC']],
       limit: PAGE_SIZE,
       offset
     });
 
     const users = rows.map(u => ({
+      id: u.id,
       nome_completo: u.nome_completo,
       cpf: maskCpf(u.cpf),
       email: u.email,
@@ -148,6 +160,7 @@ exports.users = async (req, res) => {
 
     res.render('admin/users', {
       users,
+      search,
       page,
       totalPages: Math.ceil(count / PAGE_SIZE),
       total: count,
@@ -156,6 +169,54 @@ exports.users = async (req, res) => {
     });
   } catch (err) {
     console.error('[Admin] Erro ao listar usuários:', err.message);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+exports.exportUsers = async (req, res) => {
+  try {
+    const users = await User.findAll({ order: [['created_at', 'DESC']] });
+
+    const escapeCSV = (val) => {
+      if (val == null) return '';
+      const s = String(val);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    };
+
+    const header = 'Nome,CPF,Email,Telefone,Cidade,UF,Nascimento,Nome Mae,Cadastro';
+    const rows = users.map(u => [
+      u.nome_completo, u.cpf, u.email, u.telefone,
+      u.cidade || '', u.estado || '',
+      u.data_nascimento || '', u.nome_mae || '',
+      new Date(u.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+    ].map(escapeCSV).join(','));
+
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="usuarios_${date}.csv"`);
+    res.send('\uFEFF' + header + '\n' + rows.join('\n'));
+  } catch (err) {
+    console.error('[Admin] Erro ao exportar usuários:', err.message);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+exports.deleteUser = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id);
+    if (!user) return res.redirect('/admin/users');
+
+    await mikrotikService.removeUser(user.cpf);
+    await Session.destroy({ where: { user_id: user.id } });
+    await user.destroy();
+
+    console.log(`[Admin] Usuário ${user.cpf} excluído.`);
+    res.redirect('/admin/users');
+  } catch (err) {
+    console.error('[Admin] Erro ao excluir usuário:', err.message);
     res.status(500).send('Erro interno.');
   }
 };
@@ -177,6 +238,7 @@ exports.sessions = async (req, res) => {
     });
 
     const sessions = rows.map(s => ({
+      id: s.id,
       nome: s.User ? s.User.nome_completo : '—',
       ip: s.ip_address || '—',
       mac: s.mac_address || '—',
@@ -199,13 +261,32 @@ exports.sessions = async (req, res) => {
   }
 };
 
+exports.terminateSession = async (req, res) => {
+  try {
+    const session = await Session.findByPk(req.params.id, {
+      include: [{ model: User, attributes: ['cpf'] }]
+    });
+    if (!session || !session.active) return res.redirect('/admin/sessions');
+
+    await mikrotikService.removeUser(session.User.cpf);
+    session.active = false;
+    await session.save();
+
+    console.log(`[Admin] Sessão ${session.id} encerrada manualmente.`);
+    res.redirect('/admin/sessions');
+  } catch (err) {
+    console.error('[Admin] Erro ao encerrar sessão:', err.message);
+    res.status(500).send('Erro interno.');
+  }
+};
+
 // ─── Configurações ────────────────────────────────────────────────────────────
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 async function fetchAllSettings() {
   const [orgName, orgLogo, sessionDuration, bgColor1, bgColor2] = await Promise.all([
-    Setting.get('organization_name', 'Hospital Beneficiente Portuguesa'),
+    Setting.get('organization_name', 'Captive Portal'),
     Setting.get('organization_logo', ''),
     Setting.getSessionDuration(),
     Setting.get('portal_bg_color_1', '#0d4e8b'),
