@@ -88,6 +88,10 @@ if [ -z "$DB_PASS" ]; then
   echo -e "${RED}Senha nao pode ser vazia.${NC}"
   exit 1
 fi
+if [[ "$DB_PASS" == *'"'* ]]; then
+  echo -e "${RED}Senha nao pode conter aspas duplas (\").${NC}"
+  exit 1
+fi
 
 # Criar usuario (forma segura - sem interpolacao de variavel no SQL)
 if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='captive_user'" | grep -q 1; then
@@ -146,6 +150,10 @@ if [ ! -f .env ]; then
     echo -e "${RED}Senha do Mikrotik nao pode ser vazia.${NC}"
     exit 1
   fi
+  if [[ "$MK_PASS" == *'"'* ]]; then
+    echo -e "${RED}Senha nao pode conter aspas duplas (\").${NC}"
+    exit 1
+  fi
 
   read -p "Porta da API do Mikrotik [8728]: " MK_PORT
   MK_PORT=${MK_PORT:-8728}
@@ -162,6 +170,10 @@ if [ ! -f .env ]; then
     echo -e "${RED}Senha do admin nao pode ser vazia.${NC}"
     exit 1
   fi
+  if [[ "$ADMIN_PASSWORD" == *'"'* ]]; then
+    echo -e "${RED}Senha nao pode conter aspas duplas (\").${NC}"
+    exit 1
+  fi
 
   # Gerar SESSION_SECRET aleatorio
   SESSION_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
@@ -176,12 +188,12 @@ if [ ! -f .env ]; then
     printf 'DB_PORT=5432\n'
     printf 'DB_NAME=captive_portal\n'
     printf 'DB_USER=captive_user\n'
-    printf 'DB_PASS=%s\n' "$DB_PASS"
+    printf 'DB_PASS="%s"\n' "$DB_PASS"
     printf '\n'
     printf '# Mikrotik RouterOS API\n'
     printf 'MIKROTIK_HOST=%s\n' "$MK_HOST"
     printf 'MIKROTIK_USER=%s\n' "$MK_USER"
-    printf 'MIKROTIK_PASS=%s\n' "$MK_PASS"
+    printf 'MIKROTIK_PASS="%s"\n' "$MK_PASS"
     printf 'MIKROTIK_PORT=%s\n' "$MK_PORT"
     printf '\n'
     printf '# Sessao (em horas)\n'
@@ -189,7 +201,7 @@ if [ ! -f .env ]; then
     printf '\n'
     printf '# Painel Admin\n'
     printf 'ADMIN_USER=%s\n' "$ADMIN_USER"
-    printf 'ADMIN_PASSWORD=%s\n' "$ADMIN_PASSWORD"
+    printf 'ADMIN_PASSWORD="%s"\n' "$ADMIN_PASSWORD"
     printf 'SESSION_SECRET=%s\n' "$SESSION_SECRET"
   } > .env
 

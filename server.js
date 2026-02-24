@@ -102,7 +102,6 @@ async function start() {
 
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`[Servidor] Captive Portal rodando em http://0.0.0.0:${PORT}`);
-      console.log('[Servidor] Hospital Beneficiente Portuguesa - BP TI');
     });
   } catch (err) {
     console.error('[Servidor] Erro ao iniciar:', err.message);
