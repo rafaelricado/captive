@@ -55,7 +55,7 @@
               <td>
                 <% if (s.status === 'Ativa') { %>
                   <form method="POST" action="/admin/sessions/<%= s.id %>/terminate"
-                        onsubmit="return confirm('Encerrar a sessão de <%= s.nome.replace(/\'/g, '') %>?')">
+                        onsubmit="return confirm('Encerrar a sessão de ' + <%- JSON.stringify(s.nome) %> + '?')">
                     <button type="submit" class="btn-terminate">Encerrar</button>
                   </form>
                 <% } else { %>

@@ -3,6 +3,11 @@ const User = require('./User');
 const Session = require('./Session');
 const Setting = require('./Setting');
 const AccessPoint = require('./AccessPoint');
+const ApPingHistory = require('./ApPingHistory');
+
+// Associação: histórico pertence ao ponto de acesso
+ApPingHistory.belongsTo(AccessPoint, { foreignKey: 'ap_id', as: 'AccessPoint' });
+AccessPoint.hasMany(ApPingHistory, { foreignKey: 'ap_id', as: 'PingHistory' });
 
 const initDatabase = async () => {
   await sequelize.sync({ alter: true });
@@ -32,7 +37,14 @@ const initDatabase = async () => {
     defaults: { value: '#1a7bc4' }
   });
 
-  console.log(`[DB] Banco sincronizado. Duração da sessão: ${sessionSetting.value}h`);
+  // Webhook para alertas de AP offline (vazio = desabilitado)
+  await Setting.findOrCreate({
+    where: { key: 'alert_webhook_url' },
+    defaults: { value: '' }
+  });
+
+  const logger = require('../utils/logger');
+  logger.info(`[DB] Banco sincronizado. Duração da sessão: ${sessionSetting.value}h`);
 };
 
-module.exports = { sequelize, User, Session, Setting, AccessPoint, initDatabase };
+module.exports = { sequelize, User, Session, Setting, AccessPoint, ApPingHistory, initDatabase };

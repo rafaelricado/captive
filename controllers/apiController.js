@@ -3,16 +3,8 @@ const { User, Session, Setting } = require('../models');
 const { validateCPF } = require('../utils/cpfValidator');
 const sessionService = require('../services/sessionService');
 const mikrotikService = require('../services/mikrotikService');
-
-async function getOrgSettings() {
-  const [orgName, orgLogo, bgColor1, bgColor2] = await Promise.all([
-    Setting.get('organization_name', 'Hospital Beneficiente Portuguesa'),
-    Setting.get('organization_logo', ''),
-    Setting.get('portal_bg_color_1', '#0d4e8b'),
-    Setting.get('portal_bg_color_2', '#1a7bc4')
-  ]);
-  return { orgName, orgLogo, bgColor1, bgColor2 };
-}
+const { getOrgSettings } = require('../utils/orgSettings');
+const logger = require('../utils/logger');
 
 // Converte data de DD/MM/AAAA para YYYY-MM-DD (retorna null se inválida ou futura)
 function parseDateBR(str) {
@@ -57,7 +49,6 @@ exports.register = async (req, res) => {
 
     if (!validateCPF(cpfClean)) return await renderError('CPF inválido. Verifique e tente novamente.');
 
-    // Validar data de nascimento
     if (!data_nascimento) return await renderError('Data de nascimento é obrigatória.');
     const dataNascISO = parseDateBR(data_nascimento);
     if (!dataNascISO) return await renderError('Data de nascimento inválida. Use o formato DD/MM/AAAA.');
@@ -73,7 +64,6 @@ exports.register = async (req, res) => {
 
     const existingUser = await User.findOne({ where: { cpf: cpfClean } });
 
-    // CPF já existe e já tem data de nascimento → bloquear (deve usar login)
     if (existingUser && existingUser.data_nascimento) {
       return await renderError('CPF já cadastrado. Use a aba "Já tenho cadastro" para acessar.');
     }
@@ -82,7 +72,6 @@ exports.register = async (req, res) => {
     let isNewUser = true;
 
     if (existingUser && !existingUser.data_nascimento) {
-      // Re-cadastro: usuário antigo sem data de nascimento — atualiza dados
       await existingUser.update({
         nome_completo: nome_completo.trim(),
         email: email.trim(),
@@ -121,17 +110,16 @@ exports.register = async (req, res) => {
       if (isNewUser) {
         await user.destroy();
       } else {
-        // Re-cadastro: reverter data_nascimento para null para o usuário poder tentar novamente
         await user.update({ data_nascimento: null, nome_mae: null });
       }
-      console.warn(`[Cadastro] Mikrotik recusou autorização para ${cpfClean} - cadastro revertido`);
+      logger.warn(`[Cadastro] Mikrotik recusou autorização para ${cpfClean} — cadastro revertido`);
       return await renderError('Não foi possível liberar o acesso à rede. Tente novamente em alguns instantes.');
     }
 
-    console.log(`[Cadastro] Usuário ${isNewUser ? 'cadastrado' : 'atualizado'}: ${cpfClean} - ${nome_completo}`);
+    logger.info(`[Cadastro] Usuário ${isNewUser ? 'cadastrado' : 'atualizado'}: ${cpfClean} — ${nome_completo}`);
     res.redirect(`/success?nome=${encodeURIComponent(nome_completo)}&linkOrig=${encodeURIComponent(linkOrig || '')}`);
   } catch (err) {
-    console.error('[Cadastro] Erro:', err.message);
+    logger.error(`[Cadastro] Erro: ${err.message}`);
     try { await renderError('Erro interno. Tente novamente.'); } catch (_) {
       if (!res.headersSent) res.status(500).send('Erro interno.');
     }
@@ -159,12 +147,10 @@ exports.login = async (req, res) => {
     const user = await User.findOne({ where: { cpf: cpfClean } });
     if (!user) return await renderError('CPF ou data de nascimento incorretos.');
 
-    // Usuário antigo sem data de nascimento → orientar recadastro
     if (!user.data_nascimento) {
       return await renderError('Seus dados precisam ser atualizados. Use a aba "Primeiro Acesso" para se recadastrar.');
     }
 
-    // Comparar data de nascimento
     if (user.data_nascimento !== dataNascISO) {
       return await renderError('CPF ou data de nascimento incorretos.');
     }
@@ -178,14 +164,14 @@ exports.login = async (req, res) => {
     const authorized = await mikrotikService.authorizeUser(mac, ip, cpfClean, user.nome_completo);
     if (!authorized) {
       if (isNewSession) await portalSession.destroy();
-      console.warn(`[Login] Mikrotik recusou autorização para ${cpfClean}`);
+      logger.warn(`[Login] Mikrotik recusou autorização para ${cpfClean}`);
       return await renderError('Não foi possível liberar o acesso à rede. Tente novamente em alguns instantes.');
     }
 
-    console.log(`[Login] Usuário autenticado: ${cpfClean} - ${user.nome_completo}`);
+    logger.info(`[Login] Usuário autenticado: ${cpfClean} — ${user.nome_completo}`);
     res.redirect(`/success?nome=${encodeURIComponent(user.nome_completo)}&linkOrig=${encodeURIComponent(linkOrig || '')}`);
   } catch (err) {
-    console.error('[Login] Erro:', err.message);
+    logger.error(`[Login] Erro: ${err.message}`);
     try { await renderError('Erro interno. Tente novamente.'); } catch (_) {
       if (!res.headersSent) res.status(500).send('Erro interno.');
     }
@@ -207,7 +193,7 @@ exports.consultaCep = async (req, res) => {
 
     res.json(response.data);
   } catch (err) {
-    console.error('[CEP] Erro:', err.message);
+    logger.error(`[CEP] Erro: ${err.message}`);
     res.status(500).json({ error: 'Erro ao consultar CEP' });
   }
 };

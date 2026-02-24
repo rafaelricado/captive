@@ -10,6 +10,26 @@
     header { background: <%= bgColor1 %>; }
     .btn-primary { background: <%= bgColor1 %>; }
     .btn-primary:hover { background: <%= bgColor2 %>; }
+
+    .session-info { font-size: .9rem; color: #4b5563; margin-top: 8px; }
+    .session-expires { font-size: .82rem; color: #6b7280; margin-top: 4px; }
+
+    .warning-banner {
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      color: #92400e;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: .85rem;
+      margin-top: 14px;
+      display: none;
+    }
+    .warning-banner.visible { display: block; }
+
+    #countdown {
+      font-weight: 700;
+      color: #b45309;
+    }
   </style>
 </head>
 <body>
@@ -29,13 +49,24 @@
       <div class="success-icon">&#10003;</div>
       <h2>Conectado com sucesso!</h2>
       <p>Bem-vindo(a), <strong><%= nome %></strong>!</p>
-      <p>Sua conexao Wi-Fi foi liberada.</p>
-      <p class="session-info">Sua sessao expira em <strong>2 dias</strong>. Apos esse periodo, sera necessario autenticar novamente.</p>
+      <p>Sua conexão Wi-Fi foi liberada.</p>
+
+      <p class="session-info">
+        Sua sessão tem duração de <strong><%= sessionDuration %> hora<%= sessionDuration !== 1 ? 's' : '' %></strong>.
+      </p>
+      <p class="session-expires">
+        Expira em: <strong><%= expiresAtLabel %></strong>
+      </p>
+
+      <!-- Banner de aviso quando a sessão está prestes a expirar (última hora) -->
+      <div class="warning-banner" id="warning-banner">
+        ⚠️ Sua sessão expira em <span id="countdown"></span>. Após isso, será necessário autenticar novamente.
+      </div>
 
       <% if (linkOrig && /^https?:\/\//i.test(linkOrig)) { %>
         <a href="<%= linkOrig %>" class="btn btn-primary">Continuar navegando</a>
       <% } else { %>
-        <p class="redirect-info">Voce ja pode navegar na internet normalmente.</p>
+        <p class="redirect-info">Você já pode navegar na internet normalmente.</p>
       <% } %>
     </div>
 
@@ -43,5 +74,43 @@
       <p class="footer-empresa"><%= orgName %></p>
     </footer>
   </div>
+
+  <script>
+    // Exibe banner de aviso quando a sessão expira em menos de 1 hora
+    const expiresAt = new Date('<%= expiresAtISO %>');
+
+    function formatCountdown(ms) {
+      if (ms <= 0) return 'agora';
+      const totalSec = Math.floor(ms / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      if (h > 0) return `${h}h ${m}min`;
+      if (m > 0) return `${m}min ${s}s`;
+      return `${s}s`;
+    }
+
+    function checkSessionWarning() {
+      const remaining = expiresAt - Date.now();
+      const ONE_HOUR = 60 * 60 * 1000;
+      const banner = document.getElementById('warning-banner');
+      const countdown = document.getElementById('countdown');
+
+      if (remaining <= 0) {
+        countdown.textContent = 'expirada';
+        banner.classList.add('visible');
+        clearInterval(timer);
+        return;
+      }
+
+      if (remaining <= ONE_HOUR) {
+        countdown.textContent = formatCountdown(remaining);
+        banner.classList.add('visible');
+      }
+    }
+
+    const timer = setInterval(checkSessionWarning, 1000);
+    checkSessionWarning(); // executa imediatamente ao carregar
+  </script>
 </body>
 </html>

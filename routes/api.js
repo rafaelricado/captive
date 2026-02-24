@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const apiController = require('../controllers/apiController');
-const { Setting } = require('../models');
+const { getOrgSettings } = require('../utils/orgSettings');
 
 // Limita cadastro e login: máximo 10 tentativas a cada 15 minutos por IP
 const authLimiter = rateLimit({
@@ -13,12 +13,7 @@ const authLimiter = rateLimit({
   handler: async (req, res) => {
     const { mac, ip, linkOrig } = req.body;
     try {
-      const [orgName, orgLogo, bgColor1, bgColor2] = await Promise.all([
-        Setting.get('organization_name', 'Captive Portal'),
-        Setting.get('organization_logo', ''),
-        Setting.get('portal_bg_color_1', '#0d4e8b'),
-        Setting.get('portal_bg_color_2', '#1a7bc4')
-      ]);
+      const org = await getOrgSettings();
       res.status(429).render('portal', {
         mac: mac || '',
         ip: ip || '',
@@ -26,7 +21,7 @@ const authLimiter = rateLimit({
         linkOrig: linkOrig || '',
         error: 'Muitas tentativas. Aguarde 15 minutos e tente novamente.',
         activeTab: req.path === '/login' ? 'login' : 'cadastro',
-        orgName, orgLogo, bgColor1, bgColor2
+        ...org
       });
     } catch (_) {
       res.status(429).send('Muitas tentativas. Aguarde 15 minutos e tente novamente.');

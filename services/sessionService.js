@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const { Session, Setting, User } = require('../models');
 const mikrotikService = require('./mikrotikService');
+const logger = require('../utils/logger');
 
 async function createSession(userId, mac, ip) {
   const durationHours = await Setting.getSessionDuration();
@@ -14,7 +15,7 @@ async function createSession(userId, mac, ip) {
     expires_at: expiresAt
   });
 
-  console.log(`[Sessão] Criada para user ${userId}, expira em ${expiresAt.toLocaleString('pt-BR')}`);
+  logger.info(`[Sessão] Criada para user ${userId}, expira em ${expiresAt.toLocaleString('pt-BR')}`);
   return session;
 }
 
@@ -39,7 +40,7 @@ async function expireSessions() {
 
   if (expired.length === 0) return;
 
-  console.log(`[Sessão] Expirando ${expired.length} sessão(ões)...`);
+  logger.info(`[Sessão] Expirando ${expired.length} sessão(ões)...`);
 
   for (const session of expired) {
     try {
@@ -53,11 +54,11 @@ async function expireSessions() {
       session.active = false;
       await session.save();
     } catch (err) {
-      console.error(`[Sessão] Erro ao expirar sessão ${session.id}:`, err.message);
+      logger.error(`[Sessão] Erro ao expirar sessão ${session.id}: ${err.message}`);
     }
   }
 
-  console.log(`[Sessão] ${expired.length} sessão(ões) expirada(s)`);
+  logger.info(`[Sessão] ${expired.length} sessão(ões) expirada(s)`);
 }
 
 module.exports = { createSession, getActiveSession, expireSessions };

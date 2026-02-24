@@ -265,6 +265,22 @@
         </div>
       </div>
 
+      <!-- Alertas -->
+      <div class="settings-card">
+        <h3>Alertas de AP Offline</h3>
+        <div class="field">
+          <label for="alert_webhook_url">URL do Webhook</label>
+          <input type="url" id="alert_webhook_url" name="alert_webhook_url"
+                 value="<%= alertWebhookUrl %>" maxlength="512"
+                 placeholder="https://hooks.slack.com/... ou https://discord.com/api/webhooks/...">
+          <p class="hint">
+            Quando um ponto de acesso fica offline, uma notificação é enviada a este endereço via POST.<br>
+            Compatível com <strong>Slack</strong>, <strong>Discord</strong> e <strong>Microsoft Teams</strong>.<br>
+            Deixe em branco para desabilitar os alertas.
+          </p>
+        </div>
+      </div>
+
       <button type="submit" class="btn-save">Salvar configurações</button>
     </form>
   </main>

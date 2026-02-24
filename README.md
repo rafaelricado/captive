@@ -103,10 +103,12 @@ captive/
 │   └── database.js               # Conexao com PostgreSQL via Sequelize
 │
 ├── models/
-│   ├── index.js                  # Inicializacao e sync do banco
+│   ├── index.js                  # Inicializacao, sync do banco e associacoes
 │   ├── User.js                   # Modelo de usuario (cadastro)
 │   ├── Session.js                # Modelo de sessao (controle de acesso)
-│   └── Setting.js                # Configuracoes do sistema
+│   ├── Setting.js                # Configuracoes do sistema
+│   ├── AccessPoint.js            # Modelo de ponto de acesso Wi-Fi
+│   └── ApPingHistory.js          # Historico de ping dos pontos de acesso
 │
 ├── middleware/
 │   └── adminAuth.js              # Middleware de autenticacao do painel admin
@@ -123,19 +125,24 @@ captive/
 │
 ├── services/
 │   ├── mikrotikService.js        # Integracao com RouterOS API v7
-│   └── sessionService.js         # Criacao e expiracao de sessoes
+│   ├── sessionService.js         # Criacao e expiracao de sessoes
+│   └── pingService.js            # Monitoramento de APs via ping (ICMP)
 │
 ├── utils/
-│   └── cpfValidator.js           # Validacao de CPF (algoritmo digitos verificadores)
+│   ├── cpfValidator.js           # Validacao de CPF (algoritmo digitos verificadores)
+│   ├── logger.js                 # Logger Winston estruturado (substitui console.*)
+│   ├── orgSettings.js            # Helper compartilhado de configuracoes da organizacao
+│   └── settingsCache.js          # Cache TTL em memoria (60s) para configuracoes
 │
 ├── views/
 │   ├── portal.ejs                # Pagina principal (cadastro + login)
-│   ├── success.ejs               # Pagina de sucesso apos autenticacao
+│   ├── success.ejs               # Pagina de sucesso com expiracao dinamica da sessao
 │   └── admin/
 │       ├── login.ejs             # Tela de login do painel
 │       ├── dashboard.ejs         # Dashboard com estatisticas
 │       ├── users.ejs             # Lista de usuarios cadastrados
 │       ├── sessions.ejs          # Lista de sessoes de acesso
+│       ├── access-points.ejs     # Monitoramento de pontos de acesso Wi-Fi
 │       ├── settings.ejs          # Pagina de configuracoes do portal
 │       ├── _head.ejs             # Estilos compartilhados (partial)
 │       ├── _nav.ejs              # Menu de navegacao (partial)
@@ -322,7 +329,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 | ADMIN_USER, ADMIN_PASSWORD | Credenciais do painel admin |
 | SESSION_SECRET | Chave de assinatura do cookie de sessao |
 
-Variaveis com valor padrao (opcionais): `PORT`, `DB_PORT`, `MIKROTIK_PORT`, `SESSION_DURATION_HOURS`.
+Variaveis com valor padrao (opcionais): `PORT`, `DB_PORT`, `MIKROTIK_PORT`, `SESSION_DURATION_HOURS`, `LOG_LEVEL` (padrao: `info`; valores validos: `error`, `warn`, `info`, `debug`).
 
 O servidor **nao inicia** se alguma variavel obrigatoria estiver faltando e mostra qual esta ausente.
 
@@ -514,6 +521,7 @@ Visitante perde acesso, precisa reautenticar
 | `organization_logo`    | *(vazio)*                       | Caminho relativo da logo enviada (ex: `/uploads/logo/logo_123.png`) |
 | `portal_bg_color_1`    | `#0d4e8b`                       | Cor primaria do gradiente de fundo do portal         |
 | `portal_bg_color_2`    | `#1a7bc4`                       | Cor secundaria do gradiente de fundo do portal       |
+| `alert_webhook_url`    | *(vazio)*                       | URL para receber alertas HTTP POST quando um AP fica offline |
 
 Todas as configuracoes sao gerenciadas pelo painel em `/admin/settings`. Tambem e possivel alterar diretamente no banco:
 
@@ -528,6 +536,33 @@ UPDATE settings SET value = 'Minha Empresa' WHERE key = 'organization_name';
 UPDATE settings SET value = '#1a5276' WHERE key = 'portal_bg_color_1';
 ```
 
+### Tabela `access_points`
+
+| Coluna      | Tipo         | Obrigatorio | Descricao                         |
+|------------|-------------|-------------|-----------------------------------|
+| id         | UUID        | Sim (auto)  | Identificador unico               |
+| name       | VARCHAR     | Sim         | Nome amigavel do AP               |
+| ip_address | VARCHAR     | Sim         | Endereco IP do ponto de acesso    |
+| location   | VARCHAR     | Nao         | Localizacao fisica (sala, andar)  |
+| is_online  | BOOLEAN     | Sim         | Status do ultimo ping             |
+| last_seen  | TIMESTAMP   | Nao         | Ultima vez que respondeu ao ping  |
+| created_at | TIMESTAMP   | Sim (auto)  | Data de cadastro                  |
+| updated_at | TIMESTAMP   | Sim (auto)  | Data de atualizacao               |
+
+### Tabela `ap_ping_history`
+
+Armazena o historico dos resultados de ping de cada AP. Limitado a **200 registros por AP** (os mais antigos sao removidos automaticamente).
+
+| Coluna     | Tipo      | Obrigatorio | Descricao                              |
+|-----------|----------|-------------|----------------------------------------|
+| id        | UUID     | Sim (auto)  | Identificador unico                    |
+| ap_id     | UUID     | Sim (FK)    | Referencia ao ponto de acesso          |
+| is_online | BOOLEAN  | Sim         | Se o AP respondeu ao ping              |
+| latency_ms| INTEGER  | Nao         | Latencia em milissegundos (null=timeout)|
+| checked_at| TIMESTAMP| Sim (auto)  | Quando o ping foi executado            |
+
+Indice composto em `(ap_id, checked_at)` para consultas de historico eficientes.
+
 ### Tabela `admin_sessions`
 
 Criada automaticamente pelo `connect-pg-simple`. Armazena as sessoes do painel administrativo no PostgreSQL, garantindo que as sessoes persistam entre reinicializacoes do servidor. Nao e necessario interagir com ela manualmente.
@@ -541,27 +576,38 @@ Criada automaticamente pelo `connect-pg-simple`. Armazena as sessoes do painel a
 | Metodo | Rota              | Descricao                              |
 |--------|-------------------|----------------------------------------|
 | GET    | `/`               | Pagina do portal (cadastro/login)      |
-| GET    | `/success`        | Pagina de sucesso                      |
+| GET    | `/success`        | Pagina de sucesso com contador de sessao|
 | POST   | `/api/register`   | Cadastro de novo usuario               |
 | POST   | `/api/login`      | Login por CPF                          |
 | GET    | `/api/cep/:cep`   | Consulta CEP via ViaCEP (proxy)        |
+| GET    | `/health`         | Health check (status do banco e uptime)|
 
 ### Admin (painel)
 
-| Metodo | Rota                | Descricao                              |
-|--------|---------------------|----------------------------------------|
-| GET    | `/admin/login`      | Tela de login do painel                |
-| POST   | `/admin/login`      | Autenticacao (usuario + senha)         |
-| POST   | `/admin/logout`     | Encerrar sessao admin                  |
-| GET    | `/admin`            | Dashboard com estatisticas             |
-| GET    | `/admin/users`      | Lista paginada de usuarios             |
-| GET    | `/admin/sessions`   | Lista paginada de sessoes de acesso    |
-| GET    | `/admin/settings`   | Pagina de configuracoes do portal      |
-| POST   | `/admin/settings`   | Salvar configuracoes (multipart/form)  |
+| Metodo | Rota                              | Descricao                                |
+|--------|-----------------------------------|------------------------------------------|
+| GET    | `/admin/login`                    | Tela de login do painel                  |
+| POST   | `/admin/login`                    | Autenticacao (usuario + senha)           |
+| POST   | `/admin/logout`                   | Encerrar sessao admin                    |
+| GET    | `/admin`                          | Dashboard com estatisticas               |
+| GET    | `/admin/users`                    | Lista paginada de usuarios               |
+| GET    | `/admin/users/export`             | Exportar lista de usuarios (CSV)         |
+| POST   | `/admin/users/:id/delete`         | Remover usuario (exclusao por LGPD)      |
+| GET    | `/admin/sessions`                 | Lista paginada de sessoes de acesso      |
+| POST   | `/admin/sessions/:id/terminate`   | Encerrar sessao de um usuario            |
+| GET    | `/admin/access-points`            | Lista e monitoramento de APs             |
+| POST   | `/admin/access-points`            | Adicionar ou editar ponto de acesso      |
+| POST   | `/admin/access-points/ping`       | Disparar ping em todos os APs            |
+| GET    | `/admin/access-points/:id/history`| Historico de ping de um AP (JSON)        |
+| POST   | `/admin/access-points/:id/delete` | Remover ponto de acesso                  |
+| GET    | `/admin/settings`                 | Pagina de configuracoes do portal        |
+| POST   | `/admin/settings`                 | Salvar configuracoes (multipart/form)    |
 
 Todas as rotas `/admin/*` (exceto login) requerem autenticacao. Sessao de admin dura 8 horas.
 
-> **Rate limiting em `/api/register` e `/api/login`:** maximo de 10 requisicoes por IP a cada 15 minutos. Exceder o limite retorna HTTP 429 com mensagem em portugues no portal.
+> **Rate limiting em `/api/register` e `/api/login`:** maximo de **10 requisicoes por IP a cada 15 minutos**. Exceder o limite retorna HTTP 429 com mensagem em portugues no portal.
+
+> **Rate limiting em `POST /admin/login`:** maximo de **5 tentativas por IP a cada 15 minutos** (apenas tentativas com falha contam). Protege o painel contra ataques de forca bruta.
 
 ### Detalhes
 
@@ -612,9 +658,10 @@ Sera solicitado o usuario e a senha definidos em `ADMIN_USER` e `ADMIN_PASSWORD`
 | Pagina | URL | Conteudo |
 |--------|-----|----------|
 | Dashboard | `/admin` | Total de usuarios, sessoes ativas agora, novos hoje, novos na semana |
-| Usuarios | `/admin/users` | Tabela paginada: nome, CPF mascarado, e-mail, telefone, cidade/UF, data de cadastro |
-| Sessoes | `/admin/sessions` | Tabela paginada: usuario, IP, MAC, inicio, expiracao, status (Ativa/Expirada) |
-| Configuracoes | `/admin/settings` | Identidade visual, cores do portal, duracao da sessao |
+| Usuarios | `/admin/users` | Tabela paginada: nome, CPF mascarado, e-mail, telefone, cidade/UF, data de cadastro; exportacao CSV; exclusao com remocao no Mikrotik (LGPD) |
+| Sessoes | `/admin/sessions` | Tabela paginada: usuario, IP, MAC, inicio, expiracao, status (Ativa/Expirada); encerramento manual de sessao |
+| Pontos de Acesso | `/admin/access-points` | Cadastro, status online/offline, ping manual, historico dos ultimos 100 pings por AP (modal com latencia) |
+| Configuracoes | `/admin/settings` | Identidade visual, cores do portal, duracao da sessao, URL de webhook para alertas de AP offline |
 
 - Paginacao de 50 registros por pagina
 - CPF exibido mascarado (`***.456.789-01`) para proteger dados sensiveis
@@ -626,9 +673,10 @@ Sera solicitado o usuario e a senha definidos em `ADMIN_USER` e `ADMIN_PASSWORD`
 - Sessao server-side armazenada no PostgreSQL (persiste entre reinicializacoes do servidor)
 - Sessao assinada com `SESSION_SECRET` (nunca exposta ao cliente)
 - Cookie com `httpOnly` e `sameSite: lax` (protecao contra CSRF)
-- Comparacao de senha em tempo constante (previne timing attacks)
+- Comparacao de senha com `bcryptjs` (hash computado na inicializacao; protege contra timing attacks)
 - ID de sessao regenerado apos login (previne session fixation)
 - Sessao expira automaticamente apos 8 horas de inatividade
+- Login limitado a 5 tentativas por IP em 15 minutos (bloqueio de forca bruta)
 
 ---
 
@@ -690,14 +738,22 @@ O servidor envia os seguintes headers em todas as respostas:
 
 | Header | Valor | Protecao |
 |--------|-------|----------|
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'unsafe-inline'; ...` | Bloqueia carregamento de recursos externos e injecao de scripts |
 | `X-Content-Type-Options` | `nosniff` | Previne MIME sniffing pelo navegador |
 | `X-Frame-Options` | `DENY` | Bloqueia o portal em iframes (anti-clickjacking) |
 | `X-XSS-Protection` | `1; mode=block` | Ativa filtro XSS em navegadores legados |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` | Limita vazamento de URL nos cabecalhos Referer |
 
+A CSP bloqueia `frame-ancestors` (substitui `X-Frame-Options` em navegadores modernos), restringe `form-action` ao mesmo origem e proibe uso de `base-uri` externas.
+
 ### Rate limiting
 
-As rotas `/api/register` e `/api/login` aceitam no maximo **10 requisicoes por IP a cada 15 minutos**. Requisicoes acima do limite recebem HTTP 429 e o portal exibe a mensagem em portugues.
+| Rota | Limite | Observacao |
+|------|--------|------------|
+| `POST /api/register` e `POST /api/login` | 10 req / 15 min por IP | Todas as tentativas contam |
+| `POST /admin/login` | 5 req / 15 min por IP | Apenas tentativas com falha contam |
+
+Requisicoes acima do limite recebem HTTP 429. O limite e armazenado em memoria e nao persiste entre reinicializacoes do servidor.
 
 ### Validacao de redirect
 
@@ -717,6 +773,19 @@ O campo `comment` enviado ao RouterOS e sanitizado para remover caracteres espec
 ---
 
 ## Comandos Uteis
+
+### Health Check
+
+```bash
+# Verificar se o servidor e banco estao operacionais
+curl http://localhost:3000/health
+
+# Resposta esperada (HTTP 200):
+# {"status":"ok","db":"ok","uptime":3600,"timestamp":"2025-01-01T12:00:00.000Z"}
+
+# Se o banco estiver inacessivel retorna HTTP 503:
+# {"status":"error","db":"unreachable","uptime":3600,"timestamp":"..."}
+```
 
 ### Gerenciamento do Servico
 
@@ -892,28 +961,46 @@ sudo systemctl daemon-reload && sudo systemctl restart captive-portal
 
 ### Excedeu limite de tentativas (HTTP 429)
 
-- O rate limiter bloqueia o IP apos 10 tentativas em 15 minutos nas rotas de cadastro e login
+- O rate limiter bloqueia o IP apos 10 tentativas em 15 minutos nas rotas de cadastro e login de visitantes
+- No painel admin, o bloqueio ocorre apos 5 tentativas com falha em 15 minutos
 - Aguarde 15 minutos ou reinicie o servidor (o limite e armazenado em memoria, nao persiste)
-- Em ambiente de desenvolvimento, ajuste o limite em `routes/api.js`
+- Em ambiente de desenvolvimento, ajuste o limite em `routes/api.js` (visitantes) ou `routes/admin.js` (admin)
+
+### Alertas de webhook nao chegam quando AP fica offline
+
+- Verifique se a URL foi salva corretamente em `/admin/settings` > "Alertas de AP Offline"
+- A URL deve comecar com `http://` ou `https://`
+- O alerta e disparado apenas na **transicao** de online para offline; se o AP ja estava offline ao iniciar o servidor, nenhum alerta e enviado ate que ele recupere e caia novamente
+- Verifique nos logs se ha erro: `[Ping] Erro ao enviar alerta de webhook`
+- Teste a URL manualmente: `curl -X POST <sua_url> -H 'Content-Type: application/json' -d '{"test":true}'`
+
+### Historico de ping do AP nao aparece no modal
+
+- Verifique nos logs se ha erro ao salvar: `[Ping] Erro ao salvar historico do AP`
+- Confirme que a tabela `ap_ping_history` existe: `SELECT COUNT(*) FROM ap_ping_history;`
+- O historico e populado automaticamente a cada ciclo de ping (a cada 5 minutos); espere ao menos um ciclo
+- O historico exibe no maximo os ultimos 100 registros por AP; o banco mantem os ultimos 200
 
 ---
 
 ## Dependencias do Projeto
 
-O projeto utiliza 13 pacotes npm. Abaixo a lista completa com a versao instalada e o motivo de cada dependencia.
+O projeto utiliza 15 pacotes npm. Abaixo a lista completa com a versao instalada e o motivo de cada dependencia.
 
 | Pacote              | Versao   | Por que e necessario                                                                                   |
 |---------------------|----------|--------------------------------------------------------------------------------------------------------|
 | `express`           | ^4.21    | Framework HTTP principal. Gerencia rotas, middleware e o ciclo de requisicao/resposta do servidor.     |
 | `ejs`               | ^3.1     | Template engine usada para renderizar as paginas HTML no servidor. Permite embutir variaveis e logica nas views. |
-| `sequelize`         | ^6.37    | ORM que abstrai as queries SQL. Gerencia os modelos (`User`, `Session`, `Setting`), migracoes via `sync({ alter: true })` e relacionamentos. |
+| `sequelize`         | ^6.37    | ORM que abstrai as queries SQL. Gerencia os modelos (`User`, `Session`, `Setting`, `AccessPoint`, `ApPingHistory`), migracoes via `sync({ alter: true })` e relacionamentos. |
 | `pg`                | ^8.13    | Driver nativo do PostgreSQL para Node.js. Usado pelo Sequelize e pelo `connect-pg-simple` para se comunicar com o banco. |
 | `pg-hstore`         | ^2.3     | Addon exigido pelo Sequelize ao usar PostgreSQL para serializar/desserializar o tipo `hstore`. Sem ele o Sequelize nao inicializa. |
 | `express-session`   | ^1.18    | Gerencia a sessao server-side do painel administrativo. O ID da sessao fica num cookie assinado; os dados ficam no servidor (PostgreSQL). |
 | `connect-pg-simple` | ^10.0    | Store de sessao que persiste as sessoes do painel no PostgreSQL (tabela `admin_sessions`). Sem ele as sessoes sao perdidas ao reiniciar o servidor. |
-| `express-rate-limit`| ^8.2     | Aplica limite de taxa (10 req / 15 min por IP) nas rotas `/api/register` e `/api/login`, bloqueando ataques de forca bruta e spam. |
+| `express-rate-limit`| ^8.2     | Aplica limite de taxa nas rotas de cadastro/login de visitantes (10 req/15 min) e no login do painel admin (5 req/15 min). |
 | `multer`            | ^2.0     | Middleware para processar uploads `multipart/form-data`. Usado para receber e salvar a logo da organizacao em `/admin/settings`. |
 | `node-routeros`     | ^1.6     | Cliente da API RouterOS v7 do Mikrotik. Cria usuarios no Hotspot e registros de IP binding para liberar o acesso a internet dos visitantes. |
-| `axios`             | ^1.7     | Cliente HTTP usado para consultar a API publica ViaCEP (`viacep.com.br`) e preencher automaticamente o endereco ao digitar o CEP. |
-| `node-cron`         | ^3.0     | Agenda tarefas repetitivas. Executa a cada 30 minutos para verificar sessoes expiradas, marca-las como inativas e remover os IP bindings do Mikrotik. |
+| `axios`             | ^1.7     | Cliente HTTP usado para consultar a API publica ViaCEP (`viacep.com.br`) e preencher automaticamente o endereco ao digitar o CEP. Tambem utilizado para enviar alertas de webhook. |
+| `node-cron`         | ^3.0     | Agenda tarefas repetitivas. Executa a cada 30 minutos para verificar sessoes expiradas e a cada 5 minutos para pingar os pontos de acesso cadastrados. |
 | `dotenv`            | ^16.4    | Carrega as variaveis de ambiente do arquivo `.env` para `process.env` antes de qualquer outro modulo. Necessario para configurar banco, Mikrotik e segredos sem hardcodar valores no codigo. |
+| `bcryptjs`          | ^2.4     | Compara a senha do painel admin com o hash bcrypt (computado na inicializacao do servidor). Protege contra ataques de timing e garante que a senha nao seja verificada em texto plano. |
+| `winston`           | ^3.17    | Logger estruturado que substitui todos os `console.log/error/warn`. Formata mensagens com timestamp, nivel e cor no console. Nivel configuravel via variavel de ambiente `LOG_LEVEL`. |

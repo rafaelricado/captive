@@ -3,6 +3,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 const adminAuth = require('../middleware/adminAuth');
 const adminController = require('../controllers/adminController');
 const { Setting } = require('../models');
@@ -22,7 +23,7 @@ const storage = multer.diskStorage({
 
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
 const ALLOWED_MIMETYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-// SVG excluído: arquivos SVG podem conter JavaScript e são servidos pelo mesmo origin
+// SVG excluído: pode conter JavaScript executável
 
 const upload = multer({
   storage,
@@ -36,6 +37,21 @@ const upload = multer({
       return cb(new Error('Tipo de arquivo inválido.'));
     }
     cb(null, true);
+  }
+});
+
+// Rate limit: máximo 5 tentativas de login admin em 15 minutos por IP
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  handler: (req, res) => {
+    res.render('admin/login', {
+      error: 'Muitas tentativas de login. Aguarde 15 minutos.',
+      username: ''
+    });
   }
 });
 
@@ -53,7 +69,7 @@ router.use(async (req, res, next) => {
 
 // Login (público)
 router.get('/login', adminController.showLogin);
-router.post('/login', adminController.login);
+router.post('/login', adminLoginLimiter, adminController.login);
 router.post('/logout', adminController.logout);
 
 // Painel (protegido)
@@ -65,9 +81,10 @@ router.get('/sessions', adminAuth, adminController.sessions);
 router.post('/sessions/:id/terminate', adminAuth, adminController.terminateSession);
 
 // Pontos de acesso (protegido)
-// IMPORTANTE: rota /ping deve vir antes de /:id/delete para não ser capturada pelo param
+// IMPORTANTE: rota /ping deve vir antes de /:id/* para não ser capturada pelo param
 router.get('/access-points', adminAuth, adminController.accessPoints);
 router.post('/access-points/ping', adminAuth, adminController.pingAccessPoints);
+router.get('/access-points/:id/history', adminAuth, adminController.apHistory);
 router.post('/access-points', adminAuth, adminController.saveAccessPoint);
 router.post('/access-points/:id/delete', adminAuth, adminController.deleteAccessPoint);
 
@@ -77,11 +94,13 @@ router.post('/settings', adminAuth, (req, res, next) => {
   upload.single('organization_logo')(req, res, async err => {
     if (err instanceof multer.MulterError || err) {
       let bgColor1 = '#0d4e8b', bgColor2 = '#1a7bc4', sessionDuration = 48;
+      let alertWebhookUrl = '';
       try {
-        [bgColor1, bgColor2, sessionDuration] = await Promise.all([
+        [bgColor1, bgColor2, sessionDuration, alertWebhookUrl] = await Promise.all([
           Setting.get('portal_bg_color_1', '#0d4e8b'),
           Setting.get('portal_bg_color_2', '#1a7bc4'),
-          Setting.getSessionDuration()
+          Setting.getSessionDuration(),
+          Setting.get('alert_webhook_url', '')
         ]);
       } catch (_) { /* mantém os defaults acima */ }
 
@@ -91,6 +110,7 @@ router.post('/settings', adminAuth, (req, res, next) => {
         sessionDuration,
         bgColor1,
         bgColor2,
+        alertWebhookUrl,
         page: 'settings',
         success: null,
         error: err.message || 'Erro ao processar o arquivo enviado.'

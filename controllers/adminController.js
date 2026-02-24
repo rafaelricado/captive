@@ -1,25 +1,25 @@
-const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 const { Op } = require('sequelize');
-const { User, Session, Setting, AccessPoint } = require('../models');
+const { User, Session, Setting, AccessPoint, ApPingHistory } = require('../models');
 const mikrotikService = require('../services/mikrotikService');
 const { pingAllAccessPoints, isValidIPv4 } = require('../services/pingService');
+const logger = require('../utils/logger');
+const settingsCache = require('../utils/settingsCache');
 
-// Comparação de strings em tempo constante (previne timing attacks)
-function safeEqual(a, b) {
-  const key = process.env.SESSION_SECRET || 'internal-key';
-  const ha = crypto.createHmac('sha256', key).update(String(a)).digest();
-  const hb = crypto.createHmac('sha256', key).update(String(b)).digest();
-  return crypto.timingSafeEqual(ha, hb);
-}
+// ─── Bcrypt: hash da senha admin gerado sincronamente na carga do módulo ──────
+// hashSync é seguro aqui: roda uma única vez na inicialização, não bloqueia
+// requisições porque o módulo é carregado antes do servidor aceitar conexões.
+const _adminPasswordHash = process.env.ADMIN_PASSWORD
+  ? bcrypt.hashSync(process.env.ADMIN_PASSWORD, 12)
+  : null;
 
 const PAGE_SIZE = 50;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function maskCpf(cpf) {
-  // 12345678901 → ***.456.789-01
   return `***.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}`;
 }
 
@@ -36,8 +36,8 @@ function startOfDay() {
 
 function startOfWeek() {
   const d = new Date();
-  const day = d.getDay(); // 0=Dom, 1=Seg, ..., 6=Sáb
-  const diff = day === 0 ? 6 : day - 1; // dias desde a segunda-feira
+  const day = d.getDay();
+  const diff = day === 0 ? 6 : day - 1;
   d.setDate(d.getDate() - diff);
   d.setHours(0, 0, 0, 0);
   return d;
@@ -52,10 +52,9 @@ exports.showLogin = (req, res) => {
   res.render('admin/login', { error: null, username: '' });
 };
 
-exports.login = (req, res) => {
+exports.login = async (req, res) => {
   const { username, password } = req.body;
 
-  // Validação de entrada
   if (!username || !password || typeof username !== 'string' || typeof password !== 'string') {
     return res.render('admin/login', { error: 'Usuário e senha são obrigatórios.', username: '' });
   }
@@ -64,28 +63,36 @@ exports.login = (req, res) => {
   }
 
   const adminUser = process.env.ADMIN_USER;
-  const adminPassword = process.env.ADMIN_PASSWORD;
-
-  if (!adminUser || !adminPassword) {
+  if (!adminUser || !_adminPasswordHash) {
     return res.render('admin/login', {
       error: 'ADMIN_USER ou ADMIN_PASSWORD não configurado no .env',
       username: ''
     });
   }
 
-  if (safeEqual(username, adminUser) && safeEqual(password, adminPassword)) {
-    // Regenerar ID de sessão para prevenir session fixation
-    req.session.regenerate(err => {
-      if (err) {
-        return res.render('admin/login', { error: 'Erro ao criar sessão.', username });
-      }
-      req.session.adminLoggedIn = true;
-      res.redirect('/admin');
-    });
-    return;
-  }
+  try {
+    // Comparação em tempo constante via bcrypt
+    const usernameOk = username === adminUser;
+    const passwordOk = await bcrypt.compare(password, _adminPasswordHash);
 
-  res.render('admin/login', { error: 'Usuário ou senha incorretos.', username });
+    if (usernameOk && passwordOk) {
+      req.session.regenerate(err => {
+        if (err) {
+          return res.render('admin/login', { error: 'Erro ao criar sessão.', username });
+        }
+        req.session.adminLoggedIn = true;
+        logger.info(`[Admin] Login bem-sucedido: ${username} (${req.ip})`);
+        res.redirect('/admin');
+      });
+      return;
+    }
+
+    logger.warn(`[Admin] Falha de login para usuário "${username}" (${req.ip})`);
+    res.render('admin/login', { error: 'Usuário ou senha incorretos.', username });
+  } catch (err) {
+    logger.error(`[Admin] Erro no login: ${err.message}`);
+    res.render('admin/login', { error: 'Erro interno. Tente novamente.', username });
+  }
 };
 
 exports.logout = (req, res) => {
@@ -102,26 +109,17 @@ exports.dashboard = async (req, res) => {
 
     const [totalUsers, activeSessions, novosHoje, novosSemana] = await Promise.all([
       User.count(),
-      Session.count({
-        where: { active: true, expires_at: { [Op.gt]: now } }
-      }),
-      User.count({
-        where: { created_at: { [Op.gte]: startOfDay() } }
-      }),
-      User.count({
-        where: { created_at: { [Op.gte]: startOfWeek() } }
-      })
+      Session.count({ where: { active: true, expires_at: { [Op.gt]: now } } }),
+      User.count({ where: { created_at: { [Op.gte]: startOfDay() } } }),
+      User.count({ where: { created_at: { [Op.gte]: startOfWeek() } } })
     ]);
 
     res.render('admin/dashboard', {
-      totalUsers,
-      activeSessions,
-      novosHoje,
-      novosSemana,
+      totalUsers, activeSessions, novosHoje, novosSemana,
       page: 'dashboard'
     });
   } catch (err) {
-    console.error('[Admin] Erro no dashboard:', err.message);
+    logger.error(`[Admin] Erro no dashboard: ${err.message}`);
     res.status(500).send('Erro interno.');
   }
 };
@@ -162,16 +160,14 @@ exports.users = async (req, res) => {
     }));
 
     res.render('admin/users', {
-      users,
-      search,
-      page,
+      users, search, page,
       totalPages: Math.ceil(count / PAGE_SIZE),
       total: count,
       pageLabel: page + 1,
       pageObj: 'users'
     });
   } catch (err) {
-    console.error('[Admin] Erro ao listar usuários:', err.message);
+    logger.error(`[Admin] Erro ao listar usuários: ${err.message}`);
     res.status(500).send('Erro interno.');
   }
 };
@@ -200,9 +196,10 @@ exports.exportUsers = async (req, res) => {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="usuarios_${date}.csv"`);
+    logger.info(`[Admin] Exportação de usuários: ${users.length} registros`);
     res.send('\uFEFF' + header + '\n' + rows.join('\n'));
   } catch (err) {
-    console.error('[Admin] Erro ao exportar usuários:', err.message);
+    logger.error(`[Admin] Erro ao exportar usuários: ${err.message}`);
     res.status(500).send('Erro interno.');
   }
 };
@@ -212,14 +209,14 @@ exports.deleteUser = async (req, res) => {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.redirect('/admin/users');
 
-    await mikrotikService.removeUser(user.cpf, true); // fullDelete: remove hotspot user (LGPD)
+    await mikrotikService.removeUser(user.cpf, true);
     await Session.destroy({ where: { user_id: user.id } });
     await user.destroy();
 
-    console.log(`[Admin] Usuário ${user.cpf} excluído.`);
+    logger.info(`[Admin] Usuário excluído (LGPD): ${user.cpf}`);
     res.redirect('/admin/users');
   } catch (err) {
-    console.error('[Admin] Erro ao excluir usuário:', err.message);
+    logger.error(`[Admin] Erro ao excluir usuário: ${err.message}`);
     res.status(500).send('Erro interno.');
   }
 };
@@ -251,34 +248,33 @@ exports.sessions = async (req, res) => {
     }));
 
     res.render('admin/sessions', {
-      sessions,
-      page,
+      sessions, page,
       totalPages: Math.ceil(count / PAGE_SIZE),
       total: count,
       pageLabel: page + 1,
       pageObj: 'sessions'
     });
   } catch (err) {
-    console.error('[Admin] Erro ao listar sessões:', err.message);
+    logger.error(`[Admin] Erro ao listar sessões: ${err.message}`);
     res.status(500).send('Erro interno.');
   }
 };
 
 exports.terminateSession = async (req, res) => {
   try {
-    const session = await Session.findByPk(req.params.id, {
+    const sess = await Session.findByPk(req.params.id, {
       include: [{ model: User, attributes: ['cpf'] }]
     });
-    if (!session || !session.active) return res.redirect('/admin/sessions');
+    if (!sess || !sess.active) return res.redirect('/admin/sessions');
 
-    await mikrotikService.removeUser(session.User.cpf);
-    session.active = false;
-    await session.save();
+    await mikrotikService.removeUser(sess.User.cpf);
+    sess.active = false;
+    await sess.save();
 
-    console.log(`[Admin] Sessão ${session.id} encerrada manualmente.`);
+    logger.info(`[Admin] Sessão ${sess.id} encerrada manualmente`);
     res.redirect('/admin/sessions');
   } catch (err) {
-    console.error('[Admin] Erro ao encerrar sessão:', err.message);
+    logger.error(`[Admin] Erro ao encerrar sessão: ${err.message}`);
     res.status(500).send('Erro interno.');
   }
 };
@@ -286,16 +282,18 @@ exports.terminateSession = async (req, res) => {
 // ─── Configurações ────────────────────────────────────────────────────────────
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+const URL_RE = /^https?:\/\/.+/;
 
 async function fetchAllSettings() {
-  const [orgName, orgLogo, sessionDuration, bgColor1, bgColor2] = await Promise.all([
+  const [orgName, orgLogo, sessionDuration, bgColor1, bgColor2, alertWebhookUrl] = await Promise.all([
     Setting.get('organization_name', 'Captive Portal'),
     Setting.get('organization_logo', ''),
     Setting.getSessionDuration(),
     Setting.get('portal_bg_color_1', '#0d4e8b'),
-    Setting.get('portal_bg_color_2', '#1a7bc4')
+    Setting.get('portal_bg_color_2', '#1a7bc4'),
+    Setting.get('alert_webhook_url', '')
   ]);
-  return { orgName, orgLogo, sessionDuration, bgColor1, bgColor2 };
+  return { orgName, orgLogo, sessionDuration, bgColor1, bgColor2, alertWebhookUrl };
 }
 
 exports.showSettings = async (req, res) => {
@@ -303,7 +301,7 @@ exports.showSettings = async (req, res) => {
     const s = await fetchAllSettings();
     res.render('admin/settings', { ...s, page: 'settings', success: null, error: null });
   } catch (err) {
-    console.error('[Admin] Erro ao carregar configurações:', err.message);
+    logger.error(`[Admin] Erro ao carregar configurações: ${err.message}`);
     res.status(500).send('Erro interno.');
   }
 };
@@ -315,7 +313,11 @@ exports.saveSettings = async (req, res) => {
   };
 
   try {
-    const { organization_name, session_duration_hours, remove_logo, portal_bg_color_1, portal_bg_color_2 } = req.body;
+    const {
+      organization_name, session_duration_hours,
+      remove_logo, portal_bg_color_1, portal_bg_color_2,
+      alert_webhook_url
+    } = req.body;
 
     if (organization_name && organization_name.trim()) {
       await Setting.set('organization_name', organization_name.trim());
@@ -333,6 +335,13 @@ exports.saveSettings = async (req, res) => {
     await Setting.set('portal_bg_color_1', portal_bg_color_1);
     await Setting.set('portal_bg_color_2', portal_bg_color_2);
 
+    // Webhook de alertas (opcional)
+    const webhookUrl = (alert_webhook_url || '').trim();
+    if (webhookUrl && !URL_RE.test(webhookUrl)) {
+      return await renderSettings(null, 'URL do webhook inválida. Use http:// ou https://');
+    }
+    await Setting.set('alert_webhook_url', webhookUrl);
+
     if (remove_logo === '1') {
       const oldLogo = await Setting.get('organization_logo', '');
       if (oldLogo) {
@@ -349,10 +358,13 @@ exports.saveSettings = async (req, res) => {
       await Setting.set('organization_logo', `/uploads/logo/${req.file.filename}`);
     }
 
-    console.log('[Admin] Configurações atualizadas');
+    // Invalida cache de settings de marca (chave usada em utils/orgSettings.js)
+    settingsCache.invalidate('org_settings');
+
+    logger.info('[Admin] Configurações atualizadas');
     await renderSettings('Configurações salvas com sucesso.', null);
   } catch (err) {
-    console.error('[Admin] Erro ao salvar configurações:', err.message);
+    logger.error(`[Admin] Erro ao salvar configurações: ${err.message}`);
     await renderSettings(null, 'Erro ao salvar as configurações. Tente novamente.');
   }
 };
@@ -386,11 +398,10 @@ exports.accessPoints = async (req, res) => {
       aps: list, online, offline, unknown,
       page: 'access-points',
       pageObj: 'access-points',
-      error,
-      success
+      error, success
     });
   } catch (err) {
-    console.error('[Admin] Erro ao listar APs:', err.message);
+    logger.error(`[Admin] Erro ao listar APs: ${err.message}`);
     res.status(500).send('Erro interno.');
   }
 };
@@ -411,10 +422,10 @@ exports.saveAccessPoint = async (req, res) => {
       location: location && location.trim() ? location.trim() : null
     });
 
-    console.log(`[Admin] AP adicionado: ${name.trim()} (${ip_address.trim()})`);
+    logger.info(`[Admin] AP adicionado: ${name.trim()} (${ip_address.trim()})`);
     res.redirect('/admin/access-points?success=1');
   } catch (err) {
-    console.error('[Admin] Erro ao salvar AP:', err.message);
+    logger.error(`[Admin] Erro ao salvar AP: ${err.message}`);
     res.redirect('/admin/access-points?error=Erro+ao+salvar');
   }
 };
@@ -423,12 +434,14 @@ exports.deleteAccessPoint = async (req, res) => {
   try {
     const ap = await AccessPoint.findByPk(req.params.id);
     if (ap) {
-      console.log(`[Admin] AP removido: ${ap.name} (${ap.ip_address})`);
+      logger.info(`[Admin] AP removido: ${ap.name} (${ap.ip_address})`);
+      // Remove histórico de pings associado
+      await ApPingHistory.destroy({ where: { ap_id: ap.id } });
       await ap.destroy();
     }
     res.redirect('/admin/access-points');
   } catch (err) {
-    console.error('[Admin] Erro ao excluir AP:', err.message);
+    logger.error(`[Admin] Erro ao excluir AP: ${err.message}`);
     res.status(500).send('Erro interno.');
   }
 };
@@ -438,7 +451,33 @@ exports.pingAccessPoints = async (req, res) => {
     const results = await pingAllAccessPoints();
     res.json({ ok: true, results, checked_at: new Date().toISOString() });
   } catch (err) {
-    console.error('[Admin] Erro ao pingar APs:', err.message);
+    logger.error(`[Admin] Erro ao pingar APs: ${err.message}`);
     res.status(500).json({ ok: false, error: err.message });
+  }
+};
+
+// Histórico de pings de um AP específico (JSON)
+exports.apHistory = async (req, res) => {
+  try {
+    const ap = await AccessPoint.findByPk(req.params.id);
+    if (!ap) return res.status(404).json({ error: 'Ponto de acesso não encontrado.' });
+
+    const history = await ApPingHistory.findAll({
+      where: { ap_id: ap.id },
+      order: [['checked_at', 'DESC']],
+      limit: 100
+    });
+
+    res.json({
+      ap: { id: ap.id, name: ap.name, ip_address: ap.ip_address },
+      history: history.map(h => ({
+        is_online: h.is_online,
+        latency_ms: h.latency_ms,
+        checked_at: h.checked_at
+      }))
+    });
+  } catch (err) {
+    logger.error(`[Admin] Erro ao buscar histórico do AP: ${err.message}`);
+    res.status(500).json({ error: 'Erro interno.' });
   }
 };

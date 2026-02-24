@@ -18,7 +18,8 @@ const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
 const cron = require('node-cron');
-const { initDatabase } = require('./models');
+const logger = require('./utils/logger');
+const { initDatabase, sequelize } = require('./models');
 const { expireSessions } = require('./services/sessionService');
 const { pingAllAccessPoints } = require('./services/pingService');
 
@@ -30,17 +31,34 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Confia em um nível de proxy reverso (nginx) para X-Forwarded-For e X-Forwarded-Proto
-// Necessário para rate limiting correto e flag Secure no cookie quando atrás do nginx
 if (process.env.TRUST_PROXY === 'true') {
   app.set('trust proxy', 1);
 }
 
-// Cabeçalhos de segurança HTTP
+// ─── Cabeçalhos de segurança HTTP ────────────────────────────────────────────
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  // Content Security Policy
+  // unsafe-inline necessário para estilos dinâmicos (cores do portal)
+  res.setHeader(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "connect-src 'self'",
+      "font-src 'self'",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'"
+    ].join('; ')
+  );
+
   next();
 });
 
@@ -49,7 +67,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Sessão com store persistente no PostgreSQL (sobrevive a reinicializações)
+// Sessão com store persistente no PostgreSQL
 const sessionStore = new pgSession({
   conString: `postgresql://${process.env.DB_USER}:${encodeURIComponent(process.env.DB_PASS)}@${process.env.DB_HOST}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME}`,
   tableName: 'admin_sessions',
@@ -63,8 +81,8 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: process.env.HTTPS_ENABLED === 'true', // ativar quando nginx+SSL estiver ativo
-    sameSite: 'lax',          // Proteção CSRF: bloqueia envio cross-origin
+    secure: process.env.HTTPS_ENABLED === 'true',
+    sameSite: 'lax',
     maxAge: 8 * 60 * 60 * 1000 // 8 horas
   }
 }));
@@ -72,6 +90,26 @@ app.use(session({
 // View engine
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+
+// ─── Health Check ─────────────────────────────────────────────────────────────
+app.get('/health', async (req, res) => {
+  try {
+    await sequelize.authenticate();
+    res.json({
+      status: 'ok',
+      db: 'ok',
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(503).json({
+      status: 'error',
+      db: 'unreachable',
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString()
+    });
+  }
+});
 
 // Rotas
 app.use('/', portalRoutes);
@@ -86,8 +124,8 @@ async function connectDatabase(maxAttempts = 5, delayMs = 3000) {
       return;
     } catch (err) {
       if (attempt === maxAttempts) throw err;
-      console.warn(`[Servidor] Tentativa ${attempt}/${maxAttempts} de conexão falhou: ${err.message}`);
-      console.warn(`[Servidor] Reconectando em ${delayMs / 1000}s...`);
+      logger.warn(`[Servidor] Tentativa ${attempt}/${maxAttempts} de conexão falhou: ${err.message}`);
+      logger.warn(`[Servidor] Reconectando em ${delayMs / 1000}s...`);
       await new Promise(resolve => setTimeout(resolve, delayMs));
     }
   }
@@ -101,10 +139,10 @@ async function start() {
     // Cron: verificar sessões expiradas a cada 30 minutos
     cron.schedule('*/30 * * * *', async () => {
       try {
-        console.log('[Cron] Verificando sessões expiradas...');
+        logger.info('[Cron] Verificando sessões expiradas...');
         await expireSessions();
       } catch (err) {
-        console.error('[Cron] Erro ao expirar sessões:', err.message);
+        logger.error(`[Cron] Erro ao expirar sessões: ${err.message}`);
       }
     });
 
@@ -116,15 +154,39 @@ async function start() {
         if (count === 0) return;
         await pingAllAccessPoints();
       } catch (err) {
-        console.error('[Cron] Erro ao verificar pontos de acesso:', err.message);
+        logger.error(`[Cron] Erro ao verificar pontos de acesso: ${err.message}`);
       }
     });
 
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`[Servidor] Captive Portal rodando em http://0.0.0.0:${PORT}`);
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      logger.info(`[Servidor] Captive Portal rodando em http://0.0.0.0:${PORT}`);
     });
+
+    // ─── Graceful Shutdown ────────────────────────────────────────────────────
+    async function shutdown(signal) {
+      logger.info(`[Servidor] ${signal} recebido — encerrando...`);
+      server.close(async () => {
+        try {
+          await sequelize.close();
+          logger.info('[Servidor] Conexão com banco encerrada. Saindo.');
+        } catch (err) {
+          logger.error(`[Servidor] Erro ao fechar banco: ${err.message}`);
+        }
+        process.exit(0);
+      });
+
+      // Força saída após 10s se não conseguir fechar limpo
+      setTimeout(() => {
+        logger.error('[Servidor] Encerramento forçado após timeout.');
+        process.exit(1);
+      }, 10000);
+    }
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
+
   } catch (err) {
-    console.error('[Servidor] Erro ao iniciar:', err.message);
+    logger.error(`[Servidor] Erro ao iniciar: ${err.message}`);
     process.exit(1);
   }
 }

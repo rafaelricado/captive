@@ -52,6 +52,42 @@
     }
     .btn-del:hover { background: #ef4444; color: #fff; }
 
+    .btn-hist {
+      padding: 4px 10px; background: none; border: 1px solid #0d4e8b;
+      color: #0d4e8b; border-radius: 6px; font-size: .78rem; cursor: pointer;
+    }
+    .btn-hist:hover { background: #0d4e8b; color: #fff; }
+
+    /* Modal de histórico */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal {
+      background: #fff; border-radius: 12px;
+      box-shadow: 0 4px 32px rgba(0,0,0,.2);
+      width: 90%; max-width: 640px; max-height: 80vh;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .modal-header {
+      padding: 18px 22px; border-bottom: 1px solid #e5e7eb;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-header h3 { font-size: 1rem; font-weight: 700; color: #0d4e8b; }
+    .modal-close {
+      background: none; border: none; font-size: 1.4rem;
+      cursor: pointer; color: #6b7280; line-height: 1;
+    }
+    .modal-body { padding: 16px 22px; overflow-y: auto; flex: 1; }
+    .hist-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    .hist-table th { text-align: left; padding: 7px 10px; background: #f9fafb; color: #6b7280; font-weight: 600; border-bottom: 1px solid #e5e7eb; }
+    .hist-table td { padding: 7px 10px; border-bottom: 1px solid #f3f4f6; }
+    .hist-loading { text-align: center; color: #6b7280; padding: 24px; }
+    .hist-empty { text-align: center; color: #9ca3af; padding: 24px; }
+
     /* Formulário de adição */
     .add-card {
       background: #fff; border-radius: 12px;
@@ -181,7 +217,8 @@
                 <% } %>
               </td>
               <td id="checked-<%= ap.id %>"><%= ap.last_checked_at %></td>
-              <td>
+              <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <button type="button" class="btn-hist" onclick="showHistory('<%= ap.id %>', <%- JSON.stringify(ap.name) %>)">Histórico</button>
                 <form method="POST" action="/admin/access-points/<%= ap.id %>/delete"
                       onsubmit="return confirm('Remover ' + <%- JSON.stringify(ap.name) %> + ' do monitoramento?')">
                   <button type="submit" class="btn-del">Remover</button>
@@ -314,6 +351,66 @@
 
     // Auto-refresh a cada 5 minutos (coincide com o cron do servidor)
     setTimeout(() => location.reload(), 5 * 60 * 1000);
+
+    // ─── Modal de histórico de latência ───────────────────────────────────────
+    async function showHistory(apId, apName) {
+      const overlay = document.getElementById('modal-overlay');
+      const title = document.getElementById('modal-title');
+      const body = document.getElementById('modal-body');
+
+      title.textContent = 'Histórico: ' + apName;
+      body.innerHTML = '<div class="hist-loading">Carregando...</div>';
+      overlay.classList.remove('hidden');
+
+      try {
+        const res = await fetch('/admin/access-points/' + apId + '/history');
+        const data = await res.json();
+
+        if (!data.history || data.history.length === 0) {
+          body.innerHTML = '<div class="hist-empty">Nenhum dado de histórico ainda.</div>';
+          return;
+        }
+
+        const rows = data.history.map(h => {
+          const statusCls = h.is_online ? 'badge-online' : 'badge-offline';
+          const statusTxt = h.is_online ? 'Online' : 'Offline';
+          const lat = h.latency_ms !== null ? h.latency_ms + ' ms' : '—';
+          const cls = h.latency_ms === null ? '' : h.latency_ms < 10 ? 'fast' : h.latency_ms < 50 ? 'slow' : 'very-slow';
+          return `<tr>
+            <td>${fmtDate(h.checked_at)}</td>
+            <td><span class="badge ${statusCls}">${statusTxt}</span></td>
+            <td><span class="latency ${cls}">${lat}</span></td>
+          </tr>`;
+        }).join('');
+
+        body.innerHTML = `
+          <table class="hist-table">
+            <thead><tr><th>Data/Hora</th><th>Status</th><th>Latência</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>`;
+      } catch (e) {
+        body.innerHTML = '<div class="hist-empty">Erro ao carregar histórico.</div>';
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('modal-overlay').classList.add('hidden');
+    }
+
+    document.getElementById('modal-overlay').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
+    });
   </script>
+
+  <!-- Modal de histórico de latência -->
+  <div class="modal-overlay hidden" id="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Histórico</h3>
+        <button class="modal-close" onclick="closeModal()">&#215;</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
 </body>
 </html>

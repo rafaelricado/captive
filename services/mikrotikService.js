@@ -1,4 +1,5 @@
 const { RouterOSAPI } = require('node-routeros');
+const logger = require('../utils/logger');
 
 let api = null;
 let apiConnected = false;
@@ -28,10 +29,10 @@ async function getApi() {
     try {
       await api.connect();
       apiConnected = true;
-      console.log('[Mikrotik] Conectado ao RouterOS v7');
+      logger.info('[Mikrotik] Conectado ao RouterOS v7');
       return api;
     } catch (err) {
-      console.error('[Mikrotik] Erro ao conectar:', err.message);
+      logger.error(`[Mikrotik] Erro ao conectar: ${err.message}`);
       api = null;
       apiConnected = false;
       throw err;
@@ -62,7 +63,7 @@ async function authorizeUser(mac, ip, cpf, nomeCompleto) {
       // então o vínculo seria quebrado a cada reconexão. O CPF já identifica o usuário.
 
       await conn.write('/ip/hotspot/user/add', addParams);
-      console.log(`[Mikrotik] Usuário hotspot criado: ${cpf} (mac: ${mac || 'desconhecido'})`);
+      logger.info(`[Mikrotik] Usuário hotspot criado: ${cpf} (mac: ${mac || 'desconhecido'})`);
     }
 
     // Cria IP binding para liberar acesso imediato
@@ -86,15 +87,15 @@ async function authorizeUser(mac, ip, cpf, nomeCompleto) {
         ];
 
         await conn.write('/ip/hotspot/ip-binding/add', bindParams);
-        console.log(`[Mikrotik] IP binding criado para ${ip} mac=${mac || '?'} (${cpf})`);
+        logger.info(`[Mikrotik] IP binding criado para ${ip} mac=${mac || '?'} (${cpf})`);
       } catch (err) {
-        console.warn('[Mikrotik] Aviso ao criar IP binding:', err.message);
+        logger.warn(`[Mikrotik] Aviso ao criar IP binding: ${err.message}`);
       }
     }
 
     return true;
   } catch (err) {
-    console.error('[Mikrotik] Erro ao autorizar usuário:', err.message);
+    logger.error(`[Mikrotik] Erro ao autorizar usuário: ${err.message}`);
     apiConnected = false;
     return false;
   }
@@ -133,13 +134,13 @@ async function removeUser(cpf, fullDelete = false) {
           `=.id=${u['.id']}`
         ]);
       }
-      console.log(`[Mikrotik] Usuário hotspot removido: ${cpf}`);
+      logger.info(`[Mikrotik] Usuário hotspot removido: ${cpf}`);
     }
 
-    console.log(`[Mikrotik] Autorizações removidas para: ${cpf}`);
+    logger.info(`[Mikrotik] Autorizações removidas para: ${cpf}`);
     return true;
   } catch (err) {
-    console.error('[Mikrotik] Erro ao remover usuário:', err.message);
+    logger.error(`[Mikrotik] Erro ao remover usuário: ${err.message}`);
     apiConnected = false;
     return false;
   }
