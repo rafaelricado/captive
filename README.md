@@ -1,8 +1,6 @@
-# Captive Portal - Hospital Beneficiente Portuguesa
+# Captive Portal
 
 Sistema de captive portal para autenticacao de visitantes na rede Wi-Fi, integrado com Mikrotik RouterOS v7.
-
-Desenvolvido por **BP TI**.
 
 ---
 
@@ -25,8 +23,6 @@ Desenvolvido por **BP TI**.
 15. [Comandos Uteis](#comandos-uteis)
 16. [Troubleshooting](#troubleshooting)
 17. [Dependencias do Projeto](#dependencias-do-projeto)
-
-> **Configuracao detalhada do Mikrotik:** veja `scripts/MIKROTIK_GUIA.md`
 
 ---
 
@@ -57,27 +53,30 @@ Desenvolvido por **BP TI**.
 ```
 [Internet / Provedor]
          |
-     [ ether1 ] WAN
+  [ ether5/ether6 ] WAN (dual)
          |
-     [MIKROTIK v7.19]  192.168.1.1
-         |                       |
-     [ ether2 ] (ou ether3/4)  [ wlan1 ] Wi-Fi Visitantes
-         |                              |
-  [Ubuntu 192.168.1.10]       [Visitante 192.168.1.x]
-  Captive Portal :3000                  |
-  PostgreSQL :5432            Mikrotik intercepta (Hotspot)
+  [MIKROTIK CCR v7.19]
+         |                          |
+     [ ether2 ]               [ ether3/ether4 ]
+  Rede visitantes              Rede interna hospital
+  15.1.1.0/24                  10.0.0.0/22 / 192.168.0.0/24
+  gateway 15.1.1.1                     |
+         |                    [Ubuntu 10.0.0.56]
+         |                    Captive Portal :3000
+  [Visitante 15.1.1.x]        PostgreSQL :5432
+  DHCP: 15.1.1.10-254                  |
          |                             |
-         |                    login.html redireciona para :3000
+  Mikrotik Hotspot intercepta          |
+  redireciona HTTP -> 10.0.0.56:3000   |
          |                             |
-         +<--------- cadastro / login -+
-         |
-         +--> Mikrotik API :8728  (autoriza ip-binding)
-         |
-         +--> ViaCEP API          (autocompletar CEP)
+         +-------- cadastro / login ---+
+                                       |
+                          Mikrotik API :8728 (ip-binding)
+                                       |
+                          ViaCEP API (autocompletar CEP)
 
-  Rede unica: 192.168.1.0/24
-  Servidor usa IP fixo .10, visitantes recebem .100-.250 via DHCP
-  Servidor bypassa o hotspot via ip-binding (nao precisa se autenticar)
+  Visitantes isolados da rede interna via firewall
+  Servidor bypassa o hotspot via ip-binding (libera por IP)
 ```
 
 **Resumo do fluxo:**
@@ -151,15 +150,8 @@ captive/
 │       └── logo/                 # Logos enviadas pelo admin (criado automaticamente)
 │
 └── scripts/
-    ├── setup.sh                  # Script de instalacao automatica (Ubuntu)
-    ├── mikrotik_setup.rsc        # Script de configuracao do Mikrotik (RouterOS v7)
-    ├── MIKROTIK_GUIA.md          # Guia detalhado de configuracao do Mikrotik
-    └── hotspot/                  # Paginas HTML servidas pelo Mikrotik Hotspot
-        ├── login.html            # Redireciona visitante para o portal externo
-        ├── alogin.html           # Exibida apos autenticacao bem-sucedida
-        ├── logout.html           # Exibida ao desconectar
-        ├── error.html            # Exibida em caso de erro do hotspot
-        └── redirect.html         # Redirect interno do hotspot
+    ├── setup.sh                      # Script de instalacao automatica (Ubuntu)
+    └── captive_portal_ether2.rsc     # Script de configuracao do Mikrotik (ether2, 15.1.1.0/24)
 ```
 
 ---
@@ -169,26 +161,30 @@ captive/
 O script automatico instala tudo no Ubuntu (Node.js, PostgreSQL, dependencias, systemd):
 
 ```bash
-# 1. Clone ou copie o projeto para o servidor
-cd /opt
-git clone <url-do-repositorio> captive
-cd captive
+# 1. Clone o projeto para o servidor (usuario normal com sudo, nao root)
+sudo mkdir -p /opt/captive && sudo chown $USER:$USER /opt/captive
+git clone https://github.com/rafaelricado/captive.git /opt/captive
+cd /opt/captive
 
-# 2. De permissao e execute o script
-chmod +x scripts/setup.sh
-./scripts/setup.sh
+# 2. Execute o script de instalacao
+bash scripts/setup.sh
 ```
+
+> **Atencao ao git clone:** use `git clone <url> /opt/captive` (com o caminho de destino).
+> Se usar apenas `git clone <url>` dentro de `/opt/captive`, o projeto ficara em `/opt/captive/captive` e o servico pode nao encontrar os arquivos.
 
 O script ira pedir:
 - **Senha do banco de dados** (para o usuario `captive_user`)
-- **IP do Mikrotik** (padrao: 192.168.1.1)
-- **Usuario do Mikrotik** (padrao: captive_api)
+- **IP do Mikrotik** (padrao: `15.1.1.1`)
+- **Usuario do Mikrotik** (padrao: `captive_api`)
 - **Senha do Mikrotik**
-- **Duracao da sessao em horas** (padrao: 48)
-- **Usuario do painel admin** (padrao: admin)
+- **Duracao da sessao em horas** (padrao: `48`)
+- **Usuario do painel admin** (padrao: `admin`)
 - **Senha do painel admin**
 
 O `SESSION_SECRET` e gerado automaticamente de forma segura.
+
+> **Senhas com caracteres especiais:** o script suporta qualquer caractere **exceto aspas duplas (`"`)**. Caracteres como `#`, `$`, `@`, `!` funcionam normalmente. As senhas sao gravadas com aspas no `.env` para garantir que `#` nao seja interpretado como comentario pelo dotenv.
 
 Ao final, o servico ja estara rodando na porta 3000.
 
@@ -253,7 +249,7 @@ Crie o arquivo `/etc/systemd/system/captive-portal.service`:
 
 ```ini
 [Unit]
-Description=Captive Portal - Hospital Beneficiente Portuguesa
+Description=Captive Portal
 After=network.target postgresql.service
 
 [Service]
@@ -292,22 +288,24 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=captive_portal
 DB_USER=captive_user
-DB_PASS=sua_senha_segura
+DB_PASS="sua_senha_segura"      # Use aspas para suportar # e outros caracteres especiais
 
 # Mikrotik RouterOS API
-MIKROTIK_HOST=192.168.1.1       # IP do Mikrotik
-MIKROTIK_USER=captive_api       # Usuario com permissao API
-MIKROTIK_PASS=senha_mikrotik    # Senha do usuario
+MIKROTIK_HOST=15.1.1.1          # IP do gateway da rede de visitantes (ether2)
+MIKROTIK_USER=captive_api       # Usuario criado pelo script .rsc
+MIKROTIK_PASS="senha_mikrotik"  # Use aspas para suportar # e outros caracteres especiais
 MIKROTIK_PORT=8728              # Porta da API (opcional, padrao: 8728)
 
 # Duracao da sessao em horas (padrao: 48 = 2 dias)
 SESSION_DURATION_HOURS=48
 
 # Painel Administrativo
-ADMIN_USER=admin                # Usuario de acesso ao painel
-ADMIN_PASSWORD=sua_senha_admin  # Senha de acesso ao painel
+ADMIN_USER=admin                 # Usuario de acesso ao painel
+ADMIN_PASSWORD="sua_senha_admin" # Use aspas para suportar # e outros caracteres especiais
 SESSION_SECRET=string_longa_e_aleatoria  # Gerado automaticamente pelo setup.sh
 ```
+
+> **Importante:** senhas com `#` devem estar entre aspas duplas no `.env`. Sem aspas, tudo apos o `#` e interpretado como comentario e a senha fica truncada. O `setup.sh` faz isso automaticamente. Se editar o `.env` manualmente, use sempre aspas nas senhas.
 
 Gerar o `SESSION_SECRET` manualmente (se necessario):
 
@@ -332,170 +330,56 @@ O servidor **nao inicia** se alguma variavel obrigatoria estiver faltando e most
 
 ## Configuracao do Mikrotik
 
-**Importante:** Estas instrucoes sao para RouterOS v7.x (testado em v7.19).
+**Importante:** Estas instrucoes sao para RouterOS v7.x (testado em v7.19 no CCR1009-7G-1C-1S+).
 
-Para configuracao completa e detalhada, incluindo passo a passo com Winbox,
-topologias alternativas e troubleshooting, consulte:
+O script `scripts/captive_portal_ether2.rsc` configura automaticamente a rede de visitantes na porta **ether2** com a faixa `15.1.1.0/24`.
 
-> **`scripts/MIKROTIK_GUIA.md`**
+### Passo 1 - Copiar o script para o Mikrotik
 
-### Resumo rapido (Mikrotik zerado)
+**Via SCP** (do servidor Ubuntu):
+```bash
+scp /opt/captive/scripts/captive_portal_ether2.rsc admin@15.1.1.1:/
+```
 
-### Passo 1 - Copiar arquivos para o Mikrotik (via Winbox > Files)
+**Via Winbox:** Files > Upload > selecione `captive_portal_ether2.rsc`
 
-Crie a pasta `hotspot` no Mikrotik e copie todos os arquivos de `scripts/hotspot/`.
-Depois copie `scripts/mikrotik_setup.rsc` para a raiz.
+### Passo 2 - Importar o script
 
-### Passo 2 - Editar variaveis e importar o script
-
-Edite as variaveis no inicio de `mikrotik_setup.rsc` e execute no terminal:
+No terminal do Mikrotik (SSH ou Winbox Terminal):
 
 ```routeros
-/import file-name=mikrotik_setup.rsc
+/import file-name=captive_portal_ether2.rsc
 ```
 
-### Passo 3 - Criar o Hotspot (referencia manual)
+O script configura automaticamente:
+- IP `15.1.1.1/24` na porta ether2
+- Pool DHCP `15.1.1.10-15.1.1.254` (lease 48h)
+- Servidor DHCP com DNS `15.1.1.1, 1.1.1.1, 8.8.8.8`
+- Hotspot na ether2 com redirect HTTP para o portal
+- Firewall isolando visitantes das redes internas (`10.0.0.0/22` e `192.168.0.0/24`)
+- Walled garden com deteccao de portal para iOS, Android e Windows
+- Usuario `captive_api` para a API Node.js (porta 8728)
 
-Acesse o Mikrotik via **Winbox** ou **WebFig**.
-
-```
-IP > Hotspot > Hotspot Setup
-```
-
-Siga o assistente selecionando:
-- **Hotspot Interface:** a interface wireless dos visitantes
-- **Local Address of Network:** o IP do gateway (ex: 10.0.0.1/24)
-- **Address Pool:** pool de IPs para visitantes
-- **DNS Name:** (pode deixar em branco ou colocar `portal.local`)
-
-### Passo 2 - Configurar Server Profile
-
-```
-IP > Hotspot > Server Profiles > (selecione o profile criado)
-```
-
-Na aba **Login**:
-- **Login By:** marque `HTTP CHAP`
-- Desmarque `Cookie` (para forcar reautenticacao apos expirar)
-- **HTTP PAP:** desabilitado
-
-Na aba **General**:
-- **HTML Directory Override:** deixe vazio (usaremos login externo)
-
-### Passo 3 - Configurar pagina de login externa
-
-No **Hotspot Server Profile**, na aba **Login**, configure o campo **Login Page** (ou via terminal):
+### Passo 3 - Verificar configuracao
 
 ```routeros
-/ip hotspot profile set [find name=seu_profile] login-by=http-chap html-directory-override=""
-```
+# IP configurado na ether2
+/ip address print where interface=ether2
 
-Para redirecionar para o captive portal externo, edite o arquivo `login.html` do hotspot ou use Walled Garden com redirect.
-
-**Via Terminal** (metodo recomendado - redirect automatico):
-
-```routeros
-/ip hotspot walled-garden ip
-add action=accept dst-address=<IP_DO_SERVIDOR_UBUNTU>
-add action=accept dst-address=0.0.0.0/0 dst-port=53 protocol=udp comment="DNS"
-```
-
-No **Hotspot Server**, configure a URL de login:
-
-```routeros
-/ip hotspot set [find] login-by=http-chap
-```
-
-Crie/edite o arquivo `login.html` no hotspot para redirecionar:
-
-```html
-<html>
-<head>
-<meta http-equiv="refresh" content="0;url=http://<IP_SERVIDOR>:3000/?mac=$(mac)&ip=$(ip)&username=$(username)&link-orig=$(link-orig)">
-</head>
-</html>
-```
-
-**Parametros passados pelo Mikrotik:**
-
-| Parametro     | Descricao                               |
-|--------------|----------------------------------------|
-| `$(mac)`      | MAC address do dispositivo do visitante |
-| `$(ip)`       | IP atribuido ao visitante              |
-| `$(username)` | Nome de usuario (se houver)            |
-| `$(link-orig)`| URL original que o visitante tentou acessar |
-
-### Passo 4 - Configurar Walled Garden
-
-Permitir que visitantes nao autenticados acessem o servidor do portal:
-
-```routeros
-/ip hotspot walled-garden ip
-add action=accept dst-address=<IP_DO_SERVIDOR_UBUNTU> comment="Captive Portal Server"
-add action=accept dst-address=0.0.0.0/0 dst-port=53 protocol=udp comment="DNS para todos"
-```
-
-**Via WebFig/Winbox:**
-
-```
-IP > Hotspot > Walled Garden > IP List > Add
-- Action: accept
-- Dst. Address: <IP_DO_SERVIDOR_UBUNTU>
-- Comment: Captive Portal Server
-```
-
-### Passo 5 - Habilitar API do RouterOS
-
-```routeros
-/ip service set api address=<IP_DO_SERVIDOR_UBUNTU>/32 disabled=no port=8728
-```
-
-**Via WebFig/Winbox:**
-
-```
-IP > Services
-- api: habilitado, porta 8728
-- Available From: <IP_DO_SERVIDOR_UBUNTU> (restrinja por seguranca!)
-```
-
-### Passo 6 - Criar usuario para API
-
-```routeros
-/user add name=captive_api password=sua_senha_api group=full comment="Captive Portal API"
-```
-
-**Via WebFig/Winbox:**
-
-```
-System > Users > Add
-- Name: captive_api
-- Password: sua_senha_api
-- Group: full (ou grupo customizado com permissao api, read, write)
-- Comment: Captive Portal API
-```
-
-> **Seguranca:** Restrinja o acesso da API apenas ao IP do servidor Ubuntu. Nunca deixe a API aberta para toda a rede.
-
-### Passo 7 - Verificar configuracao
-
-No terminal do Mikrotik, verifique:
-
-```routeros
-# Verificar hotspot
+# Hotspot ativo
 /ip hotspot print
 
-# Verificar server profile
-/ip hotspot profile print
-
-# Verificar walled garden
+# Walled garden
 /ip hotspot walled-garden ip print
 
-# Verificar API
-/ip service print where name=api
-
-# Verificar usuario
+# Usuario API
 /user print where name=captive_api
+
+# API habilitada
+/ip service print where name=api
 ```
+
+> **Seguranca:** A API RouterOS (porta 8728) fica acessivel apenas do servidor Ubuntu (`10.0.0.56`). O script nao restringe por IP — considere aplicar manualmente: `/ip service set api address=10.0.0.56/32`
 
 ---
 
@@ -626,7 +510,7 @@ Visitante perde acesso, precisa reautenticar
 | Chave                  | Valor padrao                    | Descricao                                            |
 |------------------------|---------------------------------|------------------------------------------------------|
 | `session_duration_hours` | `48`                          | Duracao das sessoes de visitante em horas (1-720)    |
-| `organization_name`    | `Hospital Beneficiente Portuguesa` | Nome exibido no portal e no painel admin          |
+| `organization_name`    | `Captive Portal`                   | Nome exibido no portal e no painel admin          |
 | `organization_logo`    | *(vazio)*                       | Caminho relativo da logo enviada (ex: `/uploads/logo/logo_123.png`) |
 | `portal_bg_color_1`    | `#0d4e8b`                       | Cor primaria do gradiente de fundo do portal         |
 | `portal_bg_color_2`    | `#1a7bc4`                       | Cor secundaria do gradiente de fundo do portal       |
@@ -977,6 +861,34 @@ UPDATE sessions SET active = false WHERE active = true;
 - Verifique se a tabela `settings` foi criada corretamente: `SELECT * FROM settings;`
 - O `sync({ alter: true })` na inicializacao cria e ajusta as tabelas automaticamente
 - Confirme que o usuario do banco tem permissao `INSERT` e `UPDATE` na tabela `settings`
+
+### Erro 500 ao fazer login no painel admin / TypeError: Invalid URL nos logs
+
+**Causa:** a senha do banco (`DB_PASS`) contem `#` e esta sem aspas no `.env`. O dotenv interpreta `#` como inicio de comentario e a senha fica truncada. A connection string do PostgreSQL usada pelo store de sessao recebe uma senha incorreta e falha ao montar a URL.
+
+**Solucao:** coloque aspas duplas nas senhas no `.env`:
+```env
+DB_PASS="suaSenha#comHash"
+MIKROTIK_PASS="outraSenha#"
+ADMIN_PASSWORD="adminSenha#"
+```
+Reinicie o servico apos editar: `sudo systemctl restart captive-portal`
+
+### Projeto instalado em diretorio duplicado (/opt/captive/captive)
+
+**Causa:** executar `git clone <url>` dentro de `/opt/captive` cria `/opt/captive/captive`. O servico systemd aponta para o diretorio errado.
+
+**Solucao:** use o caminho de destino no clone:
+```bash
+git clone https://github.com/rafaelricado/captive.git /opt/captive
+```
+
+Se ja instalou no diretorio errado, corrija o `WorkingDirectory` no servico:
+```bash
+sudo nano /etc/systemd/system/captive-portal.service
+# Altere: WorkingDirectory=/opt/captive/captive
+sudo systemctl daemon-reload && sudo systemctl restart captive-portal
+```
 
 ### Excedeu limite de tentativas (HTTP 429)
 
