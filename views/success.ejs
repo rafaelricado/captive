@@ -3,15 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Conectado - Hospital Beneficiente Portuguesa</title>
+  <title>Conectado - <%= orgName %></title>
   <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: linear-gradient(135deg, <%= bgColor1 %> 0%, <%= bgColor2 %> 50%, <%= bgColor1 %> 100%); }
+    header { background: <%= bgColor1 %>; }
+    .btn-primary { background: <%= bgColor1 %>; }
+    .btn-primary:hover { background: <%= bgColor2 %>; }
+  </style>
 </head>
 <body>
   <div class="container">
     <header>
       <div class="logo-area">
-        <h1>Wi-Fi Visitantes</h1>
-        <p class="subtitle">Hospital Beneficiente Portuguesa</p>
+        <% if (orgLogo) { %>
+          <img src="<%= orgLogo %>" alt="<%= orgName %>" class="org-logo">
+        <% } else { %>
+          <h1>Wi-Fi Visitantes</h1>
+        <% } %>
+        <p class="subtitle"><%= orgName %></p>
       </div>
     </header>
 
@@ -30,7 +40,7 @@
     </div>
 
     <footer>
-      <p class="footer-empresa">Hospital Beneficiente Portuguesa</p>
+      <p class="footer-empresa"><%= orgName %></p>
       <p class="footer-dev">Desenvolvido por BP TI</p>
     </footer>
   </div>

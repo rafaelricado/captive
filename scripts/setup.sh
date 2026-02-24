@@ -1,7 +1,6 @@
 #!/bin/bash
 # ===========================================
 # Script de Instalacao - Captive Portal
-# Hospital Beneficiente Portuguesa - BP TI
 # Ubuntu Server
 # ===========================================
 
@@ -17,7 +16,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo ""
 echo "============================================"
-echo "  Captive Portal - Hospital BP"
+echo "  Captive Portal"
 echo "  Script de Instalacao - Ubuntu"
 echo "============================================"
 echo ""
@@ -204,7 +203,7 @@ echo -e "${YELLOW}[6/7] Configurando servico systemd...${NC}"
 
 sudo tee /etc/systemd/system/captive-portal.service > /dev/null <<EOF
 [Unit]
-Description=Captive Portal - Hospital Beneficiente Portuguesa
+Description=Captive Portal
 After=network.target postgresql.service
 Wants=postgresql.service
 

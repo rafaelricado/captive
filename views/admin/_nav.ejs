@@ -1,8 +1,9 @@
 <nav>
-  <span class="brand">Hospital BP &mdash; Admin</span>
+  <span class="brand"><%= locals.orgName %> &mdash; Admin</span>
   <a href="/admin" class="<%= page === 'dashboard' ? 'active' : '' %>">Dashboard</a>
   <a href="/admin/users" class="<%= page === 'users' ? 'active' : '' %>">Usuários</a>
   <a href="/admin/sessions" class="<%= page === 'sessions' ? 'active' : '' %>">Sessões</a>
+  <a href="/admin/settings" class="<%= page === 'settings' ? 'active' : '' %>">Configurações</a>
   <div class="spacer"></div>
   <form method="POST" action="/admin/logout">
     <button type="submit">Sair</button>

@@ -13,7 +13,7 @@ const Setting = sequelize.define('Setting', {
     unique: true
   },
   value: {
-    type: DataTypes.STRING,
+    type: DataTypes.STRING(1024),
     allowNull: false
   }
 }, {
@@ -21,9 +21,24 @@ const Setting = sequelize.define('Setting', {
   timestamps: false
 });
 
+Setting.get = async function (key, defaultValue = null) {
+  const s = await Setting.findOne({ where: { key } });
+  return s ? s.value : defaultValue;
+};
+
+Setting.set = async function (key, value) {
+  const [s] = await Setting.findOrCreate({ where: { key }, defaults: { value: String(value) } });
+  if (s.value !== String(value)) {
+    s.value = String(value);
+    await s.save();
+  }
+  return s;
+};
+
 Setting.getSessionDuration = async function () {
-  const setting = await Setting.findOne({ where: { key: 'session_duration_hours' } });
-  return setting ? parseInt(setting.value, 10) : 48;
+  const val = await Setting.get('session_duration_hours', '48');
+  const hours = parseInt(val, 10);
+  return (isNaN(hours) || hours < 1 || hours > 720) ? 48 : hours;
 };
 
 module.exports = Setting;

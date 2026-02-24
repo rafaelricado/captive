@@ -19,9 +19,12 @@ Desenvolvido por **BP TI**.
 9. [Banco de Dados](#banco-de-dados)
 10. [Rotas da API](#rotas-da-api)
 11. [Painel Administrativo](#painel-administrativo)
-12. [Gerenciamento de Sessoes](#gerenciamento-de-sessoes)
-13. [Comandos Uteis](#comandos-uteis)
-14. [Troubleshooting](#troubleshooting)
+12. [Personalizacao de Marca e Cores](#personalizacao-de-marca-e-cores)
+13. [Gerenciamento de Sessoes](#gerenciamento-de-sessoes)
+14. [Seguranca](#seguranca)
+15. [Comandos Uteis](#comandos-uteis)
+16. [Troubleshooting](#troubleshooting)
+17. [Dependencias do Projeto](#dependencias-do-projeto)
 
 > **Configuracao detalhada do Mikrotik:** veja `scripts/MIKROTIK_GUIA.md`
 
@@ -134,6 +137,7 @@ captive/
 │       ├── dashboard.ejs         # Dashboard com estatisticas
 │       ├── users.ejs             # Lista de usuarios cadastrados
 │       ├── sessions.ejs          # Lista de sessoes de acesso
+│       ├── settings.ejs          # Pagina de configuracoes do portal
 │       ├── _head.ejs             # Estilos compartilhados (partial)
 │       ├── _nav.ejs              # Menu de navegacao (partial)
 │       └── _footer.ejs           # Rodape (partial)
@@ -141,8 +145,10 @@ captive/
 ├── public/
 │   ├── css/
 │   │   └── style.css             # Estilos do portal (responsivo)
-│   └── js/
-│       └── app.js                # JavaScript frontend (mascaras, validacao, CEP)
+│   ├── js/
+│   │   └── app.js                # JavaScript frontend (mascaras, validacao, CEP)
+│   └── uploads/
+│       └── logo/                 # Logos enviadas pelo admin (criado automaticamente)
 │
 └── scripts/
     ├── setup.sh                  # Script de instalacao automatica (Ubuntu)
@@ -609,19 +615,38 @@ Visitante perde acesso, precisa reautenticar
 
 ### Tabela `settings`
 
-| Coluna | Tipo    | Descricao                          |
-|-------|---------|------------------------------------|
-| id    | INTEGER | Identificador                      |
-| key   | VARCHAR | Nome da configuracao (unico)       |
-| value | VARCHAR | Valor da configuracao              |
+| Coluna | Tipo         | Descricao                          |
+|--------|--------------|------------------------------------|
+| id     | INTEGER      | Identificador                      |
+| key    | VARCHAR      | Nome da configuracao (unico)       |
+| value  | VARCHAR(1024)| Valor da configuracao              |
 
-**Configuracao padrao:** `session_duration_hours` = `48`
+**Chaves gerenciadas pelo sistema:**
 
-Para alterar a duracao da sessao diretamente no banco:
+| Chave                  | Valor padrao                    | Descricao                                            |
+|------------------------|---------------------------------|------------------------------------------------------|
+| `session_duration_hours` | `48`                          | Duracao das sessoes de visitante em horas (1-720)    |
+| `organization_name`    | `Hospital Beneficiente Portuguesa` | Nome exibido no portal e no painel admin          |
+| `organization_logo`    | *(vazio)*                       | Caminho relativo da logo enviada (ex: `/uploads/logo/logo_123.png`) |
+| `portal_bg_color_1`    | `#0d4e8b`                       | Cor primaria do gradiente de fundo do portal         |
+| `portal_bg_color_2`    | `#1a7bc4`                       | Cor secundaria do gradiente de fundo do portal       |
+
+Todas as configuracoes sao gerenciadas pelo painel em `/admin/settings`. Tambem e possivel alterar diretamente no banco:
 
 ```sql
+-- Alterar duracao da sessao para 24h
 UPDATE settings SET value = '24' WHERE key = 'session_duration_hours';
+
+-- Alterar nome da organizacao
+UPDATE settings SET value = 'Minha Empresa' WHERE key = 'organization_name';
+
+-- Alterar cor primaria do portal
+UPDATE settings SET value = '#1a5276' WHERE key = 'portal_bg_color_1';
 ```
+
+### Tabela `admin_sessions`
+
+Criada automaticamente pelo `connect-pg-simple`. Armazena as sessoes do painel administrativo no PostgreSQL, garantindo que as sessoes persistam entre reinicializacoes do servidor. Nao e necessario interagir com ela manualmente.
 
 ---
 
@@ -639,16 +664,20 @@ UPDATE settings SET value = '24' WHERE key = 'session_duration_hours';
 
 ### Admin (painel)
 
-| Metodo | Rota               | Descricao                              |
-|--------|--------------------|----------------------------------------|
-| GET    | `/admin/login`     | Tela de login do painel                |
-| POST   | `/admin/login`     | Autenticacao (usuario + senha)         |
-| POST   | `/admin/logout`    | Encerrar sessao admin                  |
-| GET    | `/admin`           | Dashboard com estatisticas             |
-| GET    | `/admin/users`     | Lista paginada de usuarios             |
-| GET    | `/admin/sessions`  | Lista paginada de sessoes de acesso    |
+| Metodo | Rota                | Descricao                              |
+|--------|---------------------|----------------------------------------|
+| GET    | `/admin/login`      | Tela de login do painel                |
+| POST   | `/admin/login`      | Autenticacao (usuario + senha)         |
+| POST   | `/admin/logout`     | Encerrar sessao admin                  |
+| GET    | `/admin`            | Dashboard com estatisticas             |
+| GET    | `/admin/users`      | Lista paginada de usuarios             |
+| GET    | `/admin/sessions`   | Lista paginada de sessoes de acesso    |
+| GET    | `/admin/settings`   | Pagina de configuracoes do portal      |
+| POST   | `/admin/settings`   | Salvar configuracoes (multipart/form)  |
 
 Todas as rotas `/admin/*` (exceto login) requerem autenticacao. Sessao de admin dura 8 horas.
+
+> **Rate limiting em `/api/register` e `/api/login`:** maximo de 10 requisicoes por IP a cada 15 minutos. Exceder o limite retorna HTTP 429 com mensagem em portugues no portal.
 
 ### Detalhes
 
@@ -701,18 +730,58 @@ Sera solicitado o usuario e a senha definidos em `ADMIN_USER` e `ADMIN_PASSWORD`
 | Dashboard | `/admin` | Total de usuarios, sessoes ativas agora, novos hoje, novos na semana |
 | Usuarios | `/admin/users` | Tabela paginada: nome, CPF mascarado, e-mail, telefone, cidade/UF, data de cadastro |
 | Sessoes | `/admin/sessions` | Tabela paginada: usuario, IP, MAC, inicio, expiracao, status (Ativa/Expirada) |
+| Configuracoes | `/admin/settings` | Identidade visual, cores do portal, duracao da sessao |
 
 - Paginacao de 50 registros por pagina
 - CPF exibido mascarado (`***.456.789-01`) para proteger dados sensiveis
 - Menu de navegacao com link para cada secao e botao de logout
+- Nome e logo da organizacao refletidos dinamicamente em todo o painel
 
-### Seguranca
+### Credenciais e Sessao do Admin
 
-- Sessao server-side assinada com `SESSION_SECRET` (nunca exposta ao cliente)
+- Sessao server-side armazenada no PostgreSQL (persiste entre reinicializacoes do servidor)
+- Sessao assinada com `SESSION_SECRET` (nunca exposta ao cliente)
 - Cookie com `httpOnly` e `sameSite: lax` (protecao contra CSRF)
 - Comparacao de senha em tempo constante (previne timing attacks)
 - ID de sessao regenerado apos login (previne session fixation)
 - Sessao expira automaticamente apos 8 horas de inatividade
+
+---
+
+## Personalizacao de Marca e Cores
+
+Acesse `/admin/settings` para personalizar o portal sem editar codigo.
+
+### Identidade Visual
+
+| Campo | Descricao |
+|-------|-----------|
+| Nome da organizacao | Exibido no titulo do navegador, cabecalho do portal, painel admin e rodape |
+| Logo | Upload de imagem (JPG, PNG, GIF, WebP, max 2 MB). Exibida no lugar do nome no cabecalho do portal |
+
+Quando uma logo e cadastrada, ela substitui o texto do nome no cabecalho do portal. O nome continua sendo usado no `<title>` da pagina e no rodape.
+
+- A logo anterior e excluida automaticamente do servidor ao fazer upload de uma nova
+- Use o botao "Remover logo" para voltar a exibir o nome em texto
+
+> **Seguranca de upload:** SVG nao e aceito (pode conter JavaScript). A validacao verifica tanto a extensao do arquivo quanto o MIME type real enviado pelo navegador.
+
+### Cores do Portal
+
+Dois seletores de cor definem o gradiente de fundo da pagina de portal (`portal.ejs`) e da pagina de sucesso (`success.ejs`):
+
+| Campo | Descricao |
+|-------|-----------|
+| Cor primaria | Inicio e fim do gradiente diagonal (tambem usada no cabecalho e botoes) |
+| Cor secundaria | Ponto central do gradiente |
+
+A pagina de configuracoes exibe uma miniatura ao vivo do portal conforme as cores sao alteradas.
+
+Apenas cores HEX validas no formato `#RRGGBB` sao aceitas. Valores invalidos sao rejeitados com mensagem de erro.
+
+### Duracao da Sessao
+
+Define por quantas horas um visitante tem acesso apos autenticacao. Valor minimo: 1h, maximo: 720h (30 dias). Padrao: 48h.
 
 ---
 
@@ -721,9 +790,45 @@ Sera solicitado o usuario e a senha definidos em `ADMIN_USER` e `ADMIN_PASSWORD`
 - **Duracao padrao:** 48 horas (2 dias)
 - **Verificacao:** cron job executa a cada 30 minutos
 - **Expiracao:** marca sessao como inativa e remove IP binding do Mikrotik
-- **Configuravel:** altere `SESSION_DURATION_HOURS` no `.env` ou `session_duration_hours` na tabela `settings`
+- **Configuravel:** altere em `/admin/settings`, via `.env` (`SESSION_DURATION_HOURS`), ou diretamente no banco (`settings` key `session_duration_hours`)
 
-A configuracao no banco tem prioridade sobre o `.env`. O `.env` e usado apenas como valor padrao na criacao inicial.
+A configuracao no banco (editada pelo painel) tem prioridade sobre o `.env`. O `.env` e usado apenas como valor inicial ao criar a linha no banco.
+
+Se o valor no banco for invalido (nao-numerico ou fora do intervalo 1-720), o sistema usa 48h automaticamente.
+
+---
+
+## Seguranca
+
+### Headers HTTP de seguranca
+
+O servidor envia os seguintes headers em todas as respostas:
+
+| Header | Valor | Protecao |
+|--------|-------|----------|
+| `X-Content-Type-Options` | `nosniff` | Previne MIME sniffing pelo navegador |
+| `X-Frame-Options` | `DENY` | Bloqueia o portal em iframes (anti-clickjacking) |
+| `X-XSS-Protection` | `1; mode=block` | Ativa filtro XSS em navegadores legados |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Limita vazamento de URL nos cabecalhos Referer |
+
+### Rate limiting
+
+As rotas `/api/register` e `/api/login` aceitam no maximo **10 requisicoes por IP a cada 15 minutos**. Requisicoes acima do limite recebem HTTP 429 e o portal exibe a mensagem em portugues.
+
+### Validacao de redirect
+
+O parametro `link-orig` passado pelo Mikrotik e validado no servidor com `new URL()`. Apenas URLs com protocolo `http:` ou `https:` sao aceitas, bloqueando injecao de `javascript:` ou `data:` URLs.
+
+### Upload de logo
+
+- Extensoes permitidas: `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp` (SVG proibido)
+- Validacao dupla: extensao do arquivo E MIME type reportado pelo navegador
+- Limite de tamanho: 2 MB
+- Arquivos antigos sao excluidos do disco ao fazer upload de uma nova logo
+
+### Mikrotik
+
+O campo `comment` enviado ao RouterOS e sanitizado para remover caracteres especiais que poderiam causar injecao de comandos via API. Apenas letras, numeros, acentos, espacos e `.@-_` sao permitidos (maximo 100 caracteres).
 
 ---
 
@@ -858,21 +963,45 @@ UPDATE sessions SET active = false WHERE active = true;
 ### Painel admin expira a sessao rapidamente
 
 - A sessao dura 8 horas por padrao (contadas a partir do login)
-- Verifique se o `SESSION_SECRET` nao mudou entre reinicializacoes (isso invalida todas as sessoes)
+- As sessoes sao armazenadas no PostgreSQL (tabela `admin_sessions`) e sobrevivem a reinicializacoes
+- Verifique se o `SESSION_SECRET` nao mudou — alterar o segredo invalida todas as sessoes existentes
+
+### Logo nao aparece no portal apos o upload
+
+- Confirme que o diretorio `public/uploads/logo/` existe e tem permissao de escrita pelo usuario do servico
+- Verifique nos logs se ha erro de `EACCES` ou `ENOENT` ao salvar o arquivo
+- A logo e servida em `/uploads/logo/<nome_do_arquivo>` — confirme que o Express serve a pasta `public` como estatica
+
+### Configuracoes do portal nao sao salvas
+
+- Verifique se a tabela `settings` foi criada corretamente: `SELECT * FROM settings;`
+- O `sync({ alter: true })` na inicializacao cria e ajusta as tabelas automaticamente
+- Confirme que o usuario do banco tem permissao `INSERT` e `UPDATE` na tabela `settings`
+
+### Excedeu limite de tentativas (HTTP 429)
+
+- O rate limiter bloqueia o IP apos 10 tentativas em 15 minutos nas rotas de cadastro e login
+- Aguarde 15 minutos ou reinicie o servidor (o limite e armazenado em memoria, nao persiste)
+- Em ambiente de desenvolvimento, ajuste o limite em `routes/api.js`
 
 ---
 
 ## Dependencias do Projeto
 
-| Pacote          | Versao  | Funcao                                  |
-|----------------|---------|----------------------------------------|
-| express        | ^4.21   | Servidor web e rotas                   |
-| ejs            | ^3.1    | Template engine para as paginas HTML   |
-| sequelize      | ^6.37   | ORM para PostgreSQL                    |
-| pg             | ^8.13   | Driver PostgreSQL                      |
-| pg-hstore      | ^2.3    | Suporte a hstore do PostgreSQL         |
-| express-session| ^1.18   | Sessao server-side (painel admin)      |
-| node-routeros  | ^1.6    | Cliente API RouterOS (Mikrotik v7)     |
-| axios          | ^1.7    | Requisicoes HTTP (ViaCEP)              |
-| node-cron      | ^3.0    | Agendamento de tarefas (expiracao)     |
-| dotenv         | ^16.4   | Carrega variaveis de ambiente do .env  |
+O projeto utiliza 13 pacotes npm. Abaixo a lista completa com a versao instalada e o motivo de cada dependencia.
+
+| Pacote              | Versao   | Por que e necessario                                                                                   |
+|---------------------|----------|--------------------------------------------------------------------------------------------------------|
+| `express`           | ^4.21    | Framework HTTP principal. Gerencia rotas, middleware e o ciclo de requisicao/resposta do servidor.     |
+| `ejs`               | ^3.1     | Template engine usada para renderizar as paginas HTML no servidor. Permite embutir variaveis e logica nas views. |
+| `sequelize`         | ^6.37    | ORM que abstrai as queries SQL. Gerencia os modelos (`User`, `Session`, `Setting`), migracoes via `sync({ alter: true })` e relacionamentos. |
+| `pg`                | ^8.13    | Driver nativo do PostgreSQL para Node.js. Usado pelo Sequelize e pelo `connect-pg-simple` para se comunicar com o banco. |
+| `pg-hstore`         | ^2.3     | Addon exigido pelo Sequelize ao usar PostgreSQL para serializar/desserializar o tipo `hstore`. Sem ele o Sequelize nao inicializa. |
+| `express-session`   | ^1.18    | Gerencia a sessao server-side do painel administrativo. O ID da sessao fica num cookie assinado; os dados ficam no servidor (PostgreSQL). |
+| `connect-pg-simple` | ^10.0    | Store de sessao que persiste as sessoes do painel no PostgreSQL (tabela `admin_sessions`). Sem ele as sessoes sao perdidas ao reiniciar o servidor. |
+| `express-rate-limit`| ^8.2     | Aplica limite de taxa (10 req / 15 min por IP) nas rotas `/api/register` e `/api/login`, bloqueando ataques de forca bruta e spam. |
+| `multer`            | ^2.0     | Middleware para processar uploads `multipart/form-data`. Usado para receber e salvar a logo da organizacao em `/admin/settings`. |
+| `node-routeros`     | ^1.6     | Cliente da API RouterOS v7 do Mikrotik. Cria usuarios no Hotspot e registros de IP binding para liberar o acesso a internet dos visitantes. |
+| `axios`             | ^1.7     | Cliente HTTP usado para consultar a API publica ViaCEP (`viacep.com.br`) e preencher automaticamente o endereco ao digitar o CEP. |
+| `node-cron`         | ^3.0     | Agenda tarefas repetitivas. Executa a cada 30 minutos para verificar sessoes expiradas, marca-las como inativas e remover os IP bindings do Mikrotik. |
+| `dotenv`            | ^16.4    | Carrega as variaveis de ambiente do arquivo `.env` para `process.env` antes de qualquer outro modulo. Necessario para configurar banco, Mikrotik e segredos sem hardcodar valores no codigo. |

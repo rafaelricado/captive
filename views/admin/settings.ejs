@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configurações &mdash; Captive Portal</title>
+  <%- include('_head') %>
+  <style>
+    .settings-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+      padding: 28px 32px;
+      max-width: 680px;
+      margin-bottom: 24px;
+    }
+    .settings-card h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #0d4e8b;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .field { margin-bottom: 18px; }
+    .field label {
+      display: block;
+      font-size: .85rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+    .field input[type="text"],
+    .field input[type="number"] {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: .9rem;
+      color: #1f2937;
+      transition: border-color .15s;
+    }
+    .field input:focus {
+      outline: none;
+      border-color: #0d4e8b;
+      box-shadow: 0 0 0 3px rgba(13,78,139,.12);
+    }
+    .field .hint {
+      font-size: .75rem;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+    .logo-preview {
+      margin-bottom: 14px;
+    }
+    .logo-preview img {
+      max-height: 80px;
+      max-width: 260px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      padding: 6px;
+      background: #f9fafb;
+      display: block;
+    }
+    .logo-preview .no-logo {
+      display: inline-block;
+      padding: 10px 16px;
+      background: #f3f4f6;
+      border-radius: 8px;
+      font-size: .8rem;
+      color: #6b7280;
+    }
+    .logo-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .file-input-label {
+      display: inline-block;
+      padding: 8px 16px;
+      background: #0d4e8b;
+      color: #fff;
+      border-radius: 8px;
+      font-size: .85rem;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .file-input-label:hover { background: #0a3d6e; }
+    .file-input-label input[type="file"] { display: none; }
+    .file-name { font-size: .8rem; color: #6b7280; }
+    .btn-remove {
+      padding: 7px 14px;
+      background: none;
+      border: 1px solid #ef4444;
+      color: #ef4444;
+      border-radius: 8px;
+      font-size: .82rem;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-remove:hover { background: #ef4444; color: #fff; }
+    .btn-save {
+      padding: 10px 28px;
+      background: #0d4e8b;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-save:hover { background: #0a3d6e; }
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: .875rem;
+      margin-bottom: 20px;
+      max-width: 680px;
+    }
+    .alert-success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+    .alert-error   { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+    .input-with-suffix { display: flex; align-items: center; gap: 8px; }
+    .input-with-suffix input { flex: 0 0 100px; }
+    .input-with-suffix span { font-size: .85rem; color: #6b7280; }
+
+    /* Color pickers */
+    .color-row { display: flex; gap: 24px; flex-wrap: wrap; }
+    .color-field { display: flex; flex-direction: column; gap: 6px; }
+    .color-field label { font-size: .85rem; font-weight: 600; color: #374151; }
+    .color-field input[type="color"] {
+      width: 56px; height: 40px;
+      border: 1px solid #d1d5db; border-radius: 8px;
+      padding: 2px; cursor: pointer; background: none;
+    }
+    .color-hex { font-size: .75rem; color: #6b7280; font-family: monospace; text-align: center; }
+
+    /* Preview mini-portal */
+    .colors-layout { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; margin-top: 16px; }
+    .colors-controls { display: flex; flex-direction: column; gap: 16px; }
+    .portal-preview {
+      width: 180px; border-radius: 10px;
+      overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.2); flex-shrink: 0;
+    }
+    .prev-header {
+      padding: 14px 12px; text-align: center;
+      color: #fff; font-size: .7rem; font-weight: 700;
+    }
+    .prev-body { background: #fff; padding: 10px 12px; font-size: .65rem; color: #374151; }
+    .prev-field {
+      height: 18px; background: #f3f4f6;
+      border-radius: 4px; margin-bottom: 6px;
+    }
+    .prev-btn {
+      display: block; padding: 6px; border-radius: 5px;
+      color: #fff; text-align: center; font-size: .65rem; font-weight: 700; margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <%- include('_nav', { page }) %>
+
+  <main class="container">
+    <h2 class="page-title">Configurações do Portal</h2>
+
+    <% if (success) { %>
+      <div class="alert alert-success"><%= success %></div>
+    <% } %>
+    <% if (error) { %>
+      <div class="alert alert-error"><%= error %></div>
+    <% } %>
+
+    <form method="POST" action="/admin/settings" enctype="multipart/form-data" id="form-settings">
+      <input type="hidden" name="remove_logo" id="remove_logo" value="0">
+
+      <!-- Identidade visual -->
+      <div class="settings-card">
+        <h3>Identidade Visual</h3>
+
+        <div class="field">
+          <label for="organization_name">Nome da organização</label>
+          <input type="text" id="organization_name" name="organization_name"
+                 value="<%= orgName %>" maxlength="120" required>
+          <p class="hint">Exibido no portal de cadastro, página de sucesso e rodapé.</p>
+        </div>
+
+        <div class="field">
+          <label>Logo</label>
+          <div class="logo-preview">
+            <% if (orgLogo) { %>
+              <img src="<%= orgLogo %>" alt="Logo atual" id="logo-img">
+            <% } else { %>
+              <span class="no-logo" id="no-logo-text">Nenhuma logo configurada</span>
+            <% } %>
+          </div>
+          <div class="logo-actions">
+            <label class="file-input-label">
+              Selecionar imagem
+              <input type="file" name="organization_logo" id="logo-input"
+                     accept=".jpg,.jpeg,.png,.gif,.webp"
+                     onchange="previewLogo(this)">
+            </label>
+            <span class="file-name" id="file-name">Nenhum arquivo selecionado</span>
+            <% if (orgLogo) { %>
+              <button type="button" class="btn-remove" onclick="removeLogo()">Remover logo</button>
+            <% } %>
+          </div>
+          <p class="hint">Formatos: JPG, PNG, GIF, WebP. Tamanho máximo: 2 MB.</p>
+        </div>
+      </div>
+
+      <!-- Cores -->
+      <div class="settings-card">
+        <h3>Cores do Portal</h3>
+        <p class="hint" style="margin-bottom:16px">Define o gradiente de fundo e a cor dos botões exibidos aos visitantes.</p>
+
+        <div class="colors-layout">
+          <div class="colors-controls">
+            <div class="color-row">
+              <div class="color-field">
+                <label for="portal_bg_color_1">Cor principal</label>
+                <input type="color" id="portal_bg_color_1" name="portal_bg_color_1"
+                       value="<%= bgColor1 %>" oninput="updatePreview()">
+                <span class="color-hex" id="hex1"><%= bgColor1 %></span>
+              </div>
+              <div class="color-field">
+                <label for="portal_bg_color_2">Cor secundária</label>
+                <input type="color" id="portal_bg_color_2" name="portal_bg_color_2"
+                       value="<%= bgColor2 %>" oninput="updatePreview()">
+                <span class="color-hex" id="hex2"><%= bgColor2 %></span>
+              </div>
+            </div>
+            <p class="hint">
+              A cor principal é usada para o cabeçalho e botões.<br>
+              Juntas formam o gradiente de fundo da página.
+            </p>
+          </div>
+
+          <!-- Preview ao vivo -->
+          <div class="portal-preview" id="preview-card">
+            <div class="prev-header" id="prev-header"
+                 style="background: linear-gradient(135deg, <%= bgColor1 %> 0%, <%= bgColor2 %> 100%)">
+              Wi-Fi Visitantes<br>
+              <small style="font-weight:400;opacity:.85"><%= orgName %></small>
+            </div>
+            <div class="prev-body">
+              <div class="prev-field"></div>
+              <div class="prev-field" style="width:70%"></div>
+              <div class="prev-field" style="width:85%"></div>
+              <div class="prev-btn" id="prev-btn" style="background:<%= bgColor1 %>">
+                Cadastrar e Conectar
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sessão -->
+      <div class="settings-card">
+        <h3>Sessão de Acesso</h3>
+        <div class="field">
+          <label for="session_duration_hours">Duração da sessão</label>
+          <div class="input-with-suffix">
+            <input type="number" id="session_duration_hours" name="session_duration_hours"
+                   value="<%= sessionDuration %>" min="1" max="720" required>
+            <span>horas (máx. 720)</span>
+          </div>
+          <p class="hint">Tempo antes de exigir nova autenticação do visitante.</p>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-save">Salvar configurações</button>
+    </form>
+  </main>
+
+  <%- include('_footer') %>
+
+  <script>
+    function previewLogo(input) {
+      const file = input.files[0];
+      if (!file) return;
+
+      document.getElementById('file-name').textContent = file.name;
+      document.getElementById('remove_logo').value = '0';
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        let img = document.getElementById('logo-img');
+        const noText = document.getElementById('no-logo-text');
+
+        if (!img) {
+          img = document.createElement('img');
+          img.id = 'logo-img';
+          img.alt = 'Pré-visualização';
+          const preview = document.querySelector('.logo-preview');
+          if (noText) noText.remove();
+          preview.appendChild(img);
+        }
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeLogo() {
+      document.getElementById('remove_logo').value = '1';
+      document.getElementById('logo-input').value = '';
+      document.getElementById('file-name').textContent = 'Nenhum arquivo selecionado';
+
+      const img = document.getElementById('logo-img');
+      if (img) {
+        const preview = img.parentElement;
+        img.remove();
+        const span = document.createElement('span');
+        span.className = 'no-logo';
+        span.id = 'no-logo-text';
+        span.textContent = 'Nenhuma logo configurada';
+        preview.appendChild(span);
+      }
+    }
+
+    function updatePreview() {
+      const c1 = document.getElementById('portal_bg_color_1').value;
+      const c2 = document.getElementById('portal_bg_color_2').value;
+      document.getElementById('hex1').textContent = c1;
+      document.getElementById('hex2').textContent = c2;
+      document.getElementById('prev-header').style.background =
+        `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`;
+      document.getElementById('prev-btn').style.background = c1;
+    }
+  </script>
+</body>
+</html>

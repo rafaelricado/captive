@@ -1,9 +1,41 @@
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const apiController = require('../controllers/apiController');
+const { Setting } = require('../models');
 
-router.post('/register', apiController.register);
-router.post('/login', apiController.login);
+// Limita cadastro e login: máximo 10 tentativas a cada 15 minutos por IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: async (req, res) => {
+    const { mac, ip, linkOrig } = req.body;
+    try {
+      const [orgName, orgLogo, bgColor1, bgColor2] = await Promise.all([
+        Setting.get('organization_name', 'Hospital Beneficiente Portuguesa'),
+        Setting.get('organization_logo', ''),
+        Setting.get('portal_bg_color_1', '#0d4e8b'),
+        Setting.get('portal_bg_color_2', '#1a7bc4')
+      ]);
+      res.status(429).render('portal', {
+        mac: mac || '',
+        ip: ip || '',
+        username: '',
+        linkOrig: linkOrig || '',
+        error: 'Muitas tentativas. Aguarde 15 minutos e tente novamente.',
+        activeTab: req.path === '/login' ? 'login' : 'cadastro',
+        orgName, orgLogo, bgColor1, bgColor2
+      });
+    } catch (_) {
+      res.status(429).send('Muitas tentativas. Aguarde 15 minutos e tente novamente.');
+    }
+  }
+});
+
+router.post('/register', authLimiter, apiController.register);
+router.post('/login', authLimiter, apiController.login);
 router.get('/cep/:cep', apiController.consultaCep);
 
 module.exports = router;

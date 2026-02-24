@@ -36,7 +36,12 @@ const Session = sequelize.define('Session', {
   }
 }, {
   tableName: 'sessions',
-  timestamps: false
+  timestamps: false,
+  indexes: [
+    { fields: ['user_id'] },
+    { fields: ['expires_at'] },
+    { fields: ['active', 'expires_at'] }
+  ]
 });
 
 Session.belongsTo(User, { foreignKey: 'user_id', onDelete: 'CASCADE', onUpdate: 'CASCADE' });

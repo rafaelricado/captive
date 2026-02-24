@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Usuários &mdash; Admin BP</title>
+  <title>Usuários &mdash; Captive Portal</title>
   <%- include('_head') %>
 </head>
 <body>
@@ -20,6 +20,8 @@
           <tr>
             <th>Nome completo</th>
             <th>CPF</th>
+            <th>Nascimento</th>
+            <th>Nome da Mãe</th>
             <th>E-mail</th>
             <th>Telefone</th>
             <th>Cidade/UF</th>
@@ -28,12 +30,14 @@
         </thead>
         <tbody>
           <% if (users.length === 0) { %>
-            <tr><td colspan="6" style="text-align:center;color:#9ca3af">Nenhum usuário cadastrado.</td></tr>
+            <tr><td colspan="8" style="text-align:center;color:#9ca3af">Nenhum usuário cadastrado.</td></tr>
           <% } %>
           <% users.forEach(u => { %>
             <tr>
               <td><%= u.nome_completo %></td>
               <td><%= u.cpf %></td>
+              <td><%= u.data_nascimento %></td>
+              <td><%= u.nome_mae %></td>
               <td><%= u.email %></td>
               <td><%= u.telefone %></td>
               <td><%= u.cidade %></td>

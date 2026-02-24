@@ -42,6 +42,15 @@ header .subtitle {
   opacity: 0.85;
 }
 
+.org-logo {
+  max-height: 72px;
+  max-width: 260px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto 8px;
+  filter: brightness(0) invert(1); /* branco sobre fundo azul; remova se quiser cor original */
+}
+
 /* Alert */
 .alert {
   padding: 12px 20px;

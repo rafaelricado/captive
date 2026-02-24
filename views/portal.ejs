@@ -3,15 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Wi-Fi - Hospital Beneficiente Portuguesa</title>
+  <title>Wi-Fi - <%= orgName %></title>
   <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: linear-gradient(135deg, <%= bgColor1 %> 0%, <%= bgColor2 %> 50%, <%= bgColor1 %> 100%); }
+    header { background: <%= bgColor1 %>; }
+    .btn-primary { background: <%= bgColor1 %>; }
+    .btn-primary:hover { background: <%= bgColor2 %>; }
+    .tab-btn.active { color: <%= bgColor1 %>; border-bottom-color: <%= bgColor1 %>; }
+    .form-group input:focus { border-color: <%= bgColor1 %>; box-shadow: 0 0 0 3px <%= bgColor1 %>22; }
+  </style>
 </head>
 <body>
   <div class="container">
     <header>
       <div class="logo-area">
-        <h1>Wi-Fi Visitantes</h1>
-        <p class="subtitle">Hospital Beneficiente Portuguesa</p>
+        <% if (orgLogo) { %>
+          <img src="<%= orgLogo %>" alt="<%= orgName %>" class="org-logo">
+        <% } else { %>
+          <h1>Wi-Fi Visitantes</h1>
+        <% } %>
+        <p class="subtitle"><%= orgName %></p>
       </div>
     </header>
 
@@ -22,12 +34,12 @@
     <% } %>
 
     <div class="tabs">
-      <button class="tab-btn active" data-tab="cadastro">Primeiro Acesso</button>
-      <button class="tab-btn" data-tab="login">Já tenho cadastro</button>
+      <button class="tab-btn <%= activeTab === 'cadastro' ? 'active' : '' %>" data-tab="cadastro">Primeiro Acesso</button>
+      <button class="tab-btn <%= activeTab === 'login' ? 'active' : '' %>" data-tab="login">Já tenho cadastro</button>
     </div>
 
     <!-- Aba Cadastro -->
-    <div class="tab-content active" id="tab-cadastro">
+    <div class="tab-content <%= activeTab === 'cadastro' ? 'active' : '' %>" id="tab-cadastro">
       <form action="/api/register" method="POST" id="form-cadastro">
         <input type="hidden" name="mac" value="<%= mac %>">
         <input type="hidden" name="ip" value="<%= ip %>">
@@ -47,16 +59,30 @@
             <span class="field-status" id="cpf-status"></span>
           </div>
           <div class="form-group">
+            <label for="data_nascimento">Data de Nascimento *</label>
+            <input type="text" id="data_nascimento" name="data_nascimento" required maxlength="10"
+                   placeholder="DD/MM/AAAA" autocomplete="bday">
+            <span class="field-status" id="data-status"></span>
+          </div>
+        </div>
+
+        <div id="nome-mae-group" class="form-group" style="display:none">
+          <label for="nome_mae">Nome Completo da Mãe *</label>
+          <input type="text" id="nome_mae" name="nome_mae" maxlength="255"
+                 placeholder="Nome completo da responsável">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
             <label for="telefone">Telefone *</label>
             <input type="text" id="telefone" name="telefone" required maxlength="15"
                    placeholder="(00) 00000-0000">
           </div>
-        </div>
-
-        <div class="form-group">
-          <label for="email">E-mail *</label>
-          <input type="email" id="email" name="email" required
-                 placeholder="seu@email.com">
+          <div class="form-group">
+            <label for="email">E-mail *</label>
+            <input type="email" id="email" name="email" required
+                   placeholder="seu@email.com">
+          </div>
         </div>
 
         <div class="form-row">
@@ -109,13 +135,13 @@
     </div>
 
     <!-- Aba Login -->
-    <div class="tab-content" id="tab-login">
+    <div class="tab-content <%= activeTab === 'login' ? 'active' : '' %>" id="tab-login">
       <form action="/api/login" method="POST" id="form-login">
         <input type="hidden" name="mac" value="<%= mac %>">
         <input type="hidden" name="ip" value="<%= ip %>">
         <input type="hidden" name="linkOrig" value="<%= linkOrig %>">
 
-        <p class="login-info">Digite seu CPF para acessar a internet.</p>
+        <p class="login-info">Digite seu CPF e data de nascimento para acessar a internet.</p>
 
         <div class="form-group">
           <label for="cpf-login">CPF *</label>
@@ -123,12 +149,18 @@
                  placeholder="000.000.000-00" class="cpf-input">
         </div>
 
+        <div class="form-group">
+          <label for="data_nascimento_login">Data de Nascimento *</label>
+          <input type="text" id="data_nascimento_login" name="data_nascimento" required maxlength="10"
+                 placeholder="DD/MM/AAAA" autocomplete="bday">
+        </div>
+
         <button type="submit" class="btn btn-primary">Conectar</button>
       </form>
     </div>
 
     <footer>
-      <p class="footer-empresa">Hospital Beneficiente Portuguesa</p>
+      <p class="footer-empresa"><%= orgName %></p>
       <p class="footer-dev">Desenvolvido por BP TI</p>
     </footer>
   </div>

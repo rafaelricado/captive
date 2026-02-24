@@ -3,6 +3,11 @@ const { RouterOSAPI } = require('node-routeros');
 let api = null;
 let apiConnected = false;
 
+// Remove caracteres especiais que podem causar problemas no campo comment do RouterOS
+function sanitizeComment(str) {
+  return String(str).replace(/[^\w\s\u00C0-\u017E-]/g, '').trim().substring(0, 100);
+}
+
 async function getApi() {
   if (api && apiConnected) return api;
 
@@ -40,13 +45,14 @@ async function authorizeUser(mac, ip, cpf, nomeCompleto) {
     if (existing.length === 0) {
       const addParams = [
         `=name=${cpf}`,
-        `=comment=${nomeCompleto}`,
+        `=comment=${sanitizeComment(nomeCompleto)}`,
         '=server=all'
       ];
-      if (mac) addParams.push(`=mac-address=${mac}`);
+      // MAC não incluído: dispositivos modernos usam MAC aleatório por rede,
+      // então o vínculo seria quebrado a cada reconexão. O CPF já identifica o usuário.
 
       await conn.write('/ip/hotspot/user/add', addParams);
-      console.log(`[Mikrotik] Usuário hotspot criado: ${cpf}`);
+      console.log(`[Mikrotik] Usuário hotspot criado: ${cpf} (mac: ${mac || 'desconhecido'})`);
     }
 
     // Cria IP binding para liberar acesso imediato
@@ -62,16 +68,15 @@ async function authorizeUser(mac, ip, cpf, nomeCompleto) {
           ]);
         }
 
-        // Cria novo binding
+        // Cria novo binding por IP (sem MAC — evita quebra com MAC aleatório)
         const bindParams = [
           `=address=${ip}`,
           '=type=bypassed',
           `=comment=captive-portal:${cpf}`
         ];
-        if (mac) bindParams.push(`=mac-address=${mac}`);
 
         await conn.write('/ip/hotspot/ip-binding/add', bindParams);
-        console.log(`[Mikrotik] IP binding criado para ${ip} (${cpf})`);
+        console.log(`[Mikrotik] IP binding criado para ${ip} mac=${mac || '?'} (${cpf})`);
       } catch (err) {
         console.warn('[Mikrotik] Aviso ao criar IP binding:', err.message);
       }

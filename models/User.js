@@ -65,6 +65,14 @@ const User = sequelize.define('User', {
   },
   complemento: {
     type: DataTypes.STRING
+  },
+  data_nascimento: {
+    type: DataTypes.DATEONLY,
+    allowNull: true  // null permitido para usuários migrados; controller impõe obrigatoriedade
+  },
+  nome_mae: {
+    type: DataTypes.STRING,
+    allowNull: true  // obrigatório apenas para menores de 18 anos (validado no controller)
   }
 }, {
   tableName: 'users',

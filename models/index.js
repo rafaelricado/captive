@@ -4,14 +4,34 @@ const Session = require('./Session');
 const Setting = require('./Setting');
 
 const initDatabase = async () => {
-  await sequelize.sync();
+  await sequelize.sync({ alter: true });
 
-  const [setting] = await Setting.findOrCreate({
+  const [sessionSetting] = await Setting.findOrCreate({
     where: { key: 'session_duration_hours' },
     defaults: { value: process.env.SESSION_DURATION_HOURS || '48' }
   });
 
-  console.log(`[DB] Banco sincronizado. Duração da sessão: ${setting.value}h`);
+  await Setting.findOrCreate({
+    where: { key: 'organization_name' },
+    defaults: { value: 'Hospital Beneficiente Portuguesa' }
+  });
+
+  await Setting.findOrCreate({
+    where: { key: 'organization_logo' },
+    defaults: { value: '' }
+  });
+
+  await Setting.findOrCreate({
+    where: { key: 'portal_bg_color_1' },
+    defaults: { value: '#0d4e8b' }
+  });
+
+  await Setting.findOrCreate({
+    where: { key: 'portal_bg_color_2' },
+    defaults: { value: '#1a7bc4' }
+  });
+
+  console.log(`[DB] Banco sincronizado. Duração da sessão: ${sessionSetting.value}h`);
 };
 
 module.exports = { sequelize, User, Session, Setting, initDatabase };

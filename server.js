@@ -15,6 +15,7 @@ if (missing.length > 0) {
 
 const express = require('express');
 const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
 const cron = require('node-cron');
 const { initDatabase } = require('./models');
@@ -27,13 +28,29 @@ const adminRoutes = require('./routes/admin');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Cabeçalhos de segurança HTTP
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Sessão (usada pelo painel admin)
+// Sessão com store persistente no PostgreSQL (sobrevive a reinicializações)
+const sessionStore = new pgSession({
+  conString: `postgresql://${process.env.DB_USER}:${process.env.DB_PASS}@${process.env.DB_HOST}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME}`,
+  tableName: 'admin_sessions',
+  createTableIfMissing: true
+});
+
 app.use(session({
+  store: sessionStore,
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
@@ -53,10 +70,25 @@ app.use('/', portalRoutes);
 app.use('/api', apiRoutes);
 app.use('/admin', adminRoutes);
 
+// Conexão ao banco com retry (até 5 tentativas com intervalo de 3s)
+async function connectDatabase(maxAttempts = 5, delayMs = 3000) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await initDatabase();
+      return;
+    } catch (err) {
+      if (attempt === maxAttempts) throw err;
+      console.warn(`[Servidor] Tentativa ${attempt}/${maxAttempts} de conexão falhou: ${err.message}`);
+      console.warn(`[Servidor] Reconectando em ${delayMs / 1000}s...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 // Inicialização
 async function start() {
   try {
-    await initDatabase();
+    await connectDatabase();
 
     // Cron: verificar sessões expiradas a cada 30 minutos
     cron.schedule('*/30 * * * *', async () => {
