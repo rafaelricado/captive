@@ -88,11 +88,11 @@
   <main class="container">
     <h2 class="page-title">Pontos de Acesso</h2>
 
-    <% if (locals.success || (typeof query !== 'undefined' && query && query.success)) { %>
-      <div class="alert alert-success">Ponto de acesso adicionado com sucesso.</div>
+    <% if (success) { %>
+      <div class="alert alert-success"><%= success %></div>
     <% } %>
-    <% if (locals.error || (typeof query !== 'undefined' && query && query.error)) { %>
-      <div class="alert alert-error"><%= locals.error || (query && query.error) || 'Erro ao processar.' %></div>
+    <% if (error) { %>
+      <div class="alert alert-error"><%= error %></div>
     <% } %>
 
     <!-- Cards de resumo -->

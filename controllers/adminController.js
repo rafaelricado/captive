@@ -363,7 +363,6 @@ exports.accessPoints = async (req, res) => {
   try {
     const aps = await AccessPoint.findAll({ order: [['name', 'ASC']] });
 
-    const now = new Date();
     const list = aps.map(ap => ({
       id: ap.id,
       name: ap.name,
@@ -380,12 +379,15 @@ exports.accessPoints = async (req, res) => {
     const offline = list.filter(a => a.is_online === false).length;
     const unknown = list.filter(a => a.is_online === null).length;
 
+    const success = req.query.success ? 'Ponto de acesso adicionado com sucesso.' : null;
+    const error = req.query.error ? decodeURIComponent(String(req.query.error)) : null;
+
     res.render('admin/access-points', {
       aps: list, online, offline, unknown,
       page: 'access-points',
       pageObj: 'access-points',
-      error: null,
-      success: null
+      error,
+      success
     });
   } catch (err) {
     console.error('[Admin] Erro ao listar APs:', err.message);
