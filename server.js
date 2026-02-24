@@ -44,7 +44,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Sessão com store persistente no PostgreSQL (sobrevive a reinicializações)
 const sessionStore = new pgSession({
-  conString: `postgresql://${process.env.DB_USER}:${process.env.DB_PASS}@${process.env.DB_HOST}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME}`,
+  conString: `postgresql://${process.env.DB_USER}:${encodeURIComponent(process.env.DB_PASS)}@${process.env.DB_HOST}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME}`,
   tableName: 'admin_sessions',
   createTableIfMissing: true
 });
