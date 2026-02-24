@@ -54,7 +54,7 @@ elif [[ "$(node -v)" != v20* ]] && [[ "$(node -v)" != v22* ]]; then
   sudo apt install -y nodejs
 fi
 
-NODE_BIN=$(which node)
+NODE_BIN=$(command -v node)
 echo -e "${GREEN}Node.js $(node -v) instalado em ${NODE_BIN}${NC}"
 
 # -----------------------------------------------
@@ -104,7 +104,7 @@ else
   sudo -u postgres createdb -O captive_user captive_portal
 fi
 
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE captive_portal TO captive_user;" 2>/dev/null
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE captive_portal TO captive_user;"
 
 echo -e "${GREEN}Banco de dados configurado.${NC}"
 
@@ -113,7 +113,7 @@ echo -e "${GREEN}Banco de dados configurado.${NC}"
 # -----------------------------------------------
 echo -e "${YELLOW}[4/7] Instalando dependencias npm...${NC}"
 cd "$PROJECT_DIR"
-npm install --production
+npm install --omit=dev
 
 # -----------------------------------------------
 # [5/7] Configurar .env
@@ -133,8 +133,8 @@ fi
 if [ ! -f .env ]; then
   echo ""
   echo "--- Configuracao do Mikrotik ---"
-  read -p "IP do Mikrotik [192.168.1.1]: " MK_HOST
-  MK_HOST=${MK_HOST:-192.168.1.1}
+  read -p "IP do Mikrotik [15.1.1.1]: " MK_HOST
+  MK_HOST=${MK_HOST:-15.1.1.1}
 
   read -p "Usuario do Mikrotik para API [captive_api]: " MK_USER
   MK_USER=${MK_USER:-captive_api}
@@ -166,31 +166,32 @@ if [ ! -f .env ]; then
   # Gerar SESSION_SECRET aleatorio
   SESSION_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
 
-  cat > .env <<ENVFILE
-# Servidor
-PORT=3000
-
-# PostgreSQL
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=captive_portal
-DB_USER=captive_user
-DB_PASS=${DB_PASS}
-
-# Mikrotik RouterOS API
-MIKROTIK_HOST=${MK_HOST}
-MIKROTIK_USER=${MK_USER}
-MIKROTIK_PASS=${MK_PASS}
-MIKROTIK_PORT=${MK_PORT}
-
-# Sessao (em horas)
-SESSION_DURATION_HOURS=${SESSION_HOURS}
-
-# Painel Admin
-ADMIN_USER=${ADMIN_USER}
-ADMIN_PASSWORD=${ADMIN_PASSWORD}
-SESSION_SECRET=${SESSION_SECRET}
-ENVFILE
+  # Usar printf para evitar expansao de comandos em senhas com $ ou backticks
+  {
+    printf '# Servidor\n'
+    printf 'PORT=3000\n'
+    printf '\n'
+    printf '# PostgreSQL\n'
+    printf 'DB_HOST=localhost\n'
+    printf 'DB_PORT=5432\n'
+    printf 'DB_NAME=captive_portal\n'
+    printf 'DB_USER=captive_user\n'
+    printf 'DB_PASS=%s\n' "$DB_PASS"
+    printf '\n'
+    printf '# Mikrotik RouterOS API\n'
+    printf 'MIKROTIK_HOST=%s\n' "$MK_HOST"
+    printf 'MIKROTIK_USER=%s\n' "$MK_USER"
+    printf 'MIKROTIK_PASS=%s\n' "$MK_PASS"
+    printf 'MIKROTIK_PORT=%s\n' "$MK_PORT"
+    printf '\n'
+    printf '# Sessao (em horas)\n'
+    printf 'SESSION_DURATION_HOURS=%s\n' "$SESSION_HOURS"
+    printf '\n'
+    printf '# Painel Admin\n'
+    printf 'ADMIN_USER=%s\n' "$ADMIN_USER"
+    printf 'ADMIN_PASSWORD=%s\n' "$ADMIN_PASSWORD"
+    printf 'SESSION_SECRET=%s\n' "$SESSION_SECRET"
+  } > .env
 
   chmod 600 .env
   echo -e "${GREEN}.env criado com permissao restrita (600).${NC}"
@@ -238,15 +239,19 @@ fi
 
 sudo systemctl start captive-portal
 
-# Verificar se iniciou
-sleep 5
-if sudo systemctl is-active --quiet captive-portal; then
-  echo -e "${GREEN}Servico iniciado com sucesso.${NC}"
-else
-  echo -e "${RED}Servico nao iniciou. Verifique os logs:${NC}"
-  echo "  sudo journalctl -u captive-portal -n 30"
-  exit 1
-fi
+# Verificar se iniciou (aguarda ate 30s — primeiro boot faz sync do banco)
+echo "Aguardando servico iniciar..."
+RETRIES=0
+until sudo systemctl is-active --quiet captive-portal; do
+  RETRIES=$((RETRIES + 1))
+  if [ "$RETRIES" -ge 30 ]; then
+    echo -e "${RED}Servico nao iniciou apos 30 segundos. Verifique os logs:${NC}"
+    echo "  sudo journalctl -u captive-portal -n 30"
+    exit 1
+  fi
+  sleep 1
+done
+echo -e "${GREEN}Servico iniciado com sucesso.${NC}"
 
 # -----------------------------------------------
 # Resumo final
@@ -269,20 +274,23 @@ echo "============================================"
 echo "  PROXIMO PASSO: CONFIGURAR O MIKROTIK"
 echo "============================================"
 echo ""
-echo "Importe o script de configuracao no Mikrotik:"
+echo "Execute no Mikrotik o script de configuracao da rede de visitantes:"
 echo ""
-echo "  1. Copie o arquivo scripts/mikrotik_setup.rsc para o Mikrotik"
-echo "     via Winbox (Files) ou SCP/FTP"
+echo "  1. Copie o arquivo scripts/captive_portal_ether2.rsc para o Mikrotik"
+echo "     via Winbox (Files > Upload) ou SCP"
 echo ""
-echo "  2. Edite as variaveis no INICIO do arquivo .rsc:"
-echo "     - portalServerIP  = ${SERVER_IP}"
-echo "     - wanInterface    = ether1 (ou sua interface WAN)"
-echo "     - lanInterface    = ether2 (ou sua interface LAN)"
-echo "     - wifiInterface   = wlan1  (ou sua interface wireless)"
-echo "     - apiPassword     = senha do usuario API"
+echo "  2. No terminal do Mikrotik (ou via SSH), execute:"
+echo "     /import file-name=captive_portal_ether2.rsc"
 echo ""
-echo "  3. No terminal do Mikrotik, execute:"
-echo "     /import file-name=mikrotik_setup.rsc"
+echo "  O script configura automaticamente:"
+echo "    - IP 15.1.1.1/24 na porta ether2"
+echo "    - DHCP pool 15.1.1.10-15.1.1.254 (lease 48h)"
+echo "    - Hotspot na ether2 com redirect para o portal"
+echo "    - Firewall isolando visitantes da rede interna"
+echo "    - Usuario captive_api para a API do Node.js"
 echo ""
-echo "  OU configure manualmente seguindo o README.md"
+echo "  Certifique-se que o .env do servidor tem:"
+echo "    MIKROTIK_HOST=15.1.1.1"
+echo "    MIKROTIK_USER=captive_api"
+echo "    MIKROTIK_PORT=8728"
 echo ""
