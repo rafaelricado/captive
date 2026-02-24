@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pontos de Acesso &mdash; Captive Portal</title>
+  <%- include('_head') %>
+  <style>
+    .summary-cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+    .summary-card {
+      display: flex; align-items: center; gap: 12px;
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+      padding: 14px 20px; min-width: 140px;
+    }
+    .summary-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+    .dot-green  { background: #16a34a; }
+    .dot-red    { background: #ef4444; }
+    .dot-gray   { background: #9ca3af; }
+    .dot-total  { background: #0d4e8b; }
+    .summary-val { font-size: 1.6rem; font-weight: 700; line-height: 1; color: #1f2937; }
+    .summary-lbl { font-size: .72rem; color: #6b7280; margin-top: 2px; }
+
+    .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+
+    .btn-ping {
+      padding: 8px 18px; background: #0d4e8b; color: #fff;
+      border: none; border-radius: 8px; font-size: .875rem;
+      cursor: pointer; display: flex; align-items: center; gap: 8px;
+      transition: background .15s;
+    }
+    .btn-ping:hover { background: #0a3d6e; }
+    .btn-ping:disabled { background: #93c5fd; cursor: not-allowed; }
+
+    .spin { display: inline-block; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .last-check { font-size: .8rem; color: #6b7280; }
+
+    .badge-online  { background: #dcfce7; color: #16a34a; }
+    .badge-offline { background: #fee2e2; color: #ef4444; }
+    .badge-unknown { background: #f3f4f6; color: #9ca3af; }
+
+    .latency { font-size: .8rem; color: #6b7280; }
+    .latency.fast  { color: #16a34a; }
+    .latency.slow  { color: #d97706; }
+    .latency.very-slow { color: #ef4444; }
+
+    .btn-del {
+      padding: 4px 10px; background: none; border: 1px solid #ef4444;
+      color: #ef4444; border-radius: 6px; font-size: .78rem; cursor: pointer;
+    }
+    .btn-del:hover { background: #ef4444; color: #fff; }
+
+    /* Formulário de adição */
+    .add-card {
+      background: #fff; border-radius: 12px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+      padding: 24px; max-width: 680px; margin-top: 28px;
+    }
+    .add-card h3 { font-size: 1rem; font-weight: 700; color: #0d4e8b; margin-bottom: 18px; }
+    .add-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .add-field { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 140px; }
+    .add-field label { font-size: .8rem; font-weight: 600; color: #374151; }
+    .add-field input {
+      padding: 8px 10px; border: 1px solid #d1d5db;
+      border-radius: 7px; font-size: .875rem; color: #1f2937;
+    }
+    .add-field input:focus { outline: none; border-color: #0d4e8b; box-shadow: 0 0 0 3px rgba(13,78,139,.1); }
+    .btn-add {
+      margin-top: 18px; padding: 9px 24px;
+      background: #16a34a; color: #fff;
+      border: none; border-radius: 8px;
+      font-size: .875rem; font-weight: 600; cursor: pointer;
+    }
+    .btn-add:hover { background: #15803d; }
+
+    .alert { padding: 10px 16px; border-radius: 8px; font-size: .875rem; margin-bottom: 16px; max-width: 680px; }
+    .alert-success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+    .alert-error   { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+
+    .empty-row td { text-align: center; color: #9ca3af; padding: 32px !important; }
+  </style>
+</head>
+<body>
+  <%- include('_nav', { page: pageObj }) %>
+
+  <main class="container">
+    <h2 class="page-title">Pontos de Acesso</h2>
+
+    <% if (locals.success || (typeof query !== 'undefined' && query && query.success)) { %>
+      <div class="alert alert-success">Ponto de acesso adicionado com sucesso.</div>
+    <% } %>
+    <% if (locals.error || (typeof query !== 'undefined' && query && query.error)) { %>
+      <div class="alert alert-error"><%= locals.error || (query && query.error) || 'Erro ao processar.' %></div>
+    <% } %>
+
+    <!-- Cards de resumo -->
+    <div class="summary-cards">
+      <div class="summary-card">
+        <span class="summary-dot dot-total"></span>
+        <div>
+          <div class="summary-val"><%= aps.length %></div>
+          <div class="summary-lbl">Total</div>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="summary-dot dot-green"></span>
+        <div>
+          <div class="summary-val" id="count-online"><%= online %></div>
+          <div class="summary-lbl">Online</div>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="summary-dot dot-red"></span>
+        <div>
+          <div class="summary-val" id="count-offline"><%= offline %></div>
+          <div class="summary-lbl">Offline</div>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="summary-dot dot-gray"></span>
+        <div>
+          <div class="summary-val" id="count-unknown"><%= unknown %></div>
+          <div class="summary-lbl">Não verificado</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <button class="btn-ping" id="btn-ping" onclick="pingNow()">
+        <span id="ping-icon">&#9654;</span>
+        <span id="ping-label">Verificar Agora</span>
+      </button>
+      <span class="last-check" id="last-check-text">
+        <% if (aps.length > 0 && aps[0].last_checked_at !== 'Nunca') { %>
+          Última verificação automática: próximo ciclo em 5 min
+        <% } %>
+      </span>
+    </div>
+
+    <!-- Tabela de APs -->
+    <div class="table-wrap">
+      <table id="ap-table">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Localização</th>
+            <th>IP</th>
+            <th>Status</th>
+            <th>Latência</th>
+            <th>Última verificação</th>
+            <th>Ação</th>
+          </tr>
+        </thead>
+        <tbody id="ap-tbody">
+          <% if (aps.length === 0) { %>
+            <tr class="empty-row"><td colspan="7">Nenhum ponto de acesso cadastrado.<br>Adicione abaixo.</td></tr>
+          <% } %>
+          <% aps.forEach(ap => { %>
+            <tr id="row-<%= ap.id %>">
+              <td><strong><%= ap.name %></strong></td>
+              <td><%= ap.location %></td>
+              <td><code><%= ap.ip_address %></code></td>
+              <td>
+                <% if (ap.is_online === true) { %>
+                  <span class="badge badge-online" id="status-<%= ap.id %>">Online</span>
+                <% } else if (ap.is_online === false) { %>
+                  <span class="badge badge-offline" id="status-<%= ap.id %>">Offline</span>
+                <% } else { %>
+                  <span class="badge badge-unknown" id="status-<%= ap.id %>">Não verificado</span>
+                <% } %>
+              </td>
+              <td>
+                <% if (ap.latency_ms !== null) { %>
+                  <% const cls = ap.latency_ms < 10 ? 'fast' : ap.latency_ms < 50 ? 'slow' : 'very-slow'; %>
+                  <span class="latency <%= cls %>" id="latency-<%= ap.id %>"><%= ap.latency_ms %> ms</span>
+                <% } else { %>
+                  <span class="latency" id="latency-<%= ap.id %>">—</span>
+                <% } %>
+              </td>
+              <td id="checked-<%= ap.id %>"><%= ap.last_checked_at %></td>
+              <td>
+                <form method="POST" action="/admin/access-points/<%= ap.id %>/delete"
+                      onsubmit="return confirm('Remover ' + <%- JSON.stringify(ap.name) %> + ' do monitoramento?')">
+                  <button type="submit" class="btn-del">Remover</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Formulário de adição -->
+    <div class="add-card">
+      <h3>Adicionar Ponto de Acesso</h3>
+      <form method="POST" action="/admin/access-points" id="form-add-ap">
+        <div class="add-row">
+          <div class="add-field">
+            <label for="ap-name">Nome *</label>
+            <input type="text" id="ap-name" name="name" required maxlength="100"
+                   placeholder="AP Recepção, AP UTI...">
+          </div>
+          <div class="add-field">
+            <label for="ap-ip">Endereço IP *</label>
+            <input type="text" id="ap-ip" name="ip_address" required maxlength="45"
+                   placeholder="192.168.1.1">
+          </div>
+          <div class="add-field">
+            <label for="ap-location">Localização</label>
+            <input type="text" id="ap-location" name="location" maxlength="200"
+                   placeholder="Piso 1 - Ala Norte">
+          </div>
+        </div>
+        <button type="submit" class="btn-add">Adicionar</button>
+      </form>
+    </div>
+  </main>
+
+  <%- include('_footer') %>
+
+  <script>
+    // Formata data ISO para pt-BR
+    function fmtDate(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    }
+
+    // Verifica agora via AJAX
+    async function pingNow() {
+      const btn = document.getElementById('btn-ping');
+      const icon = document.getElementById('ping-icon');
+      const label = document.getElementById('ping-label');
+
+      btn.disabled = true;
+      icon.textContent = '↻';
+      icon.classList.add('spin');
+      label.textContent = 'Verificando...';
+
+      try {
+        const res = await fetch('/admin/access-points/ping', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+
+        if (data.ok && data.results) {
+          let online = 0, offline = 0, unknown = 0;
+
+          data.results.forEach(ap => {
+            // Atualiza badge de status
+            const statusEl = document.getElementById('status-' + ap.id);
+            if (statusEl) {
+              statusEl.className = 'badge ' + (ap.online ? 'badge-online' : 'badge-offline');
+              statusEl.textContent = ap.online ? 'Online' : 'Offline';
+            }
+
+            // Atualiza latência
+            const latEl = document.getElementById('latency-' + ap.id);
+            if (latEl) {
+              if (ap.latency_ms !== null) {
+                const cls = ap.latency_ms < 10 ? 'fast' : ap.latency_ms < 50 ? 'slow' : 'very-slow';
+                latEl.className = 'latency ' + cls;
+                latEl.textContent = ap.latency_ms + ' ms';
+              } else {
+                latEl.className = 'latency';
+                latEl.textContent = '—';
+              }
+            }
+
+            // Atualiza última verificação
+            const chkEl = document.getElementById('checked-' + ap.id);
+            if (chkEl) chkEl.textContent = fmtDate(data.checked_at);
+
+            if (ap.online) online++; else offline++;
+          });
+
+          // Atualiza cards de resumo
+          const total = data.results.length;
+          unknown = total - online - offline;
+          const elOnline = document.getElementById('count-online');
+          const elOffline = document.getElementById('count-offline');
+          const elUnknown = document.getElementById('count-unknown');
+          if (elOnline) elOnline.textContent = online;
+          if (elOffline) elOffline.textContent = offline;
+          if (elUnknown) elUnknown.textContent = Math.max(0, unknown);
+
+          document.getElementById('last-check-text').textContent =
+            'Verificado em: ' + fmtDate(data.checked_at);
+        }
+      } catch (e) {
+        alert('Erro ao verificar pontos de acesso. Tente novamente.');
+      } finally {
+        btn.disabled = false;
+        icon.textContent = '▶';
+        icon.classList.remove('spin');
+        label.textContent = 'Verificar Agora';
+      }
+    }
+
+    // Validação de IP no formulário
+    document.getElementById('form-add-ap').addEventListener('submit', function(e) {
+      const ip = document.getElementById('ap-ip').value.trim();
+      const ipRe = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+      const m = ipRe.exec(ip);
+      if (!m || !m.slice(1).every(n => parseInt(n, 10) <= 255)) {
+        e.preventDefault();
+        alert('Endereço IP inválido. Use o formato 192.168.1.1');
+        document.getElementById('ap-ip').focus();
+      }
+    });
+
+    // Auto-refresh a cada 5 minutos (coincide com o cron do servidor)
+    setTimeout(() => location.reload(), 5 * 60 * 1000);
+  </script>
+</body>
+</html>

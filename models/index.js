@@ -2,6 +2,7 @@ const sequelize = require('../config/database');
 const User = require('./User');
 const Session = require('./Session');
 const Setting = require('./Setting');
+const AccessPoint = require('./AccessPoint');
 
 const initDatabase = async () => {
   await sequelize.sync({ alter: true });
@@ -13,7 +14,7 @@ const initDatabase = async () => {
 
   await Setting.findOrCreate({
     where: { key: 'organization_name' },
-    defaults: { value: 'Hospital Beneficiente Portuguesa' }
+    defaults: { value: 'Captive Portal' }
   });
 
   await Setting.findOrCreate({
@@ -34,4 +35,4 @@ const initDatabase = async () => {
   console.log(`[DB] Banco sincronizado. Duração da sessão: ${sessionSetting.value}h`);
 };
 
-module.exports = { sequelize, User, Session, Setting, initDatabase };
+module.exports = { sequelize, User, Session, Setting, AccessPoint, initDatabase };

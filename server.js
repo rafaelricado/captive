@@ -20,6 +20,7 @@ const path = require('path');
 const cron = require('node-cron');
 const { initDatabase } = require('./models');
 const { expireSessions } = require('./services/sessionService');
+const { pingAllAccessPoints } = require('./services/pingService');
 
 const portalRoutes = require('./routes/portal');
 const apiRoutes = require('./routes/api');
@@ -104,6 +105,18 @@ async function start() {
         await expireSessions();
       } catch (err) {
         console.error('[Cron] Erro ao expirar sessões:', err.message);
+      }
+    });
+
+    // Cron: pingar pontos de acesso a cada 5 minutos
+    cron.schedule('*/5 * * * *', async () => {
+      try {
+        const { AccessPoint } = require('./models');
+        const count = await AccessPoint.count({ where: { active: true } });
+        if (count === 0) return;
+        await pingAllAccessPoints();
+      } catch (err) {
+        console.error('[Cron] Erro ao verificar pontos de acesso:', err.message);
       }
     });
 

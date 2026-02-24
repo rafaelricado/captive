@@ -2,8 +2,9 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { Op } = require('sequelize');
-const { User, Session, Setting } = require('../models');
+const { User, Session, Setting, AccessPoint } = require('../models');
 const mikrotikService = require('../services/mikrotikService');
+const { pingAllAccessPoints, isValidIPv4 } = require('../services/pingService');
 
 // Comparação de strings em tempo constante (previne timing attacks)
 function safeEqual(a, b) {
@@ -353,5 +354,89 @@ exports.saveSettings = async (req, res) => {
   } catch (err) {
     console.error('[Admin] Erro ao salvar configurações:', err.message);
     await renderSettings(null, 'Erro ao salvar as configurações. Tente novamente.');
+  }
+};
+
+// ─── Pontos de Acesso ─────────────────────────────────────────────────────────
+
+exports.accessPoints = async (req, res) => {
+  try {
+    const aps = await AccessPoint.findAll({ order: [['name', 'ASC']] });
+
+    const now = new Date();
+    const list = aps.map(ap => ({
+      id: ap.id,
+      name: ap.name,
+      ip_address: ap.ip_address,
+      location: ap.location || '—',
+      active: ap.active,
+      is_online: ap.is_online,
+      latency_ms: ap.latency_ms,
+      last_checked_at: ap.last_checked_at ? formatDate(ap.last_checked_at) : 'Nunca',
+      status: ap.is_online === null ? 'unknown' : (ap.is_online ? 'online' : 'offline')
+    }));
+
+    const online = list.filter(a => a.is_online === true).length;
+    const offline = list.filter(a => a.is_online === false).length;
+    const unknown = list.filter(a => a.is_online === null).length;
+
+    res.render('admin/access-points', {
+      aps: list, online, offline, unknown,
+      page: 'access-points',
+      pageObj: 'access-points',
+      error: null,
+      success: null
+    });
+  } catch (err) {
+    console.error('[Admin] Erro ao listar APs:', err.message);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+exports.saveAccessPoint = async (req, res) => {
+  const { name, ip_address, location } = req.body;
+  try {
+    if (!name || !name.trim()) {
+      return res.redirect('/admin/access-points?error=Nome+obrigatorio');
+    }
+    if (!ip_address || !isValidIPv4(ip_address.trim())) {
+      return res.redirect('/admin/access-points?error=IP+invalido');
+    }
+
+    await AccessPoint.create({
+      name: name.trim(),
+      ip_address: ip_address.trim(),
+      location: location && location.trim() ? location.trim() : null
+    });
+
+    console.log(`[Admin] AP adicionado: ${name.trim()} (${ip_address.trim()})`);
+    res.redirect('/admin/access-points?success=1');
+  } catch (err) {
+    console.error('[Admin] Erro ao salvar AP:', err.message);
+    res.redirect('/admin/access-points?error=Erro+ao+salvar');
+  }
+};
+
+exports.deleteAccessPoint = async (req, res) => {
+  try {
+    const ap = await AccessPoint.findByPk(req.params.id);
+    if (ap) {
+      console.log(`[Admin] AP removido: ${ap.name} (${ap.ip_address})`);
+      await ap.destroy();
+    }
+    res.redirect('/admin/access-points');
+  } catch (err) {
+    console.error('[Admin] Erro ao excluir AP:', err.message);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+exports.pingAccessPoints = async (req, res) => {
+  try {
+    const results = await pingAllAccessPoints();
+    res.json({ ok: true, results, checked_at: new Date().toISOString() });
+  } catch (err) {
+    console.error('[Admin] Erro ao pingar APs:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
   }
 };

@@ -64,6 +64,13 @@ router.post('/users/:id/delete', adminAuth, adminController.deleteUser);
 router.get('/sessions', adminAuth, adminController.sessions);
 router.post('/sessions/:id/terminate', adminAuth, adminController.terminateSession);
 
+// Pontos de acesso (protegido)
+// IMPORTANTE: rota /ping deve vir antes de /:id/delete para não ser capturada pelo param
+router.get('/access-points', adminAuth, adminController.accessPoints);
+router.post('/access-points/ping', adminAuth, adminController.pingAccessPoints);
+router.post('/access-points', adminAuth, adminController.saveAccessPoint);
+router.post('/access-points/:id/delete', adminAuth, adminController.deleteAccessPoint);
+
 // Configurações (protegido)
 router.get('/settings', adminAuth, adminController.showSettings);
 router.post('/settings', adminAuth, (req, res, next) => {
