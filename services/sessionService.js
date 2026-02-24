@@ -43,12 +43,15 @@ async function expireSessions() {
 
   for (const session of expired) {
     try {
-      session.active = false;
-      await session.save();
-
+      // Remove do Mikrotik ANTES de marcar como inativa no banco.
+      // Se o Mikrotik falhar, a sessão permanece ativa e o cron tentará novamente.
+      // Evita o estado inconsistente: inativa no banco mas ativa no Mikrotik.
       if (session.User) {
         await mikrotikService.removeUser(session.User.cpf);
       }
+
+      session.active = false;
+      await session.save();
     } catch (err) {
       console.error(`[Sessão] Erro ao expirar sessão ${session.id}:`, err.message);
     }

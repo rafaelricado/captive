@@ -277,6 +277,32 @@ footer {
   margin-top: 2px;
 }
 
+/* LGPD Consent Checkbox */
+.lgpd-group {
+  margin-top: 4px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: #4b5563;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: #0d4e8b;
+  cursor: pointer;
+}
+
 /* Responsive */
 @media (max-width: 480px) {
   body {

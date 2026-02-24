@@ -13,7 +13,7 @@ function sanitizeRedirectUrl(url) {
 
 async function getPortalSettings() {
   const [orgName, orgLogo, bgColor1, bgColor2] = await Promise.all([
-    Setting.get('organization_name', 'Hospital Beneficiente Portuguesa'),
+    Setting.get('organization_name', 'Captive Portal'),
     Setting.get('organization_logo', ''),
     Setting.get('portal_bg_color_1', '#0d4e8b'),
     Setting.get('portal_bg_color_2', '#1a7bc4')
