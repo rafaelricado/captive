@@ -323,8 +323,8 @@ ADMIN_USER=admin                 # Usuario de acesso ao painel
 ADMIN_PASSWORD="sua_senha_admin" # Use aspas para suportar # e outros caracteres especiais
 SESSION_SECRET=string_longa_e_aleatoria  # Gerado automaticamente pelo setup.sh
 
-# Ingestao de dados do Mikrotik (opcional)
-MIKROTIK_DATA_KEY="sua-chave-secreta"    # Chave para autenticar envio de dados pelo roteador
+# Recepção de dados Mikrotik (tráfego, WAN, conexões, DNS)
+MIKROTIK_DATA_KEY=sua-chave-secreta-aqui  # Deve coincidir com o campo "key" dos scripts do roteador
 ```
 
 > **Importante:** senhas com `#` devem estar entre aspas duplas no `.env`. Sem aspas, tudo apos o `#` e interpretado como comentario e a senha fica truncada. O `setup.sh` faz isso automaticamente. Se editar o `.env` manualmente, use sempre aspas nas senhas.
@@ -800,7 +800,7 @@ A chave pode ser sobrescrita pela configuracao `mikrotik_data_key` na tabela `se
 | `key`  | Chave de autenticacao                                             |
 | `router` | Nome identificador do roteador (ex: `CCR01`)                  |
 | `data` | CSV de clientes: `IP,Hostname[MAC],bytes_up,bytes_down;`          |
-| `iface`| CSV de interfaces: `NomeInterface,tx_delta,rx_delta,up\|down;`    |
+| `iface`| CSV de interfaces: `NomeInterface,tx_delta,rx_delta,up|down;`    |
 
 **POST /api/mikrotik/details** (body form-urlencoded):
 
@@ -1182,7 +1182,7 @@ O projeto utiliza 15 pacotes npm (sem dependencias adicionais para a ingestao de
 |---------------------|----------|--------------------------------------------------------------------------------------------------------|
 | `express`           | ^4.21    | Framework HTTP principal. Gerencia rotas, middleware e o ciclo de requisicao/resposta do servidor.     |
 | `ejs`               | ^3.1     | Template engine usada para renderizar as paginas HTML no servidor. Permite embutir variaveis e logica nas views. |
-| `sequelize`         | ^6.37    | ORM que abstrai as queries SQL. Gerencia os modelos (`User`, `Session`, `Setting`, `AccessPoint`, `ApPingHistory`), migracoes via `sync({ alter: true })` e relacionamentos. |
+| `sequelize`         | ^6.37    | ORM que abstrai as queries SQL. Gerencia os modelos (`User`, `Session`, `Setting`, `AccessPoint`, `ApPingHistory`, `TrafficRanking`, `WanStat`, `ClientConnection`, `DnsEntry`), migracoes via `sync({ alter: true })` e relacionamentos. |
 | `pg`                | ^8.13    | Driver nativo do PostgreSQL para Node.js. Usado pelo Sequelize e pelo `connect-pg-simple` para se comunicar com o banco. |
 | `pg-hstore`         | ^2.3     | Addon exigido pelo Sequelize ao usar PostgreSQL para serializar/desserializar o tipo `hstore`. Sem ele o Sequelize nao inicializa. |
 | `express-session`   | ^1.18    | Gerencia a sessao server-side do painel administrativo. O ID da sessao fica num cookie assinado; os dados ficam no servidor (PostgreSQL). |

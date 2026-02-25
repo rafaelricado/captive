@@ -337,15 +337,16 @@ const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const URL_RE = /^https?:\/\/.+/;
 
 async function fetchAllSettings() {
-  const [orgName, orgLogo, sessionDuration, bgColor1, bgColor2, alertWebhookUrl] = await Promise.all([
+  const [orgName, orgLogo, sessionDuration, bgColor1, bgColor2, alertWebhookUrl, mikrotikDataKey] = await Promise.all([
     Setting.get('organization_name', 'Captive Portal'),
     Setting.get('organization_logo', ''),
     Setting.getSessionDuration(),
     Setting.get('portal_bg_color_1', '#0d4e8b'),
     Setting.get('portal_bg_color_2', '#1a7bc4'),
-    Setting.get('alert_webhook_url', '')
+    Setting.get('alert_webhook_url', ''),
+    Setting.get('mikrotik_data_key', '')
   ]);
-  return { orgName, orgLogo, sessionDuration, bgColor1, bgColor2, alertWebhookUrl };
+  return { orgName, orgLogo, sessionDuration, bgColor1, bgColor2, alertWebhookUrl, mikrotikDataKey };
 }
 
 exports.showSettings = async (req, res) => {
@@ -368,7 +369,7 @@ exports.saveSettings = async (req, res) => {
     const {
       organization_name, session_duration_hours,
       remove_logo, portal_bg_color_1, portal_bg_color_2,
-      alert_webhook_url
+      alert_webhook_url, mikrotik_data_key
     } = req.body;
 
     if (organization_name && organization_name.trim()) {
@@ -409,6 +410,9 @@ exports.saveSettings = async (req, res) => {
       }
       await Setting.set('organization_logo', `/uploads/logo/${req.file.filename}`);
     }
+
+    // Chave de ingestão Mikrotik (opcional — sobrescreve env se preenchida)
+    await Setting.set('mikrotik_data_key', (mikrotik_data_key || '').trim());
 
     // Invalida cache de settings de marca (chave usada em utils/orgSettings.js)
     settingsCache.invalidate('org_settings');

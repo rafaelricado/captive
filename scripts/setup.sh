@@ -339,5 +339,5 @@ echo "    POST http://${SERVER_IP}:3000/api/mikrotik/details   (a cada 15 min)"
 echo ""
 echo "  Use a chave configurada em MIKROTIK_DATA_KEY do .env"
 echo "  (exibida abaixo para referencia):"
-grep MIKROTIK_DATA_KEY .env 2>/dev/null | sed 's/MIKROTIK_DATA_KEY=/  key=/' || true
+grep MIKROTIK_DATA_KEY .env 2>/dev/null | sed 's/MIKROTIK_DATA_KEY=//;s/"//g;s/^/  key=/' || true
 echo ""

@@ -281,6 +281,22 @@
         </div>
       </div>
 
+      <!-- Chave Mikrotik -->
+      <div class="settings-card">
+        <h3>Ingestão de Dados Mikrotik</h3>
+        <div class="field">
+          <label for="mikrotik_data_key">Chave de autenticação (MIKROTIK_DATA_KEY)</label>
+          <input type="text" id="mikrotik_data_key" name="mikrotik_data_key"
+                 value="<%= mikrotikDataKey %>" maxlength="256"
+                 placeholder="Deixe em branco para usar o valor do .env">
+          <p class="hint">
+            Chave enviada no campo <code>key</code> pelos scripts do roteador Mikrotik.<br>
+            Se preenchida aqui, tem prioridade sobre a variável <code>MIKROTIK_DATA_KEY</code> do <code>.env</code>.<br>
+            Deixe em branco para usar o valor configurado no servidor.
+          </p>
+        </div>
+      </div>
+
       <button type="submit" class="btn-save">Salvar configurações</button>
     </form>
   </main>
