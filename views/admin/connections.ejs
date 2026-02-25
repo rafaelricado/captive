@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conexões Ativas &mdash; Captive Portal</title>
+  <%- include('_head') %>
+</head>
+<body>
+  <%- include('_nav', { page: pageObj }) %>
+
+  <main class="container">
+    <h2 class="page-title">Conexões Ativas</h2>
+
+    <% if (updatedAt) { %>
+      <p class="meta">Snapshot de <strong><%= updatedAt %></strong> &mdash; <%= connections.length %> conexão(ões)</p>
+    <% } else { %>
+      <p class="meta">Nenhum dado recebido ainda.</p>
+    <% } %>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Origem</th>
+            <th>Destino</th>
+            <th>Porta</th>
+            <th>Enviado</th>
+            <th>Recebido</th>
+            <th>Roteador</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (connections.length === 0) { %>
+            <tr><td colspan="7" style="text-align:center;color:#9ca3af">Nenhuma conexão registrada.</td></tr>
+          <% } %>
+          <% connections.forEach((c, i) => { %>
+            <tr>
+              <td style="color:#9ca3af"><%= i + 1 %></td>
+              <td><%= c.src_ip %></td>
+              <td><%= c.dst_ip %></td>
+              <td><%= c.dst_port %></td>
+              <td><%= c.bytes_orig %></td>
+              <td><%= c.bytes_reply %></td>
+              <td><%= c.router_name %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <%- include('_footer') %>
+</body>
+</html>

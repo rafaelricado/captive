@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Estatísticas WAN &mdash; Captive Portal</title>
+  <%- include('_head') %>
+  <style>
+    .badge-up   { background: #dcfce7; color: #16a34a; }
+    .badge-down { background: #fee2e2; color: #dc2626; }
+  </style>
+</head>
+<body>
+  <%- include('_nav', { page: pageObj }) %>
+
+  <main class="container">
+    <h2 class="page-title">Estatísticas WAN &mdash; últimas 24h</h2>
+
+    <p class="meta"><%= stats.length %> registro(s)</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Interface</th>
+            <th>TX (delta)</th>
+            <th>RX (delta)</th>
+            <th>Status</th>
+            <th>Roteador</th>
+            <th>Registrado em</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (stats.length === 0) { %>
+            <tr><td colspan="6" style="text-align:center;color:#9ca3af">Nenhum dado disponível.</td></tr>
+          <% } %>
+          <% stats.forEach(s => { %>
+            <tr>
+              <td><strong><%= s.interface_name %></strong></td>
+              <td><%= s.tx %></td>
+              <td><%= s.rx %></td>
+              <td>
+                <% if (s.is_up) { %>
+                  <span class="badge badge-up">UP</span>
+                <% } else { %>
+                  <span class="badge badge-down">DOWN</span>
+                <% } %>
+              </td>
+              <td><%= s.router_name %></td>
+              <td><%= s.recorded_at %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <%- include('_footer') %>
+</body>
+</html>

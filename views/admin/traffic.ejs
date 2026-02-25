@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tráfego de Clientes &mdash; Captive Portal</title>
+  <%- include('_head') %>
+</head>
+<body>
+  <%- include('_nav', { page: pageObj }) %>
+
+  <main class="container">
+    <h2 class="page-title">Tráfego de Clientes</h2>
+
+    <% if (updatedAt) { %>
+      <p class="meta">Snapshot de <strong><%= updatedAt %></strong> &mdash; <%= clients.length %> cliente(s)</p>
+    <% } else { %>
+      <p class="meta">Nenhum dado recebido ainda.</p>
+    <% } %>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>IP</th>
+            <th>Hostname / MAC</th>
+            <th>Upload</th>
+            <th>Download</th>
+            <th>Total</th>
+            <th>Roteador</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (clients.length === 0) { %>
+            <tr><td colspan="7" style="text-align:center;color:#9ca3af">Nenhum dado disponível.</td></tr>
+          <% } %>
+          <% clients.forEach((c, i) => { %>
+            <tr>
+              <td style="color:#9ca3af"><%= i + 1 %></td>
+              <td><strong><%= c.ip_address %></strong></td>
+              <td>
+                <div><%= c.hostname %></div>
+                <% if (c.mac_address !== '—') { %>
+                  <div style="font-size:.75rem;color:#9ca3af"><%= c.mac_address %></div>
+                <% } %>
+              </td>
+              <td><%= c.bytes_up %></td>
+              <td><%= c.bytes_down %></td>
+              <td><strong><%= c.total %></strong></td>
+              <td><%= c.router_name %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <%- include('_footer') %>
+</body>
+</html>

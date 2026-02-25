@@ -2,7 +2,8 @@ const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 const { Op } = require('sequelize');
-const { User, Session, Setting, AccessPoint, ApPingHistory } = require('../models');
+const { User, Session, Setting, AccessPoint, ApPingHistory,
+  TrafficRanking, WanStat, ClientConnection, DnsEntry } = require('../models');
 const mikrotikService = require('../services/mikrotikService');
 const { pingAllAccessPoints, isValidIPv4 } = require('../services/pingService');
 const logger = require('../utils/logger');
@@ -32,6 +33,15 @@ function startOfDay() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+function formatBytes(bytes) {
+  const n = Number(bytes) || 0;
+  if (n === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(n) / Math.log(k));
+  return parseFloat((n / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 function startOfWeek() {
@@ -479,5 +489,151 @@ exports.apHistory = async (req, res) => {
   } catch (err) {
     logger.error(`[Admin] Erro ao buscar histórico do AP: ${err.message}`);
     res.status(500).json({ error: 'Erro interno.' });
+  }
+};
+
+// ─── Tráfego de Clientes ──────────────────────────────────────────────────────
+
+exports.traffic = async (req, res) => {
+  try {
+    // Pega o último snapshot: todos os registros do recorded_at mais recente
+    const latest = await TrafficRanking.max('recorded_at');
+    let clients = [];
+    let updatedAt = null;
+
+    if (latest) {
+      const rows = await TrafficRanking.findAll({
+        where: { recorded_at: latest },
+        order: [['bytes_down', 'DESC']],
+        limit: 200
+      });
+      updatedAt = formatDate(latest);
+      clients = rows.map(r => ({
+        ip_address: r.ip_address,
+        hostname: r.hostname || '—',
+        mac_address: r.mac_address || '—',
+        bytes_up: formatBytes(r.bytes_up),
+        bytes_down: formatBytes(r.bytes_down),
+        total: formatBytes(Number(r.bytes_up) + Number(r.bytes_down)),
+        router_name: r.router_name || '—'
+      }));
+    }
+
+    res.render('admin/traffic', {
+      clients, updatedAt,
+      page: 'traffic',
+      pageObj: 'traffic'
+    });
+  } catch (err) {
+    logger.error(`[Admin] Erro ao listar tráfego: ${err.message}`);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+// ─── Estatísticas WAN ─────────────────────────────────────────────────────────
+
+exports.wan = async (req, res) => {
+  try {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const rows = await WanStat.findAll({
+      where: { recorded_at: { [Op.gte]: since } },
+      order: [['interface_name', 'ASC'], ['recorded_at', 'DESC']],
+      limit: 500
+    });
+
+    const stats = rows.map(r => ({
+      interface_name: r.interface_name,
+      tx: formatBytes(r.tx_bytes),
+      rx: formatBytes(r.rx_bytes),
+      is_up: r.is_up,
+      router_name: r.router_name || '—',
+      recorded_at: formatDate(r.recorded_at)
+    }));
+
+    res.render('admin/wan', {
+      stats,
+      page: 'wan',
+      pageObj: 'wan'
+    });
+  } catch (err) {
+    logger.error(`[Admin] Erro ao listar WAN: ${err.message}`);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+// ─── Conexões Ativas ──────────────────────────────────────────────────────────
+
+exports.connections = async (req, res) => {
+  try {
+    const latest = await ClientConnection.max('recorded_at');
+    let connections = [];
+    let updatedAt = null;
+
+    if (latest) {
+      const rows = await ClientConnection.findAll({
+        where: { recorded_at: latest },
+        order: [['bytes_orig', 'DESC']],
+        limit: 200
+      });
+      updatedAt = formatDate(latest);
+      connections = rows.map(r => ({
+        src_ip: r.src_ip,
+        dst_ip: r.dst_ip,
+        dst_port: r.dst_port,
+        bytes_orig: formatBytes(r.bytes_orig),
+        bytes_reply: formatBytes(r.bytes_reply),
+        router_name: r.router_name || '—'
+      }));
+    }
+
+    res.render('admin/connections', {
+      connections, updatedAt,
+      page: 'connections',
+      pageObj: 'connections'
+    });
+  } catch (err) {
+    logger.error(`[Admin] Erro ao listar conexões: ${err.message}`);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+// ─── Cache DNS ────────────────────────────────────────────────────────────────
+
+exports.dns = async (req, res) => {
+  try {
+    const page = Math.max(0, parseInt(req.query.page || '0', 10) || 0);
+    const offset = page * PAGE_SIZE;
+    const q = (req.query.q || '').trim();
+
+    const where = q ? {
+      [Op.or]: [
+        { domain: { [Op.iLike]: `%${q}%` } },
+        { ip_address: { [Op.iLike]: `%${q}%` } }
+      ]
+    } : {};
+
+    const { count, rows } = await DnsEntry.findAndCountAll({
+      where,
+      order: [['domain', 'ASC']],
+      limit: PAGE_SIZE,
+      offset
+    });
+
+    const latest = await DnsEntry.max('recorded_at');
+
+    res.render('admin/dns', {
+      entries: rows,
+      q,
+      page,
+      totalPages: Math.ceil(count / PAGE_SIZE),
+      total: count,
+      pageLabel: page + 1,
+      updatedAt: latest ? formatDate(latest) : null,
+      pageObj: 'dns'
+    });
+  } catch (err) {
+    logger.error(`[Admin] Erro ao listar DNS: ${err.message}`);
+    res.status(500).send('Erro interno.');
   }
 };

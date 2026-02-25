@@ -26,6 +26,7 @@ const { pingAllAccessPoints } = require('./services/pingService');
 const portalRoutes = require('./routes/portal');
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
+const mikrotikRoutes = require('./routes/mikrotik');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -114,6 +115,7 @@ app.get('/health', async (req, res) => {
 // Rotas
 app.use('/', portalRoutes);
 app.use('/api', apiRoutes);
+app.use('/api/mikrotik', mikrotikRoutes);
 app.use('/admin', adminRoutes);
 
 // Conexão ao banco com retry (até 5 tentativas com intervalo de 3s)

@@ -4,6 +4,10 @@ const Session = require('./Session');
 const Setting = require('./Setting');
 const AccessPoint = require('./AccessPoint');
 const ApPingHistory = require('./ApPingHistory');
+const TrafficRanking = require('./TrafficRanking');
+const WanStat = require('./WanStat');
+const ClientConnection = require('./ClientConnection');
+const DnsEntry = require('./DnsEntry');
 
 // Associação: histórico pertence ao ponto de acesso
 ApPingHistory.belongsTo(AccessPoint, { foreignKey: 'ap_id', as: 'AccessPoint' });
@@ -43,8 +47,18 @@ const initDatabase = async () => {
     defaults: { value: '' }
   });
 
+  // Chave de autenticação para recepção de dados do Mikrotik (vazio = desabilitado)
+  await Setting.findOrCreate({
+    where: { key: 'mikrotik_data_key' },
+    defaults: { value: process.env.MIKROTIK_DATA_KEY || '' }
+  });
+
   const logger = require('../utils/logger');
   logger.info(`[DB] Banco sincronizado. Duração da sessão: ${sessionSetting.value}h`);
 };
 
-module.exports = { sequelize, User, Session, Setting, AccessPoint, ApPingHistory, initDatabase };
+module.exports = {
+  sequelize, User, Session, Setting, AccessPoint, ApPingHistory,
+  TrafficRanking, WanStat, ClientConnection, DnsEntry,
+  initDatabase
+};

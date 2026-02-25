@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cache DNS &mdash; Captive Portal</title>
+  <%- include('_head') %>
+</head>
+<body>
+  <%- include('_nav', { page: pageObj }) %>
+
+  <main class="container">
+    <h2 class="page-title">Cache DNS</h2>
+
+    <% if (updatedAt) { %>
+      <p class="meta">Snapshot de <strong><%= updatedAt %></strong> &mdash; <%= total %> entrada(s)</p>
+    <% } else { %>
+      <p class="meta">Nenhum dado recebido ainda.</p>
+    <% } %>
+
+    <form method="GET" action="/admin/dns" style="margin-bottom:16px;display:flex;gap:8px">
+      <input type="text" name="q" value="<%= q %>" placeholder="Buscar domínio ou IP..."
+             style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:.875rem;flex:1;max-width:320px">
+      <button type="submit" class="btn-outline" style="padding:8px 18px">Buscar</button>
+      <% if (q) { %>
+        <a href="/admin/dns" class="btn-outline" style="padding:8px 18px">Limpar</a>
+      <% } %>
+    </form>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Domínio</th>
+            <th>IP Resolvido</th>
+            <th>Roteador</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (entries.length === 0) { %>
+            <tr><td colspan="3" style="text-align:center;color:#9ca3af">Nenhuma entrada encontrada.</td></tr>
+          <% } %>
+          <% entries.forEach(e => { %>
+            <tr>
+              <td><%= e.domain %></td>
+              <td><%= e.ip_address %></td>
+              <td><%= e.router_name || '—' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <% if (page > 0) { %>
+        <a href="/admin/dns?page=<%= page - 1 %>&q=<%= encodeURIComponent(q) %>">&larr; Anterior</a>
+      <% } %>
+      <span class="current">Página <%= pageLabel %></span>
+      <% if (page + 1 < totalPages) { %>
+        <a href="/admin/dns?page=<%= page + 1 %>&q=<%= encodeURIComponent(q) %>">Próxima &rarr;</a>
+      <% } %>
+    </div>
+  </main>
+
+  <%- include('_footer') %>
+</body>
+</html>

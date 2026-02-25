@@ -88,6 +88,12 @@ router.get('/access-points/:id/history', adminAuth, adminController.apHistory);
 router.post('/access-points', adminAuth, adminController.saveAccessPoint);
 router.post('/access-points/:id/delete', adminAuth, adminController.deleteAccessPoint);
 
+// Rede / Tráfego Mikrotik (protegido)
+router.get('/traffic', adminAuth, adminController.traffic);
+router.get('/wan', adminAuth, adminController.wan);
+router.get('/connections', adminAuth, adminController.connections);
+router.get('/dns', adminAuth, adminController.dns);
+
 // Configurações (protegido)
 router.get('/settings', adminAuth, adminController.showSettings);
 router.post('/settings', adminAuth, (req, res, next) => {
