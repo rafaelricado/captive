@@ -106,7 +106,8 @@ exports.login = async (req, res) => {
 };
 
 exports.logout = (req, res) => {
-  req.session.destroy(() => {
+  req.session.destroy(err => {
+    if (err) logger.warn(`[Admin] Erro ao destruir sessão: ${err.message}`);
     res.redirect('/admin/login');
   });
 };
@@ -336,6 +337,21 @@ exports.terminateSession = async (req, res) => {
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const URL_RE = /^https?:\/\/.+/;
 
+function safeColor(val, fallback) {
+  return HEX_COLOR_RE.test(val) ? val : fallback;
+}
+
+function isPrivateUrl(urlStr) {
+  try {
+    const { hostname } = new URL(urlStr);
+    if (['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(hostname)) return true;
+    if (/^10\./.test(hostname)) return true;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(hostname)) return true;
+    if (/^192\.168\./.test(hostname)) return true;
+    return false;
+  } catch (_) { return true; }
+}
+
 async function fetchAllSettings() {
   const [orgName, orgLogo, sessionDuration, bgColor1, bgColor2, alertWebhookUrl, mikrotikDataKey] = await Promise.all([
     Setting.get('organization_name', 'Captive Portal'),
@@ -390,8 +406,13 @@ exports.saveSettings = async (req, res) => {
 
     // Webhook de alertas (opcional)
     const webhookUrl = (alert_webhook_url || '').trim();
-    if (webhookUrl && !URL_RE.test(webhookUrl)) {
-      return await renderSettings(null, 'URL do webhook inválida. Use http:// ou https://');
+    if (webhookUrl) {
+      if (!URL_RE.test(webhookUrl)) {
+        return await renderSettings(null, 'URL do webhook inválida. Use http:// ou https://');
+      }
+      if (isPrivateUrl(webhookUrl)) {
+        return await renderSettings(null, 'URL do webhook não pode apontar para endereços internos ou localhost.');
+      }
     }
     await Setting.set('alert_webhook_url', webhookUrl);
 

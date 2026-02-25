@@ -5,6 +5,7 @@ const fs = require('fs');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const adminAuth = require('../middleware/adminAuth');
+const { csrfMiddleware, verifyCsrf } = require('../middleware/csrfProtection');
 const adminController = require('../controllers/adminController');
 const { Setting } = require('../models');
 
@@ -70,23 +71,26 @@ router.use(async (req, res, next) => {
 // Login (público)
 router.get('/login', adminController.showLogin);
 router.post('/login', adminLoginLimiter, adminController.login);
-router.post('/logout', adminController.logout);
+router.post('/logout', verifyCsrf, adminController.logout);
+
+// Middleware CSRF em todas as rotas GET protegidas
+router.use(adminAuth, csrfMiddleware);
 
 // Painel (protegido)
 router.get('/', adminAuth, adminController.dashboard);
 router.get('/users', adminAuth, adminController.users);
 router.get('/users/export', adminAuth, adminController.exportUsers);
-router.post('/users/:id/delete', adminAuth, adminController.deleteUser);
+router.post('/users/:id/delete', adminAuth, verifyCsrf, adminController.deleteUser);
 router.get('/sessions', adminAuth, adminController.sessions);
-router.post('/sessions/:id/terminate', adminAuth, adminController.terminateSession);
+router.post('/sessions/:id/terminate', adminAuth, verifyCsrf, adminController.terminateSession);
 
 // Pontos de acesso (protegido)
 // IMPORTANTE: rota /ping deve vir antes de /:id/* para não ser capturada pelo param
 router.get('/access-points', adminAuth, adminController.accessPoints);
-router.post('/access-points/ping', adminAuth, adminController.pingAccessPoints);
+router.post('/access-points/ping', adminAuth, verifyCsrf, adminController.pingAccessPoints);
 router.get('/access-points/:id/history', adminAuth, adminController.apHistory);
-router.post('/access-points', adminAuth, adminController.saveAccessPoint);
-router.post('/access-points/:id/delete', adminAuth, adminController.deleteAccessPoint);
+router.post('/access-points', adminAuth, verifyCsrf, adminController.saveAccessPoint);
+router.post('/access-points/:id/delete', adminAuth, verifyCsrf, adminController.deleteAccessPoint);
 
 // Rede / Tráfego Mikrotik (protegido)
 router.get('/traffic', adminAuth, adminController.traffic);
@@ -101,7 +105,7 @@ router.get('/connections/data', adminAuth, adminController.connectionsData);
 
 // Configurações (protegido)
 router.get('/settings', adminAuth, adminController.showSettings);
-router.post('/settings', adminAuth, (req, res, next) => {
+router.post('/settings', adminAuth, verifyCsrf, (req, res, next) => {
   upload.single('organization_logo')(req, res, async err => {
     if (err instanceof multer.MulterError || err) {
       let bgColor1 = '#0d4e8b', bgColor2 = '#1a7bc4', sessionDuration = 48;

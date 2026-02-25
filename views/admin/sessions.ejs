@@ -56,6 +56,7 @@
                 <% if (s.status === 'Ativa') { %>
                   <form method="POST" action="/admin/sessions/<%= s.id %>/terminate"
                         onsubmit="return confirm('Encerrar a sessão de ' + <%- JSON.stringify(s.nome) %> + '?')">
+                    <input type="hidden" name="_csrf" value="<%= locals.csrfToken || '' %>">
                     <button type="submit" class="btn-terminate">Encerrar</button>
                   </form>
                 <% } else { %>

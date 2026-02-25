@@ -165,7 +165,7 @@
 
     <!-- Toolbar -->
     <div class="toolbar">
-      <button class="btn-ping" id="btn-ping" onclick="pingNow()">
+      <button class="btn-ping" id="btn-ping" onclick="pingNow()" data-csrf="<%= locals.csrfToken || '' %>">
         <span id="ping-icon">&#9654;</span>
         <span id="ping-label">Verificar Agora</span>
       </button>
@@ -221,6 +221,7 @@
                 <button type="button" class="btn-hist" data-id="<%= ap.id %>" data-name="<%= ap.name %>">Histórico</button>
                 <form method="POST" action="/admin/access-points/<%= ap.id %>/delete"
                       onsubmit="return confirm('Remover ' + <%- JSON.stringify(ap.name) %> + ' do monitoramento?')">
+                  <input type="hidden" name="_csrf" value="<%= locals.csrfToken || '' %>">
                   <button type="submit" class="btn-del">Remover</button>
                 </form>
               </td>
@@ -234,6 +235,7 @@
     <div class="add-card">
       <h3>Adicionar Ponto de Acesso</h3>
       <form method="POST" action="/admin/access-points" id="form-add-ap">
+        <input type="hidden" name="_csrf" value="<%= locals.csrfToken || '' %>">
         <div class="add-row">
           <div class="add-field">
             <label for="ap-name">Nome *</label>
@@ -288,9 +290,10 @@
       label.textContent = 'Verificando...';
 
       try {
+        const csrf = btn.dataset.csrf || '';
         const res = await fetch('/admin/access-points/ping', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }
         });
         const data = await res.json();
 

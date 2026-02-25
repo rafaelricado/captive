@@ -82,6 +82,7 @@
               <td>
                 <form method="POST" action="/admin/users/<%= u.id %>/delete"
                       onsubmit="return confirm('Excluir permanentemente os dados de ' + <%- JSON.stringify(u.nome_completo) %> + '?\n\nEsta ação não pode ser desfeita.')">
+                  <input type="hidden" name="_csrf" value="<%= locals.csrfToken || '' %>">
                   <button type="submit" class="btn-delete">Excluir</button>
                 </form>
               </td>

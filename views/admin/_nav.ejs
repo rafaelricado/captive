@@ -1,17 +1,35 @@
 <nav>
   <span class="brand"><%= locals.orgName %> &mdash; Admin</span>
-  <a href="/admin" class="<%= page === 'dashboard' ? 'active' : '' %>">Dashboard</a>
-  <a href="/admin/users" class="<%= page === 'users' ? 'active' : '' %>">Usuários</a>
-  <a href="/admin/sessions" class="<%= page === 'sessions' ? 'active' : '' %>">Sessões</a>
-  <a href="/admin/access-points" class="<%= page === 'access-points' ? 'active' : '' %>">Pontos de Acesso</a>
-  <span class="nav-section">Rede</span>
-  <a href="/admin/traffic" class="<%= page === 'traffic' ? 'active' : '' %>">Tráfego</a>
-  <a href="/admin/wan" class="<%= page === 'wan' ? 'active' : '' %>">WAN</a>
-  <a href="/admin/connections" class="<%= page === 'connections' ? 'active' : '' %>">Conexões</a>
-  <a href="/admin/dns" class="<%= page === 'dns' ? 'active' : '' %>">DNS</a>
-  <a href="/admin/settings" class="<%= page === 'settings' ? 'active' : '' %>">Configurações</a>
-  <div class="spacer"></div>
-  <form method="POST" action="/admin/logout">
-    <button type="submit">Sair</button>
-  </form>
+
+  <div class="nav-links" id="nav-links">
+    <a href="/admin" class="<%= page === 'dashboard' ? 'active' : '' %>">Dashboard</a>
+    <a href="/admin/users" class="<%= page === 'users' ? 'active' : '' %>">Usuários</a>
+    <a href="/admin/sessions" class="<%= page === 'sessions' ? 'active' : '' %>">Sessões</a>
+    <a href="/admin/access-points" class="<%= page === 'access-points' ? 'active' : '' %>">Pontos de Acesso</a>
+    <span class="nav-section">Rede</span>
+    <a href="/admin/traffic" class="<%= page === 'traffic' ? 'active' : '' %>">Tráfego</a>
+    <a href="/admin/wan" class="<%= page === 'wan' ? 'active' : '' %>">WAN</a>
+    <a href="/admin/connections" class="<%= page === 'connections' ? 'active' : '' %>">Conexões</a>
+    <a href="/admin/dns" class="<%= page === 'dns' ? 'active' : '' %>">DNS</a>
+    <a href="/admin/settings" class="<%= page === 'settings' ? 'active' : '' %>">Configurações</a>
+    <div class="spacer"></div>
+    <form method="POST" action="/admin/logout">
+      <input type="hidden" name="_csrf" value="<%= locals.csrfToken || '' %>">
+      <button type="submit">Sair</button>
+    </form>
+  </div>
+
+  <button class="hamburger" id="nav-toggle" aria-label="Menu" aria-expanded="false">&#9776;</button>
 </nav>
+<script>
+  (function () {
+    var btn = document.getElementById('nav-toggle');
+    var links = document.getElementById('nav-links');
+    if (btn && links) {
+      btn.addEventListener('click', function () {
+        var open = links.classList.toggle('open');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+    }
+  })();
+</script>

@@ -2,41 +2,56 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: sans-serif; background: #f0f4f8; color: #1f2937; }
 
-  /* Nav */
+  /* ── Nav ──────────────────────────────────────────────────────────── */
   nav {
     background: #0d4e8b;
-    padding: 0 24px;
+    padding: 0 32px;
     display: flex;
     align-items: center;
-    gap: 0;
+    position: relative;
+    min-height: 52px;
   }
-  nav .brand { color: #fff; font-weight: 700; font-size: 1rem; padding: 14px 0; margin-right: 24px; }
-  nav a {
+  nav .brand {
+    color: #fff; font-weight: 700; font-size: 1rem;
+    padding: 14px 0; margin-right: 20px; white-space: nowrap; flex-shrink: 0;
+  }
+  nav .nav-links {
+    display: flex; align-items: center; gap: 0; flex: 1;
+  }
+  nav .nav-links a {
     color: rgba(255,255,255,.75); text-decoration: none;
-    padding: 14px 16px; font-size: .875rem;
+    padding: 14px 14px; font-size: .875rem; white-space: nowrap;
     transition: color .15s;
   }
-  nav a:hover, nav a.active { color: #fff; }
-  nav .spacer { flex: 1; }
-  nav .nav-section {
+  nav .nav-links a:hover, nav .nav-links a.active { color: #fff; }
+  nav .nav-links .spacer { flex: 1; }
+  nav .nav-links .nav-section {
     color: rgba(255,255,255,.4); font-size: .7rem; font-weight: 700;
     text-transform: uppercase; letter-spacing: .06em;
-    padding: 0 8px 0 20px; border-left: 1px solid rgba(255,255,255,.2);
-    margin-left: 8px;
+    padding: 0 8px 0 16px; border-left: 1px solid rgba(255,255,255,.2);
+    margin-left: 4px; white-space: nowrap;
   }
-  nav form button {
+  nav .nav-links form button {
     background: none; border: 1px solid rgba(255,255,255,.4);
     color: rgba(255,255,255,.8); padding: 6px 14px;
     border-radius: 6px; cursor: pointer; font-size: .8rem;
-    transition: all .15s;
+    transition: all .15s; white-space: nowrap;
   }
-  nav form button:hover { background: rgba(255,255,255,.1); color: #fff; }
+  nav .nav-links form button:hover { background: rgba(255,255,255,.1); color: #fff; }
 
-  /* Container */
-  .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+  /* Hamburger button */
+  nav .hamburger {
+    display: none;
+    background: none; border: none; cursor: pointer;
+    color: #fff; font-size: 1.5rem; padding: 6px 8px;
+    margin-left: auto; line-height: 1;
+  }
+
+  /* ── Container ────────────────────────────────────────────────────── */
+  .container { max-width: 100%; padding: 28px 48px; }
   .page-title { font-size: 1.4rem; font-weight: 700; color: #0d4e8b; margin-bottom: 24px; }
 
-  /* Cards */
+  /* ── Cards ────────────────────────────────────────────────────────── */
   .cards {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -53,7 +68,7 @@
   .card-green .card-value { color: #16a34a; }
   .card-label { font-size: .8rem; color: #6b7280; margin-top: 6px; }
 
-  /* Quick links */
+  /* ── Quick links ──────────────────────────────────────────────────── */
   .quick-links { display: flex; gap: 12px; flex-wrap: wrap; }
   .btn-outline {
     display: inline-block;
@@ -64,8 +79,8 @@
   }
   .btn-outline:hover { background: #0d4e8b; color: #fff; }
 
-  /* Table */
-  .table-wrap { overflow-x: auto; }
+  /* ── Table ────────────────────────────────────────────────────────── */
+  .table-wrap { overflow-x: auto; border-radius: 12px; }
   table {
     width: 100%; border-collapse: collapse;
     background: #fff; border-radius: 12px;
@@ -87,7 +102,7 @@
   .badge-orange { background: #fef3c7; color: #d97706; }
   .badge-red    { background: #fee2e2; color: #dc2626; }
 
-  /* Pagination */
+  /* ── Pagination ───────────────────────────────────────────────────── */
   .meta { color: #6b7280; font-size: .8rem; margin-bottom: 12px; }
   .pagination { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
   .pagination a, .pagination span {
@@ -98,11 +113,59 @@
   .pagination a:hover { background: #e5e7eb; }
   .pagination .current { background: #0d4e8b; color: #fff; border-color: #0d4e8b; }
 
-  /* Footer */
+  /* ── Footer ───────────────────────────────────────────────────────── */
   footer { text-align: center; font-size: .75rem; color: #9ca3af; padding: 24px; }
 
-  @media (max-width: 600px) {
-    nav { flex-wrap: wrap; padding: 0 12px; }
-    .container { padding: 20px 12px; }
+  /* ── Breakpoints ──────────────────────────────────────────────────── */
+  @media (max-width: 1200px) {
+    .container { padding: 24px 32px; }
+    nav { padding: 0 24px; }
+  }
+
+  @media (max-width: 900px) {
+    .container { padding: 20px 20px; }
+    nav { padding: 0 16px; }
+    nav .nav-links a { padding: 14px 10px; font-size: .82rem; }
+  }
+
+  @media (max-width: 768px) {
+    nav .hamburger { display: block; }
+
+    nav .nav-links {
+      display: none;
+      position: absolute; top: 100%; left: 0; right: 0;
+      background: #0b4070;
+      flex-direction: column; align-items: flex-start;
+      padding: 8px 0; z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,.25);
+    }
+    nav .nav-links.open { display: flex; }
+
+    nav .nav-links a {
+      width: 100%; padding: 12px 20px; font-size: .9rem;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    nav .nav-links .nav-section {
+      border-left: none; padding: 10px 20px 4px;
+      border-top: 1px solid rgba(255,255,255,.12); width: 100%;
+    }
+    nav .nav-links .spacer { display: none; }
+    nav .nav-links form {
+      width: 100%; padding: 10px 20px 14px;
+      border-top: 1px solid rgba(255,255,255,.12);
+    }
+    nav .nav-links form button { width: 100%; text-align: center; }
+
+    .container { padding: 16px 14px; }
+    .cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .card { padding: 18px 14px; }
+    .card-value { font-size: 1.8rem; }
+    th, td { padding: 10px 10px; font-size: .8rem; }
+  }
+
+  @media (max-width: 480px) {
+    nav .brand { font-size: .9rem; }
+    .page-title { font-size: 1.15rem; margin-bottom: 16px; }
+    .cards { grid-template-columns: 1fr 1fr; }
   }
 </style>

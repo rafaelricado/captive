@@ -167,6 +167,7 @@
     <% } %>
 
     <form method="POST" action="/admin/settings" enctype="multipart/form-data" id="form-settings">
+      <input type="hidden" name="_csrf" value="<%= locals.csrfToken || '' %>">
       <input type="hidden" name="remove_logo" id="remove_logo" value="0">
 
       <!-- Identidade visual -->
