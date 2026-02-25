@@ -320,7 +320,7 @@
 :local connCount 0\r\
 :local maxConns 200\r\
 \r\
-:foreach c in=[/ip firewall connection find where src-address~\"10\\.0\\.\"] do={\r\
+:foreach c in=[/ip firewall connection find where src-address~\"10.0.\"] do={\r\
     :if (\$connCount < \$maxConns) do={\r\
         :do {\r\
             :local src [/ip firewall connection get \$c src-address]\r\
