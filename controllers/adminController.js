@@ -597,7 +597,29 @@ exports.traffic = async (req, res) => {
   }
 };
 
+// ─── Helpers DNS para resolução de IP → domínio ───────────────────────────────
+
+async function buildDnsMap() {
+  const rows = await DnsEntry.findAll({ raw: true });
+  const map = {};
+  for (const r of rows) {
+    if (r.ip_address && !map[r.ip_address]) map[r.ip_address] = r.domain;
+  }
+  return map;
+}
+
+function resolveLabel(ip, dnsMap) {
+  if (!ip) return ip;
+  const domain = dnsMap[ip];
+  if (!domain) return ip;
+  // Remove subdomínios irrelevantes para exibir o serviço principal
+  const parts = domain.split('.');
+  return parts.length > 2 ? parts.slice(-2).join('.') : domain;
+}
+
 // ─── Estatísticas WAN ─────────────────────────────────────────────────────────
+
+function padZ(n) { return String(n).padStart(2, '0'); }
 
 // Agrega os deltas das últimas 24h somando TX e RX por interface.
 // Rows devem estar ordenadas por recorded_at DESC para que o primeiro
@@ -622,6 +644,39 @@ function aggregateWanRows(rows) {
   return Object.values(map).sort((a, b) => a.interface_name.localeCompare(b.interface_name));
 }
 
+// Agrupa rows em buckets horários e produz datasets para Chart.js.
+// Rows devem estar com raw:true. Retorna { labels, datasets }.
+function buildWanChart(rows) {
+  const map = {}; // "YYYY-MM-DD HH:00|iface" → {hour, iface, tx, rx}
+  for (const r of rows) {
+    const d = new Date(r.recorded_at);
+    const h = `${d.getFullYear()}-${padZ(d.getMonth()+1)}-${padZ(d.getDate())} ${padZ(d.getHours())}:00`;
+    const k = `${h}|${r.interface_name}`;
+    if (!map[k]) map[k] = { hour: h, iface: r.interface_name, tx: 0, rx: 0 };
+    map[k].tx += Number(r.tx_bytes) || 0;
+    map[k].rx += Number(r.rx_bytes) || 0;
+  }
+  const entries = Object.values(map);
+  const hours = [...new Set(entries.map(e => e.hour))].sort();
+  const ifaces = [...new Set(entries.map(e => e.iface))].sort();
+  const COLORS = [['#0d4e8b','#60a5fa'], ['#15803d','#4ade80']];
+  const datasets = [];
+  ifaces.forEach((iface, i) => {
+    const [cRx, cTx] = COLORS[i] || ['#888','#aaa'];
+    datasets.push({
+      label: `${iface} ↓RX`,
+      data: hours.map(h => { const e = map[`${h}|${iface}`]; return e ? +(e.rx/1024/1024).toFixed(2) : 0; }),
+      borderColor: cRx, backgroundColor: cRx + '25', fill: true, tension: 0.3, borderWidth: 2
+    });
+    datasets.push({
+      label: `${iface} ↑TX`,
+      data: hours.map(h => { const e = map[`${h}|${iface}`]; return e ? +(e.tx/1024/1024).toFixed(2) : 0; }),
+      borderColor: cTx, backgroundColor: 'transparent', fill: false, tension: 0.3, borderWidth: 1.5, borderDash: [5,3]
+    });
+  });
+  return { labels: hours.map(h => h.slice(11,16)), datasets };
+}
+
 exports.wan = async (req, res) => {
   try {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -644,8 +699,21 @@ exports.wan = async (req, res) => {
       recorded_at: formatDate(r.latest_at)
     }));
 
+    const chartData = buildWanChart(rows);
+
+    // Histórico: últimos 40 snapshots individuais para a tabela de histórico
+    const history = rows.slice(0, 40).map(r => ({
+      interface_name: r.interface_name,
+      tx: formatBytes(Number(r.tx_bytes) || 0),
+      rx: formatBytes(Number(r.rx_bytes) || 0),
+      is_up: r.is_up,
+      recorded_at: formatDate(r.recorded_at)
+    }));
+
     res.render('admin/wan', {
       stats,
+      chartData,
+      history,
       updatedAt: latestTs ? formatDate(latestTs) : null,
       page: 'wan',
       pageObj: 'wan'
@@ -665,15 +733,15 @@ exports.connections = async (req, res) => {
     let updatedAt = null;
 
     if (latest) {
-      const rows = await ClientConnection.findAll({
-        where: { recorded_at: latest },
-        order: [['bytes_orig', 'DESC']],
-        limit: 200
-      });
+      const [rows, dnsMap] = await Promise.all([
+        ClientConnection.findAll({ where: { recorded_at: latest }, order: [['bytes_orig', 'DESC']], limit: 200 }),
+        buildDnsMap()
+      ]);
       updatedAt = formatDate(latest);
       connections = rows.map(r => ({
         src_ip: r.src_ip,
         dst_ip: r.dst_ip,
+        dst_label: resolveLabel(r.dst_ip, dnsMap),
         dst_port: r.dst_port,
         bytes_orig: formatBytes(r.bytes_orig),
         bytes_reply: formatBytes(r.bytes_reply),
@@ -778,7 +846,15 @@ exports.wanData = async (req, res) => {
       router_name: r.router_name,
       recorded_at: formatDate(r.latest_at)
     }));
-    res.json({ stats, updatedAt: latestTs ? formatDate(latestTs) : null });
+    const chartData = buildWanChart(rows);
+    const history = rows.slice(0, 40).map(r => ({
+      interface_name: r.interface_name,
+      tx: formatBytes(Number(r.tx_bytes) || 0),
+      rx: formatBytes(Number(r.rx_bytes) || 0),
+      is_up: r.is_up,
+      recorded_at: formatDate(r.recorded_at)
+    }));
+    res.json({ stats, chartData, history, updatedAt: latestTs ? formatDate(latestTs) : null });
   } catch (err) {
     logger.error(`[Admin] Erro em wanData: ${err.message}`);
     res.status(500).json({ error: 'Erro interno.' });
@@ -790,13 +866,15 @@ exports.connectionsData = async (req, res) => {
     const latest = await ClientConnection.max('recorded_at');
     let connections = [], updatedAt = null;
     if (latest) {
-      const rows = await ClientConnection.findAll({
-        where: { recorded_at: latest }, order: [['bytes_orig', 'DESC']], limit: 200
-      });
+      const [rows, dnsMap] = await Promise.all([
+        ClientConnection.findAll({ where: { recorded_at: latest }, order: [['bytes_orig', 'DESC']], limit: 200 }),
+        buildDnsMap()
+      ]);
       updatedAt = formatDate(latest);
       connections = rows.map(r => ({
         src_ip:      r.src_ip,
         dst_ip:      r.dst_ip,
+        dst_label:   resolveLabel(r.dst_ip, dnsMap),
         dst_port:    r.dst_port,
         bytes_orig:  formatBytes(r.bytes_orig),
         bytes_reply: formatBytes(r.bytes_reply),
