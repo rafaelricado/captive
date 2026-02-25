@@ -323,21 +323,21 @@
 :foreach c in=[/ip firewall connection find where src-address~\"10.0.\"] do={\r\
     :if (\$connCount < \$maxConns) do={\r\
         :do {\r\
-            :local src [/ip firewall connection get \$c src-address]\r\
-            :local dst [/ip firewall connection get \$c dst-address]\r\
+            :local src [:tostr [/ip firewall connection get \$c src-address]]\r\
+            :local dst [:tostr [/ip firewall connection get \$c dst-address]]\r\
             :local origB [/ip firewall connection get \$c orig-bytes]\r\
             :local replB [/ip firewall connection get \$c repl-bytes]\r\
 \r\
             :local srcIP \$src\r\
             :local colonPos [:find \$src \":\"]\r\
-            :if ([:typeof \$colonPos] != \"nothing\") do={\r\
+            :if ([:typeof \$colonPos] = \"num\" and \$colonPos > 1) do={\r\
                 :set srcIP [:pick \$src 0 \$colonPos]\r\
             }\r\
 \r\
             :local dstIP \$dst\r\
             :local dport \"0\"\r\
             :set colonPos [:find \$dst \":\"]\r\
-            :if ([:typeof \$colonPos] != \"nothing\") do={\r\
+            :if ([:typeof \$colonPos] = \"num\" and \$colonPos > 1) do={\r\
                 :set dstIP [:pick \$dst 0 \$colonPos]\r\
                 :set dport [:pick \$dst (\$colonPos + 1) [:len \$dst]]\r\
             }\r\
