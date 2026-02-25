@@ -175,6 +175,19 @@ if [ ! -f .env ]; then
     exit 1
   fi
 
+  echo ""
+  echo "--- Ingestao de Dados Mikrotik ---"
+  read -s -p "Chave de autenticacao Mikrotik (MIKROTIK_DATA_KEY) [Enter para gerar automaticamente]: " DATA_KEY
+  echo ""
+  if [[ "$DATA_KEY" == *'"'* ]]; then
+    echo -e "${RED}Chave nao pode conter aspas duplas (\").${NC}"
+    exit 1
+  fi
+  if [ -z "$DATA_KEY" ]; then
+    DATA_KEY=$(node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")
+    echo -e "${GREEN}Chave MIKROTIK_DATA_KEY gerada automaticamente.${NC}"
+  fi
+
   # Gerar SESSION_SECRET aleatorio
   SESSION_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
 
@@ -203,6 +216,9 @@ if [ ! -f .env ]; then
     printf 'ADMIN_USER=%s\n' "$ADMIN_USER"
     printf 'ADMIN_PASSWORD="%s"\n' "$ADMIN_PASSWORD"
     printf 'SESSION_SECRET=%s\n' "$SESSION_SECRET"
+    printf '\n'
+    printf '# Ingestao de dados do Mikrotik\n'
+    printf 'MIKROTIK_DATA_KEY="%s"\n' "$DATA_KEY"
   } > .env
 
   chmod 600 .env
@@ -305,4 +321,23 @@ echo "  Certifique-se que o .env do servidor tem:"
 echo "    MIKROTIK_HOST=15.1.1.1"
 echo "    MIKROTIK_USER=captive_api"
 echo "    MIKROTIK_PORT=8728"
+echo ""
+echo "============================================"
+echo "  OPCIONAL: ENVIO DE DADOS DE MONITORAMENTO"
+echo "============================================"
+echo ""
+echo "Para ativar o monitoramento de trafego e WAN no painel,"
+echo "configure os schedulers do Mikrotik para enviar dados:"
+echo ""
+echo "  Scripts a editar no Mikrotik:"
+echo "    /system script edit traffic-ranking-send source"
+echo "    /system script edit traffic-ranking-send-details source"
+echo ""
+echo "  Substituir URL do Firebase por:"
+echo "    POST http://${SERVER_IP}:3000/api/mikrotik/traffic   (a cada 5 min)"
+echo "    POST http://${SERVER_IP}:3000/api/mikrotik/details   (a cada 15 min)"
+echo ""
+echo "  Use a chave configurada em MIKROTIK_DATA_KEY do .env"
+echo "  (exibida abaixo para referencia):"
+grep MIKROTIK_DATA_KEY .env 2>/dev/null | sed 's/MIKROTIK_DATA_KEY=/  key=/' || true
 echo ""

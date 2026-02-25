@@ -17,12 +17,13 @@ Sistema de captive portal para autenticacao de visitantes na rede Wi-Fi, integra
 9. [Banco de Dados](#banco-de-dados)
 10. [Rotas da API](#rotas-da-api)
 11. [Painel Administrativo](#painel-administrativo)
-12. [Personalizacao de Marca e Cores](#personalizacao-de-marca-e-cores)
-13. [Gerenciamento de Sessoes](#gerenciamento-de-sessoes)
-14. [Seguranca](#seguranca)
-15. [Comandos Uteis](#comandos-uteis)
-16. [Troubleshooting](#troubleshooting)
-17. [Dependencias do Projeto](#dependencias-do-projeto)
+12. [Ingestao de Dados Mikrotik](#ingestao-de-dados-mikrotik)
+13. [Personalizacao de Marca e Cores](#personalizacao-de-marca-e-cores)
+14. [Gerenciamento de Sessoes](#gerenciamento-de-sessoes)
+15. [Seguranca](#seguranca)
+16. [Comandos Uteis](#comandos-uteis)
+17. [Troubleshooting](#troubleshooting)
+18. [Dependencias do Projeto](#dependencias-do-projeto)
 
 ---
 
@@ -108,7 +109,11 @@ captive/
 │   ├── Session.js                # Modelo de sessao (controle de acesso)
 │   ├── Setting.js                # Configuracoes do sistema
 │   ├── AccessPoint.js            # Modelo de ponto de acesso Wi-Fi
-│   └── ApPingHistory.js          # Historico de ping dos pontos de acesso
+│   ├── ApPingHistory.js          # Historico de ping dos pontos de acesso
+│   ├── TrafficRanking.js         # Ranking de trafego por cliente (Mikrotik)
+│   ├── WanStat.js                # Estatisticas das interfaces WAN (Mikrotik)
+│   ├── ClientConnection.js       # Snapshot de conexoes ativas (Mikrotik)
+│   └── DnsEntry.js               # Cache DNS do roteador (Mikrotik)
 │
 ├── middleware/
 │   └── adminAuth.js              # Middleware de autenticacao do painel admin
@@ -116,12 +121,14 @@ captive/
 ├── controllers/
 │   ├── portalController.js       # Renderizacao das paginas do portal
 │   ├── apiController.js          # Logica de cadastro, login e CEP
-│   └── adminController.js        # Logica do painel administrativo
+│   ├── adminController.js        # Logica do painel administrativo
+│   └── mikrotikDataController.js # Recepcao e persistencia dos dados enviados pelo Mikrotik
 │
 ├── routes/
 │   ├── portal.js                 # Rotas do portal (GET /, GET /success)
 │   ├── api.js                    # Rotas da API (POST /api/register, etc.)
-│   └── admin.js                  # Rotas do painel admin (/admin/*)
+│   ├── admin.js                  # Rotas do painel admin (/admin/*)
+│   └── mikrotik.js               # Rotas de ingestao de dados (/api/mikrotik/*)
 │
 ├── services/
 │   ├── mikrotikService.js        # Integracao com RouterOS API v7
@@ -139,11 +146,15 @@ captive/
 │   ├── success.ejs               # Pagina de sucesso com expiracao dinamica da sessao
 │   └── admin/
 │       ├── login.ejs             # Tela de login do painel
-│       ├── dashboard.ejs         # Dashboard com estatisticas
+│       ├── dashboard.ejs         # Dashboard com estatisticas e cards de status WAN
 │       ├── users.ejs             # Lista de usuarios cadastrados
 │       ├── sessions.ejs          # Lista de sessoes de acesso
 │       ├── access-points.ejs     # Monitoramento de pontos de acesso Wi-Fi
 │       ├── settings.ejs          # Pagina de configuracoes do portal
+│       ├── traffic.ejs           # Ranking de trafego por cliente (atualiza a cada 30s)
+│       ├── wan.ejs               # Estatisticas das interfaces WAN (atualiza a cada 30s)
+│       ├── connections.ejs       # Conexoes ativas — snapshot do roteador (30s)
+│       ├── dns.ejs               # Cache DNS do roteador (paginado, busca por dominio)
 │       ├── _head.ejs             # Estilos compartilhados (partial)
 │       ├── _nav.ejs              # Menu de navegacao (partial)
 │       └── _footer.ejs           # Rodape (partial)
@@ -188,8 +199,9 @@ O script ira pedir:
 - **Duracao da sessao em horas** (padrao: `48`)
 - **Usuario do painel admin** (padrao: `admin`)
 - **Senha do painel admin**
+- **Chave de ingestao de dados Mikrotik** (`MIKROTIK_DATA_KEY` — gerada automaticamente se deixada em branco)
 
-O `SESSION_SECRET` e gerado automaticamente de forma segura.
+O `SESSION_SECRET` e o `MIKROTIK_DATA_KEY` sao gerados automaticamente de forma segura se nao forem informados.
 
 > **Senhas com caracteres especiais:** o script suporta qualquer caractere **exceto aspas duplas (`"`)**. Caracteres como `#`, `$`, `@`, `!` funcionam normalmente. As senhas sao gravadas com aspas no `.env` para garantir que `#` nao seja interpretado como comentario pelo dotenv.
 
@@ -310,6 +322,9 @@ SESSION_DURATION_HOURS=48
 ADMIN_USER=admin                 # Usuario de acesso ao painel
 ADMIN_PASSWORD="sua_senha_admin" # Use aspas para suportar # e outros caracteres especiais
 SESSION_SECRET=string_longa_e_aleatoria  # Gerado automaticamente pelo setup.sh
+
+# Ingestao de dados do Mikrotik (opcional)
+MIKROTIK_DATA_KEY="sua-chave-secreta"    # Chave para autenticar envio de dados pelo roteador
 ```
 
 > **Importante:** senhas com `#` devem estar entre aspas duplas no `.env`. Sem aspas, tudo apos o `#` e interpretado como comentario e a senha fica truncada. O `setup.sh` faz isso automaticamente. Se editar o `.env` manualmente, use sempre aspas nas senhas.
@@ -329,7 +344,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 | ADMIN_USER, ADMIN_PASSWORD | Credenciais do painel admin |
 | SESSION_SECRET | Chave de assinatura do cookie de sessao |
 
-Variaveis com valor padrao (opcionais): `PORT`, `DB_PORT`, `MIKROTIK_PORT`, `SESSION_DURATION_HOURS`, `LOG_LEVEL` (padrao: `info`; valores validos: `error`, `warn`, `info`, `debug`).
+Variaveis com valor padrao (opcionais): `PORT`, `DB_PORT`, `MIKROTIK_PORT`, `SESSION_DURATION_HOURS`, `LOG_LEVEL` (padrao: `info`; valores validos: `error`, `warn`, `info`, `debug`), `MIKROTIK_DATA_KEY` (se vazio, o endpoint de ingestao retorna 401 para todas as requisicoes).
 
 O servidor **nao inicia** se alguma variavel obrigatoria estiver faltando e mostra qual esta ausente.
 
@@ -522,6 +537,7 @@ Visitante perde acesso, precisa reautenticar
 | `portal_bg_color_1`    | `#0d4e8b`                       | Cor primaria do gradiente de fundo do portal         |
 | `portal_bg_color_2`    | `#1a7bc4`                       | Cor secundaria do gradiente de fundo do portal       |
 | `alert_webhook_url`    | *(vazio)*                       | URL para receber alertas HTTP POST quando um AP fica offline |
+| `mikrotik_data_key`    | *(vazio)*                       | Chave de autenticacao para receber dados do Mikrotik (tem prioridade sobre MIKROTIK_DATA_KEY do .env) |
 
 Todas as configuracoes sao gerenciadas pelo painel em `/admin/settings`. Tambem e possivel alterar diretamente no banco:
 
@@ -563,6 +579,62 @@ Armazena o historico dos resultados de ping de cada AP. Limitado a **200 registr
 
 Indice composto em `(ap_id, checked_at)` para consultas de historico eficientes.
 
+### Tabela `traffic_rankings`
+
+Armazena o historico de uso de banda por cliente, enviado pelo Mikrotik a cada 5 minutos. Retencao: **30 dias** (registros mais antigos removidos automaticamente na ingestao).
+
+| Coluna       | Tipo         | Descricao                                    |
+|-------------|-------------|----------------------------------------------|
+| id          | UUID        | Identificador unico                          |
+| ip_address  | VARCHAR     | IP do cliente na rede de visitantes          |
+| hostname    | VARCHAR     | Hostname resolvido pelo roteador (pode ser nulo) |
+| mac_address | VARCHAR     | Endereco MAC (pode ser nulo)                 |
+| bytes_up    | BIGINT      | Bytes enviados pelo cliente (delta)          |
+| bytes_down  | BIGINT      | Bytes recebidos pelo cliente (delta)         |
+| router_name | VARCHAR     | Nome do roteador de origem                   |
+| recorded_at | TIMESTAMP   | Quando o snapshot foi coletado               |
+
+### Tabela `wan_stats`
+
+Armazena o historico de estatisticas das interfaces WAN, enviado pelo Mikrotik a cada 5 minutos. Retencao: **7 dias**.
+
+| Coluna         | Tipo      | Descricao                                    |
+|---------------|----------|----------------------------------------------|
+| id            | UUID     | Identificador unico                          |
+| interface_name| VARCHAR  | Nome da interface (ex: `Gardeline`, `Vellon`)|
+| tx_bytes      | BIGINT   | Bytes transmitidos (delta desde ultimo envio)|
+| rx_bytes      | BIGINT   | Bytes recebidos (delta desde ultimo envio)   |
+| is_up         | BOOLEAN  | Se a interface estava ativa no momento       |
+| router_name   | VARCHAR  | Nome do roteador de origem                   |
+| recorded_at   | TIMESTAMP| Quando o snapshot foi coletado               |
+
+### Tabela `client_connections`
+
+Armazena o **snapshot mais recente** das conexoes ativas rastreadas pelo conntrack do Mikrotik. A tabela e completamente substituida a cada envio (DELETE ALL + INSERT).
+
+| Coluna      | Tipo      | Descricao                          |
+|------------|----------|------------------------------------|
+| id         | UUID     | Identificador unico                |
+| src_ip     | VARCHAR  | IP de origem da conexao            |
+| dst_ip     | VARCHAR  | IP de destino da conexao           |
+| dst_port   | INTEGER  | Porta de destino (pode ser nulo)   |
+| bytes_orig | BIGINT   | Bytes enviados na direcao original |
+| bytes_reply| BIGINT   | Bytes enviados na direcao de volta |
+| router_name| VARCHAR  | Nome do roteador de origem         |
+| recorded_at| TIMESTAMP| Quando o snapshot foi coletado     |
+
+### Tabela `dns_entries`
+
+Armazena o **snapshot mais recente** do cache DNS do Mikrotik. Substituida completamente a cada envio.
+
+| Coluna     | Tipo      | Descricao                          |
+|-----------|----------|------------------------------------|
+| id        | UUID     | Identificador unico                |
+| domain    | VARCHAR  | Nome de dominio resolvido          |
+| ip_address| VARCHAR  | IP associado ao dominio            |
+| router_name| VARCHAR | Nome do roteador de origem         |
+| recorded_at| TIMESTAMP| Quando o snapshot foi coletado    |
+
 ### Tabela `admin_sessions`
 
 Criada automaticamente pelo `connect-pg-simple`. Armazena as sessoes do painel administrativo no PostgreSQL, garantindo que as sessoes persistam entre reinicializacoes do servidor. Nao e necessario interagir com ela manualmente.
@@ -589,7 +661,7 @@ Criada automaticamente pelo `connect-pg-simple`. Armazena as sessoes do painel a
 | GET    | `/admin/login`                    | Tela de login do painel                  |
 | POST   | `/admin/login`                    | Autenticacao (usuario + senha)           |
 | POST   | `/admin/logout`                   | Encerrar sessao admin                    |
-| GET    | `/admin`                          | Dashboard com estatisticas               |
+| GET    | `/admin`                          | Dashboard com estatisticas e status WAN  |
 | GET    | `/admin/users`                    | Lista paginada de usuarios               |
 | GET    | `/admin/users/export`             | Exportar lista de usuarios (CSV)         |
 | POST   | `/admin/users/:id/delete`         | Remover usuario (exclusao por LGPD)      |
@@ -602,8 +674,24 @@ Criada automaticamente pelo `connect-pg-simple`. Armazena as sessoes do painel a
 | POST   | `/admin/access-points/:id/delete` | Remover ponto de acesso                  |
 | GET    | `/admin/settings`                 | Pagina de configuracoes do portal        |
 | POST   | `/admin/settings`                 | Salvar configuracoes (multipart/form)    |
+| GET    | `/admin/traffic`                  | Ranking de trafego por cliente           |
+| GET    | `/admin/traffic/data`             | JSON para auto-refresh da pagina (30s)   |
+| GET    | `/admin/wan`                      | Estatisticas das interfaces WAN          |
+| GET    | `/admin/wan/data`                 | JSON para auto-refresh da pagina (30s)   |
+| GET    | `/admin/connections`              | Conexoes ativas (snapshot atual)         |
+| GET    | `/admin/connections/data`         | JSON para auto-refresh da pagina (30s)   |
+| GET    | `/admin/dns`                      | Cache DNS paginado com busca             |
 
 Todas as rotas `/admin/*` (exceto login) requerem autenticacao. Sessao de admin dura 8 horas.
+
+### Ingestao de Dados (Mikrotik)
+
+| Metodo | Rota                          | Descricao                                           |
+|--------|-------------------------------|-----------------------------------------------------|
+| POST   | `/api/mikrotik/traffic`       | Recebe trafego de clientes e estatisticas WAN       |
+| POST   | `/api/mikrotik/details`       | Recebe conexoes ativas e cache DNS (snapshot)       |
+
+Autenticacao via campo `key` no body (valor igual a `MIKROTIK_DATA_KEY` no `.env`). Rate limit: 60 req/5min por IP.
 
 > **Rate limiting em `/api/register` e `/api/login`:** maximo de **10 requisicoes por IP a cada 15 minutos**. Exceder o limite retorna HTTP 429 com mensagem em portugues no portal.
 
@@ -657,11 +745,15 @@ Sera solicitado o usuario e a senha definidos em `ADMIN_USER` e `ADMIN_PASSWORD`
 
 | Pagina | URL | Conteudo |
 |--------|-----|----------|
-| Dashboard | `/admin` | Total de usuarios, sessoes ativas agora, novos hoje, novos na semana |
+| Dashboard | `/admin` | Total de usuarios, sessoes ativas, novos hoje/semana; cards de status WAN (volume 24h, qualidade, online/offline); atualiza automaticamente a cada 60s |
 | Usuarios | `/admin/users` | Tabela paginada: nome, CPF mascarado, e-mail, telefone, cidade/UF, data de cadastro; exportacao CSV; exclusao com remocao no Mikrotik (LGPD) |
 | Sessoes | `/admin/sessions` | Tabela paginada: usuario, IP, MAC, inicio, expiracao, status (Ativa/Expirada); encerramento manual de sessao |
 | Pontos de Acesso | `/admin/access-points` | Cadastro, status online/offline, ping manual, historico dos ultimos 100 pings por AP (modal com latencia) |
 | Configuracoes | `/admin/settings` | Identidade visual, cores do portal, duracao da sessao, URL de webhook para alertas de AP offline |
+| Trafego | `/admin/traffic` | Ranking de clientes por uso de banda (upload, download, total); dados do Mikrotik; auto-refresh a cada 30s |
+| WAN | `/admin/wan` | Historico de estatisticas das interfaces WAN (TX/RX delta, status UP/DOWN); ultimas 24h; auto-refresh a cada 30s |
+| Conexoes | `/admin/connections` | Snapshot das conexoes ativas rastreadas pelo conntrack (IP origem/destino, porta, bytes); auto-refresh a cada 30s |
+| DNS | `/admin/dns` | Cache DNS do roteador paginado (dominio -> IP); campo de busca por dominio |
 
 - Paginacao de 50 registros por pagina
 - CPF exibido mascarado (`***.456.789-01`) para proteger dados sensiveis
@@ -677,6 +769,96 @@ Sera solicitado o usuario e a senha definidos em `ADMIN_USER` e `ADMIN_PASSWORD`
 - ID de sessao regenerado apos login (previne session fixation)
 - Sessao expira automaticamente apos 8 horas de inatividade
 - Login limitado a 5 tentativas por IP em 15 minutos (bloqueio de forca bruta)
+
+---
+
+## Ingestao de Dados Mikrotik
+
+O captive portal recebe dados de monitoramento diretamente do roteador CCR via HTTP POST, eliminando a dependencia de servicos externos (anteriormente Firebase Cloud Functions).
+
+### Visao Geral
+
+O roteador executa dois schedulers periodicos que enviam dados ao servidor:
+
+| Script Mikrotik             | Frequencia | Endpoint                        |
+|-----------------------------|-----------|----------------------------------|
+| `traffic-ranking-send`      | 5 min     | `POST /api/mikrotik/traffic`     |
+| `traffic-ranking-send-details` | 15 min | `POST /api/mikrotik/details`     |
+
+### Autenticacao
+
+Todas as requisicoes devem incluir o campo `key` no body com o valor igual a `MIKROTIK_DATA_KEY` configurado no `.env`. A comparacao usa `crypto.timingSafeEqual` para evitar timing attacks.
+
+A chave pode ser sobrescrita pela configuracao `mikrotik_data_key` na tabela `settings` (editavel pelo painel em `/admin/settings`).
+
+### Formatos de Payload
+
+**POST /api/mikrotik/traffic** (body form-urlencoded):
+
+| Campo  | Descricao                                                         |
+|--------|-------------------------------------------------------------------|
+| `key`  | Chave de autenticacao                                             |
+| `router` | Nome identificador do roteador (ex: `CCR01`)                  |
+| `data` | CSV de clientes: `IP,Hostname[MAC],bytes_up,bytes_down;`          |
+| `iface`| CSV de interfaces: `NomeInterface,tx_delta,rx_delta,up\|down;`    |
+
+**POST /api/mikrotik/details** (body form-urlencoded):
+
+| Campo         | Descricao                                              |
+|---------------|--------------------------------------------------------|
+| `key`         | Chave de autenticacao                                  |
+| `router`      | Nome identificador do roteador                         |
+| `connections` | CSV: `srcIP,dstIP,dport,bytes_orig,bytes_reply;`        |
+| `dns`         | CSV: `dominio>ip;`                                     |
+
+### Configurando os Schedulers no Mikrotik
+
+No terminal do CCR (SSH ou Winbox Terminal), atualize as URLs dos scripts existentes:
+
+```routeros
+# Editar URL do script de trafego
+/system script edit traffic-ranking-send source
+# Substituir a URL antiga do Firebase por:
+#   http://10.0.0.56:3000/api/mikrotik/traffic
+
+# Editar URL do script de detalhes
+/system script edit traffic-ranking-send-details source
+# Substituir a URL antiga do Firebase por:
+#   http://10.0.0.56:3000/api/mikrotik/details
+```
+
+O campo `key` dos scripts existentes permanece identico — apenas a URL muda.
+
+Para verificar se os schedulers estao ativos:
+
+```routeros
+/system scheduler print
+```
+
+### Retencao de Dados
+
+| Tabela               | Estrategia          | Periodo |
+|---------------------|---------------------|---------|
+| `traffic_rankings`  | Historico acumulado | 30 dias |
+| `wan_stats`         | Historico acumulado | 7 dias  |
+| `client_connections`| Ultimo snapshot     | Substituido a cada POST |
+| `dns_entries`       | Ultimo snapshot     | Substituido a cada POST |
+
+A limpeza de `traffic_rankings` e `wan_stats` ocorre de forma assincrona durante a ingestao (nao bloqueia a resposta). A substituicao de `client_connections` e `dns_entries` e atomica (transacao Sequelize).
+
+### Testando o Endpoint Manualmente
+
+```bash
+curl -X POST http://localhost:3000/api/mikrotik/traffic \
+  -d "key=sua-chave&router=CCR01&data=10.0.1.1,TESTE[AA:BB:CC:DD:EE:FF],1048576,2097152;&iface=Gardeline,500000,1000000,up;"
+
+# Resposta esperada: {"ok":true}
+```
+
+```bash
+# Verificar dados inseridos
+sudo -u postgres psql -d captive_portal -c "SELECT * FROM traffic_rankings ORDER BY recorded_at DESC LIMIT 5;"
+```
 
 ---
 
@@ -981,11 +1163,20 @@ sudo systemctl daemon-reload && sudo systemctl restart captive-portal
 - O historico e populado automaticamente a cada ciclo de ping (a cada 5 minutos); espere ao menos um ciclo
 - O historico exibe no maximo os ultimos 100 registros por AP; o banco mantem os ultimos 200
 
+### Paginas de Trafego / WAN / Conexoes nao mostram dados
+
+- Verifique se os schedulers do Mikrotik estao ativos: `/system scheduler print`
+- Confirme que a URL nos scripts aponta para o servidor correto: `http://10.0.0.56:3000/api/mikrotik/traffic`
+- Teste o endpoint manualmente com `curl` (veja secao "Ingestao de Dados Mikrotik")
+- Verifique a chave: `MIKROTIK_DATA_KEY` no `.env` deve coincidir com o campo `key` nos scripts do Mikrotik
+- Verifique os logs: `sudo journalctl -u captive-portal -f | grep MikrotikData`
+- Se a chave foi alterada no painel (`/admin/settings` > `mikrotik_data_key`), ela tem prioridade sobre o `.env`
+
 ---
 
 ## Dependencias do Projeto
 
-O projeto utiliza 15 pacotes npm. Abaixo a lista completa com a versao instalada e o motivo de cada dependencia.
+O projeto utiliza 15 pacotes npm (sem dependencias adicionais para a ingestao de dados Mikrotik — o modulo `crypto` e nativo do Node.js). Abaixo a lista completa com a versao instalada e o motivo de cada dependencia.
 
 | Pacote              | Versao   | Por que e necessario                                                                                   |
 |---------------------|----------|--------------------------------------------------------------------------------------------------------|
