@@ -57,7 +57,7 @@
 
 /ip dhcp-server network
 :if ([find address=$guestNet] = "") do={
-  add address=$guestNet gateway=$guestGW dns-server=$guestGW,1.1.1.1,8.8.8.8 \
+  add address=$guestNet gateway=$guestGW dns-server=($guestGW . ",1.1.1.1,8.8.8.8") \
       comment="Captive Portal - rede visitantes"
 } else={
   :put "    SKIP: rede DHCP $guestNet ja existe"
