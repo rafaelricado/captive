@@ -8,6 +8,20 @@
   <style>
     .badge-up   { background: #dcfce7; color: #16a34a; }
     .badge-down { background: #fee2e2; color: #dc2626; }
+    .section-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #374151;
+      margin: 28px 0 10px;
+    }
+    .chart-wrap {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 28px;
+    }
+    .chart-wrap canvas { max-height: 280px; }
   </style>
 </head>
 <body>
@@ -22,6 +36,14 @@
       <p class="meta" id="meta-line">Nenhum dado recebido ainda. &mdash; atualiza em <span id="rt">30s</span></p>
     <% } %>
 
+    <!-- Gráfico horário -->
+    <div class="chart-wrap">
+      <p class="section-title" style="margin-top:0">Tráfego por hora (MB)</p>
+      <canvas id="wan-chart"></canvas>
+    </div>
+
+    <!-- Tabela resumo (acumulado 24h) -->
+    <p class="section-title">Resumo acumulado (24h)</p>
     <div class="table-wrap">
       <table>
         <thead>
@@ -34,7 +56,7 @@
             <th>Último registro</th>
           </tr>
         </thead>
-        <tbody id="tbody-data">
+        <tbody id="tbody-stats">
           <% if (stats.length === 0) { %>
             <tr><td colspan="6" style="text-align:center;color:#9ca3af">Nenhum dado disponível.</td></tr>
           <% } %>
@@ -57,16 +79,78 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Tabela histórico de snapshots -->
+    <p class="section-title">Histórico recente (snapshots individuais)</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Interface</th>
+            <th>TX</th>
+            <th>RX</th>
+            <th>Status</th>
+            <th>Hora</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-history">
+          <% if (history.length === 0) { %>
+            <tr><td colspan="5" style="text-align:center;color:#9ca3af">Nenhum dado disponível.</td></tr>
+          <% } %>
+          <% history.forEach(h => { %>
+            <tr>
+              <td><strong><%= h.interface_name %></strong></td>
+              <td><%= h.tx %></td>
+              <td><%= h.rx %></td>
+              <td>
+                <% if (h.is_up) { %>
+                  <span class="badge badge-up">UP</span>
+                <% } else { %>
+                  <span class="badge badge-down">DOWN</span>
+                <% } %>
+              </td>
+              <td style="color:#6b7280;font-size:.85rem"><%= h.recorded_at %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
   </main>
 
   <%- include('_footer') %>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script>
   (function () {
+    /* ── Inicializar chart ── */
+    const initData = <%- JSON.stringify(chartData) %>;
+    const ctx = document.getElementById('wan-chart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: initData,
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'top' },
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y} MB` } }
+        },
+        scales: {
+          x: { grid: { color: '#f3f4f6' } },
+          y: {
+            beginAtZero: true,
+            grid: { color: '#f3f4f6' },
+            ticks: { callback: v => v + ' MB' }
+          }
+        }
+      }
+    });
+
+    /* ── Helpers ── */
     function esc(s) {
       return String(s == null ? '' : s)
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
-    function buildRows(stats) {
+    function buildStatsRows(stats) {
       if (!stats.length)
         return '<tr><td colspan="6" style="text-align:center;color:#9ca3af">Nenhum dado disponível.</td></tr>';
       return stats.map(s => `<tr>
@@ -78,18 +162,41 @@
         <td>${esc(s.recorded_at)}</td>
       </tr>`).join('');
     }
+    function buildHistoryRows(history) {
+      if (!history.length)
+        return '<tr><td colspan="5" style="text-align:center;color:#9ca3af">Nenhum dado disponível.</td></tr>';
+      return history.map(h => `<tr>
+        <td><strong>${esc(h.interface_name)}</strong></td>
+        <td>${esc(h.tx)}</td>
+        <td>${esc(h.rx)}</td>
+        <td><span class="badge ${h.is_up ? 'badge-up' : 'badge-down'}">${h.is_up ? 'UP' : 'DOWN'}</span></td>
+        <td style="color:#6b7280;font-size:.85rem">${esc(h.recorded_at)}</td>
+      </tr>`).join('');
+    }
+
+    /* ── Auto-refresh ── */
     async function doRefresh() {
       try {
         const r = await fetch('/admin/wan/data', { credentials: 'same-origin' });
         if (!r.ok) return;
         const data = await r.json();
-        document.getElementById('tbody-data').innerHTML = buildRows(data.stats);
+
+        document.getElementById('tbody-stats').innerHTML    = buildStatsRows(data.stats);
+        document.getElementById('tbody-history').innerHTML  = buildHistoryRows(data.history);
+
+        if (data.chartData) {
+          chart.data.labels   = data.chartData.labels;
+          chart.data.datasets = data.chartData.datasets;
+          chart.update('none');
+        }
+
         const meta = document.getElementById('meta-line');
         if (meta) meta.innerHTML = data.updatedAt
           ? `Último recebimento: <strong>${data.updatedAt}</strong> &mdash; ${data.stats.length} interface(s) &mdash; atualiza em <span id="rt">30s</span>`
           : 'Nenhum dado recebido ainda. &mdash; atualiza em <span id="rt">30s</span>';
       } catch (e) {}
     }
+
     let ticks = 30;
     setInterval(() => {
       ticks--;

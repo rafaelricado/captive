@@ -24,7 +24,7 @@
           <tr>
             <th>#</th>
             <th>Origem</th>
-            <th>Destino</th>
+            <th>Destino / Serviço</th>
             <th>Porta</th>
             <th>Enviado</th>
             <th>Recebido</th>
@@ -39,8 +39,14 @@
             <tr>
               <td style="color:#9ca3af"><%= i + 1 %></td>
               <td><%= c.src_ip %></td>
-              <td><%= c.dst_ip %></td>
-              <td><%= c.dst_port %></td>
+              <td>
+                <% if (c.dst_label && c.dst_label !== c.dst_ip) { %>
+                  <span title="<%= c.dst_ip %>"><%= c.dst_label %></span>
+                <% } else { %>
+                  <%= c.dst_ip %>
+                <% } %>
+              </td>
+              <td><%= c.dst_port != null ? c.dst_port : '—' %></td>
               <td><%= c.bytes_orig %></td>
               <td><%= c.bytes_reply %></td>
               <td><%= c.router_name %></td>
@@ -58,13 +64,18 @@
       return String(s == null ? '' : s)
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
+    function dstCell(c) {
+      if (c.dst_label && c.dst_label !== c.dst_ip)
+        return `<span title="${esc(c.dst_ip)}">${esc(c.dst_label)}</span>`;
+      return esc(c.dst_ip);
+    }
     function buildRows(connections) {
       if (!connections.length)
         return '<tr><td colspan="7" style="text-align:center;color:#9ca3af">Nenhuma conexão registrada.</td></tr>';
       return connections.map((c, i) => `<tr>
         <td style="color:#9ca3af">${i + 1}</td>
         <td>${esc(c.src_ip)}</td>
-        <td>${esc(c.dst_ip)}</td>
+        <td>${dstCell(c)}</td>
         <td>${c.dst_port != null ? c.dst_port : '—'}</td>
         <td>${esc(c.bytes_orig)}</td>
         <td>${esc(c.bytes_reply)}</td>
