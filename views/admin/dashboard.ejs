@@ -5,12 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard &mdash; Captive Portal</title>
   <%- include('_head') %>
+  <style>
+    .wan-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .wan-card {
+      background: #fff; border-radius: 12px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+      padding: 18px 20px;
+    }
+    .wan-card-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 14px;
+    }
+    .wan-name { font-weight: 700; font-size: .95rem; color: #1f2937; }
+    .wan-row  { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+    .wan-label { font-size: .75rem; color: #6b7280; }
+    .wan-value { font-size: .9rem; font-weight: 600; color: #0d4e8b; }
+    .section-title { font-size: 1rem; font-weight: 700; color: #374151; margin: 28px 0 14px; }
+    .dash-refresh  { font-size: .75rem; color: #9ca3af; margin-left: 10px; font-weight: normal; }
+  </style>
 </head>
 <body>
   <%- include('_nav', { page }) %>
 
   <main class="container">
-    <h2 class="page-title">Dashboard</h2>
+    <h2 class="page-title">
+      Dashboard
+      <span class="dash-refresh">atualiza em <span id="dash-timer">60</span>s</span>
+    </h2>
 
     <div class="cards">
       <div class="card">
@@ -31,12 +57,61 @@
       </div>
     </div>
 
+    <% if (wanCards.length > 0) { %>
+      <div class="section-title">Status WAN — últimas 24h</div>
+      <div class="wan-grid">
+        <% wanCards.forEach(w => { %>
+          <%
+            let uptimeLabel = 'Sem dados', uptimeClass = 'badge-gray';
+            if (w.uptime !== null) {
+              if      (w.uptime === 100) { uptimeLabel = 'Excelente'; uptimeClass = 'badge-green'; }
+              else if (w.uptime >= 95)   { uptimeLabel = 'Boa';       uptimeClass = 'badge-green'; }
+              else if (w.uptime >= 80)   { uptimeLabel = 'Regular';   uptimeClass = 'badge-orange'; }
+              else                       { uptimeLabel = 'Ruim';      uptimeClass = 'badge-red'; }
+            }
+          %>
+          <div class="wan-card">
+            <div class="wan-card-header">
+              <span class="wan-name"><%= w.interface_name %></span>
+              <% if (w.is_up === null) { %>
+                <span class="badge badge-gray">?</span>
+              <% } else if (w.is_up) { %>
+                <span class="badge badge-green">UP</span>
+              <% } else { %>
+                <span class="badge badge-red">DOWN</span>
+              <% } %>
+            </div>
+            <div class="wan-row">
+              <span class="wan-label">Volume 24h</span>
+              <span class="wan-value"><%= w.volume %></span>
+            </div>
+            <div class="wan-row" style="margin-top:10px">
+              <span class="wan-label">Qualidade</span>
+              <span class="badge <%= uptimeClass %>">
+                <%= w.uptime !== null ? w.uptime + '% — ' : '' %><%= uptimeLabel %>
+              </span>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+
     <div class="quick-links">
       <a href="/admin/users" class="btn-outline">Ver lista de usuários &rarr;</a>
       <a href="/admin/sessions" class="btn-outline">Ver sessões &rarr;</a>
+      <a href="/admin/traffic" class="btn-outline">Tráfego em tempo real &rarr;</a>
     </div>
   </main>
 
   <%- include('_footer') %>
+  <script>
+    let t = 60;
+    setInterval(() => {
+      t--;
+      const el = document.getElementById('dash-timer');
+      if (el) el.textContent = t;
+      if (t <= 0) location.reload();
+    }, 1000);
+  </script>
 </body>
 </html>

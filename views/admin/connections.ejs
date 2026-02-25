@@ -13,9 +13,9 @@
     <h2 class="page-title">Conexões Ativas</h2>
 
     <% if (updatedAt) { %>
-      <p class="meta">Snapshot de <strong><%= updatedAt %></strong> &mdash; <%= connections.length %> conexão(ões)</p>
+      <p class="meta" id="meta-line">Snapshot de <strong><%= updatedAt %></strong> &mdash; <%= connections.length %> conexão(ões) &mdash; atualiza em <span id="rt">30s</span></p>
     <% } else { %>
-      <p class="meta">Nenhum dado recebido ainda.</p>
+      <p class="meta" id="meta-line">Nenhum dado recebido ainda. &mdash; atualiza em <span id="rt">30s</span></p>
     <% } %>
 
     <div class="table-wrap">
@@ -31,7 +31,7 @@
             <th>Roteador</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="tbody-data">
           <% if (connections.length === 0) { %>
             <tr><td colspan="7" style="text-align:center;color:#9ca3af">Nenhuma conexão registrada.</td></tr>
           <% } %>
@@ -52,5 +52,45 @@
   </main>
 
   <%- include('_footer') %>
+  <script>
+  (function () {
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    function buildRows(connections) {
+      if (!connections.length)
+        return '<tr><td colspan="7" style="text-align:center;color:#9ca3af">Nenhuma conexão registrada.</td></tr>';
+      return connections.map((c, i) => `<tr>
+        <td style="color:#9ca3af">${i + 1}</td>
+        <td>${esc(c.src_ip)}</td>
+        <td>${esc(c.dst_ip)}</td>
+        <td>${c.dst_port != null ? c.dst_port : '—'}</td>
+        <td>${esc(c.bytes_orig)}</td>
+        <td>${esc(c.bytes_reply)}</td>
+        <td>${esc(c.router_name)}</td>
+      </tr>`).join('');
+    }
+    async function doRefresh() {
+      try {
+        const r = await fetch('/admin/connections/data', { credentials: 'same-origin' });
+        if (!r.ok) return;
+        const data = await r.json();
+        document.getElementById('tbody-data').innerHTML = buildRows(data.connections);
+        const meta = document.getElementById('meta-line');
+        if (meta) meta.innerHTML = data.updatedAt
+          ? `Snapshot de <strong>${data.updatedAt}</strong> &mdash; ${data.connections.length} conexão(ões) &mdash; atualiza em <span id="rt">30s</span>`
+          : 'Nenhum dado recebido ainda. &mdash; atualiza em <span id="rt">30s</span>';
+      } catch (e) {}
+    }
+    let ticks = 30;
+    setInterval(() => {
+      ticks--;
+      const el = document.getElementById('rt');
+      if (el) el.textContent = ticks + 's';
+      if (ticks <= 0) { ticks = 30; doRefresh(); }
+    }, 1000);
+  })();
+  </script>
 </body>
 </html>

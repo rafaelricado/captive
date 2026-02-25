@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { Op } = require('sequelize');
 const { User, Session, Setting, AccessPoint, ApPingHistory,
-  TrafficRanking, WanStat, ClientConnection, DnsEntry } = require('../models');
+  TrafficRanking, WanStat, ClientConnection, DnsEntry, sequelize } = require('../models');
 const mikrotikService = require('../services/mikrotikService');
 const { pingAllAccessPoints, isValidIPv4 } = require('../services/pingService');
 const logger = require('../utils/logger');
@@ -117,15 +117,57 @@ exports.dashboard = async (req, res) => {
   try {
     const now = new Date();
 
-    const [totalUsers, activeSessions, novosHoje, novosSemana] = await Promise.all([
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const [totalUsers, activeSessions, novosHoje, novosSemana, wan24h, latestWanTime] = await Promise.all([
       User.count(),
       Session.count({ where: { active: true, expires_at: { [Op.gt]: now } } }),
       User.count({ where: { created_at: { [Op.gte]: startOfDay() } } }),
-      User.count({ where: { created_at: { [Op.gte]: startOfWeek() } } })
+      User.count({ where: { created_at: { [Op.gte]: startOfWeek() } } }),
+      WanStat.findAll({
+        attributes: [
+          'interface_name',
+          [sequelize.fn('SUM', sequelize.col('tx_bytes')), 'total_tx'],
+          [sequelize.fn('SUM', sequelize.col('rx_bytes')), 'total_rx'],
+          [sequelize.fn('COUNT', sequelize.col('id')), 'total_records'],
+          [sequelize.literal(`SUM(CASE WHEN is_up THEN 1 ELSE 0 END)`), 'up_count']
+        ],
+        where: { recorded_at: { [Op.gte]: since24h } },
+        group: ['interface_name'],
+        order: [['interface_name', 'ASC']],
+        raw: true
+      }),
+      WanStat.max('recorded_at')
     ]);
 
+    // Status atual de cada interface (snapshot mais recente)
+    const wanLatest = latestWanTime
+      ? await WanStat.findAll({ where: { recorded_at: latestWanTime }, raw: true })
+      : [];
+
+    // Combina agregado 24h + status atual
+    const wanMap = {};
+    wan24h.forEach(r => {
+      const total = Number(r.total_records);
+      const up    = Number(r.up_count);
+      wanMap[r.interface_name] = {
+        interface_name: r.interface_name,
+        volume:  formatBytes(Number(r.total_tx) + Number(r.total_rx)),
+        uptime:  total > 0 ? Math.round((up / total) * 100) : null,
+        is_up:   null
+      };
+    });
+    wanLatest.forEach(r => {
+      if (wanMap[r.interface_name]) {
+        wanMap[r.interface_name].is_up = r.is_up;
+      } else {
+        wanMap[r.interface_name] = { interface_name: r.interface_name, volume: '—', uptime: null, is_up: r.is_up };
+      }
+    });
+    const wanCards = Object.values(wanMap);
+
     res.render('admin/dashboard', {
-      totalUsers, activeSessions, novosHoje, novosSemana,
+      totalUsers, activeSessions, novosHoje, novosSemana, wanCards,
       page: 'dashboard'
     });
   } catch (err) {
@@ -638,5 +680,82 @@ exports.dns = async (req, res) => {
   } catch (err) {
     logger.error(`[Admin] Erro ao listar DNS: ${err.message}`);
     res.status(500).send('Erro interno.');
+  }
+};
+
+// ─── JSON para auto-refresh das páginas ───────────────────────────────────────
+
+exports.trafficData = async (req, res) => {
+  try {
+    const latest = await TrafficRanking.max('recorded_at');
+    let clients = [], updatedAt = null;
+    if (latest) {
+      const rows = await TrafficRanking.findAll({
+        where: { recorded_at: latest }, order: [['bytes_down', 'DESC']], limit: 200
+      });
+      updatedAt = formatDate(latest);
+      clients = rows.map(r => ({
+        ip_address:  r.ip_address,
+        hostname:    r.hostname    || '—',
+        mac_address: r.mac_address || '—',
+        bytes_up:    formatBytes(r.bytes_up),
+        bytes_down:  formatBytes(r.bytes_down),
+        total:       formatBytes(Number(r.bytes_up) + Number(r.bytes_down)),
+        router_name: r.router_name || '—'
+      }));
+    }
+    res.json({ clients, updatedAt });
+  } catch (err) {
+    logger.error(`[Admin] Erro em trafficData: ${err.message}`);
+    res.status(500).json({ error: 'Erro interno.' });
+  }
+};
+
+exports.wanData = async (req, res) => {
+  try {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const rows = await WanStat.findAll({
+      where: { recorded_at: { [Op.gte]: since } },
+      order: [['interface_name', 'ASC'], ['recorded_at', 'DESC']],
+      limit: 500
+    });
+    const latestTs = rows.reduce((max, r) => (!max || r.recorded_at > max ? r.recorded_at : max), null);
+    const stats = rows.map(r => ({
+      interface_name: r.interface_name,
+      tx:          formatBytes(r.tx_bytes),
+      rx:          formatBytes(r.rx_bytes),
+      is_up:       r.is_up,
+      router_name: r.router_name || '—',
+      recorded_at: formatDate(r.recorded_at)
+    }));
+    res.json({ stats, updatedAt: latestTs ? formatDate(latestTs) : null });
+  } catch (err) {
+    logger.error(`[Admin] Erro em wanData: ${err.message}`);
+    res.status(500).json({ error: 'Erro interno.' });
+  }
+};
+
+exports.connectionsData = async (req, res) => {
+  try {
+    const latest = await ClientConnection.max('recorded_at');
+    let connections = [], updatedAt = null;
+    if (latest) {
+      const rows = await ClientConnection.findAll({
+        where: { recorded_at: latest }, order: [['bytes_orig', 'DESC']], limit: 200
+      });
+      updatedAt = formatDate(latest);
+      connections = rows.map(r => ({
+        src_ip:      r.src_ip,
+        dst_ip:      r.dst_ip,
+        dst_port:    r.dst_port,
+        bytes_orig:  formatBytes(r.bytes_orig),
+        bytes_reply: formatBytes(r.bytes_reply),
+        router_name: r.router_name || '—'
+      }));
+    }
+    res.json({ connections, updatedAt });
+  } catch (err) {
+    logger.error(`[Admin] Erro em connectionsData: ${err.message}`);
+    res.status(500).json({ error: 'Erro interno.' });
   }
 };

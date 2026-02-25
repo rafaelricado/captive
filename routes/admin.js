@@ -94,6 +94,11 @@ router.get('/wan', adminAuth, adminController.wan);
 router.get('/connections', adminAuth, adminController.connections);
 router.get('/dns', adminAuth, adminController.dns);
 
+// Endpoints JSON para auto-refresh das páginas (protegido)
+router.get('/traffic/data', adminAuth, adminController.trafficData);
+router.get('/wan/data', adminAuth, adminController.wanData);
+router.get('/connections/data', adminAuth, adminController.connectionsData);
+
 // Configurações (protegido)
 router.get('/settings', adminAuth, adminController.showSettings);
 router.post('/settings', adminAuth, (req, res, next) => {
