@@ -151,8 +151,7 @@
       html-directory=hotspot \
       login-by=http-chap,http-pap \
       http-proxy=0.0.0.0:0 \
-      use-radius=no \
-      comment="Captive Portal - perfil hotspot visitantes"
+      use-radius=no
   :put "    OK: perfil hotspot criado"
 } else={
   :put "    SKIP: perfil $hsProfile ja existe"
@@ -161,8 +160,7 @@
 /ip hotspot
 :if ([find name=$hsName] = "") do={
   add name=$hsName interface=$iface address-pool="pool-visitantes" \
-      profile=$hsProfile disabled=no \
-      comment="Captive Portal - hotspot visitantes"
+      profile=$hsProfile disabled=no
   :put "    OK: hotspot $hsName criado em $iface"
 } else={
   :put "    SKIP: hotspot $hsName ja existe"
@@ -182,7 +180,7 @@
 
 /ip hotspot walled-garden
 # DNS e NTP livres (necessarios para autenticacao funcionar em iOS/Android)
-:if ([find comment="CP: DNS livre"] = "") do={
+:if ([find comment="CP: iOS captive detection"] = "") do={
   add dst-host="*.apple.com" action=allow comment="CP: iOS captive detection"
   add dst-host="captive.apple.com" action=allow comment="CP: iOS captive detection"
   add dst-host="connectivitycheck.gstatic.com" action=allow comment="CP: Android captive detection"
@@ -207,7 +205,7 @@
 
 # Garantir que a API esta habilitada na porta 8728
 /ip service
-:if ([find name=api and disabled=yes] != "") do={
+:if ([find name=api disabled=yes] != "") do={
   set [find name=api] disabled=no
   :put "    OK: servico API habilitado na porta 8728"
 } else={
