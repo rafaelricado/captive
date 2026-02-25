@@ -60,8 +60,10 @@
 # Adiciona jump rules e depois move para o inicio do forward chain
 # Ordem: primeiro adiciona DN, depois UP, move UP para 0, move DN para 0
 # Resultado final: DN=pos0, UP=pos1 (ambas antes do QoS)
-/ip firewall mangle add chain=forward dst-address=10.0.0.0/22 src-address-list=!RANKING-local action=jump jump-target=RANKING-DN comment="RANKING: Jump download internet"
-/ip firewall mangle add chain=forward src-address=10.0.0.0/22 dst-address-list=!RANKING-local action=jump jump-target=RANKING-UP comment="RANKING: Jump upload internet"
+# ATENÇÃO: ajuste $localNet para a subnet da sua rede local.
+:local localNet "10.0.0.0/22"
+/ip firewall mangle add chain=forward dst-address=$localNet src-address-list=!RANKING-local action=jump jump-target=RANKING-DN comment="RANKING: Jump download internet"
+/ip firewall mangle add chain=forward src-address=$localNet dst-address-list=!RANKING-local action=jump jump-target=RANKING-UP comment="RANKING: Jump upload internet"
 
 # Move UP para posicao 0 (topo absoluto da lista mangle)
 :local upRule [/ip firewall mangle find where comment="RANKING: Jump upload internet"]
@@ -158,7 +160,7 @@
 # PASSO 3 - SCRIPT DE COLETA E ENVIO
 # ============================================================
 # Lê os contadores de bytes das mangle rules por IP e envia
-# via HTTP POST para a Cloud Function do Firebase.
+# via HTTP POST para o servidor local (Captive Portal).
 #
 # Formato CSV: ip,info,uploadBytes,downloadBytes;...
 #
@@ -168,7 +170,7 @@
 # Após envio, reseta os contadores das regras mangle.
 
 /system script add name="traffic-ranking-send" policy=read,write,test source="\
-:local firebaseUrl \"http://10.0.0.56:3000/api/mikrotik/traffic\"\r\
+:local serverUrl \"http://10.0.0.56:3000/api/mikrotik/traffic\"\r\
 :local apiKey \"c3d5ee363e0b3fbc3dc12777f13bf437c2613207\"\r\
 \r\
 :local data \"\"\r\
@@ -277,7 +279,7 @@
 \r\
     :local sendOk 1\r\
     :do {\r\
-        /tool fetch url=\$firebaseUrl mode=http http-method=post http-data=\$sendData http-header-field=\"Content-Type: application/x-www-form-urlencoded\" output=none\r\
+        /tool fetch url=\$serverUrl mode=http http-method=post http-data=\$sendData http-header-field=\"Content-Type: application/x-www-form-urlencoded\" output=none\r\
         :log info (\"RANKING: Enviados \" . \$count . \" registros para servidor local\")\r\
     } on-error={\r\
         :set sendOk 0\r\
@@ -300,7 +302,7 @@
 # PASSO 4 - SCRIPT DE DETALHES (DESTINOS POR DISPOSITIVO)
 # ============================================================
 # Coleta conexões ativas + cache DNS do router.
-# Envia para Firebase que cruza os dados e identifica
+# Envia para o servidor local que cruza os dados e identifica
 # quais sites/serviços cada dispositivo está acessando.
 # Conexões com destino local (10.x, 192.168.x, 172.16-31.x)
 # são ignoradas - apenas destinos internet são enviados.
@@ -311,14 +313,14 @@
 # Roda a cada 15 minutos (menos frequente que o tráfego).
 
 /system script add name="traffic-ranking-send-details" policy=read,write,test source="\
-:local firebaseUrl \"http://10.0.0.56:3000/api/mikrotik/details\"\r\
+:local serverUrl \"http://10.0.0.56:3000/api/mikrotik/details\"\r\
 :local apiKey \"c3d5ee363e0b3fbc3dc12777f13bf437c2613207\"\r\
 \r\
 :local connData \"\"\r\
 :local connCount 0\r\
 :local maxConns 200\r\
 \r\
-:foreach c in=[/ip firewall connection find where src-address~\"10.0.\"] do={\r\
+:foreach c in=[/ip firewall connection find where src-address~\"10\\.0\\.\"] do={\r\
     :if (\$connCount < \$maxConns) do={\r\
         :do {\r\
             :local src [/ip firewall connection get \$c src-address]\r\
@@ -362,7 +364,7 @@
 \r\
 :local dnsData \"\"\r\
 :local dnsCount 0\r\
-:local maxDns 2000\r\
+:local maxDns 500\r\
 \r\
 :foreach d in=[/ip dns cache find where type=\"A\"] do={\r\
     :if (\$dnsCount < \$maxDns) do={\r\
@@ -380,7 +382,7 @@
     :local sendData (\"key=\" . \$apiKey . \"&router=\" . \$routerName . \"&connections=\" . \$connData . \"&dns=\" . \$dnsData)\r\
 \r\
     :do {\r\
-        /tool fetch url=\$firebaseUrl mode=http http-method=post http-data=\$sendData http-header-field=\"Content-Type: application/x-www-form-urlencoded\" output=none\r\
+        /tool fetch url=\$serverUrl mode=http http-method=post http-data=\$sendData http-header-field=\"Content-Type: application/x-www-form-urlencoded\" output=none\r\
         :log info (\"RANKING: Detalhes enviados - \" . \$connCount . \" conexoes, \" . \$dnsCount . \" DNS\")\r\
     } on-error={\r\
         :log error \"RANKING: Falha ao enviar detalhes para servidor local\"\r\
@@ -407,7 +409,7 @@
 
 /system scheduler add name="traffic-ranking-sync" interval=30m on-event="/system script run traffic-ranking-sync-queues" start-time=startup comment="RANKING: Sync mangle rules com DHCP leases"
 
-/system scheduler add name="traffic-ranking-scheduler" interval=5m on-event="/system script run traffic-ranking-send" start-time=startup comment="RANKING: Envio periodico para Firebase"
+/system scheduler add name="traffic-ranking-scheduler" interval=5m on-event="/system script run traffic-ranking-send" start-time=startup comment="RANKING: Envio periodico para servidor local"
 
 /system scheduler add name="traffic-ranking-details" interval=15m on-event="/system script run traffic-ranking-send-details" start-time=startup comment="RANKING: Envio detalhes conexoes+DNS"
 
