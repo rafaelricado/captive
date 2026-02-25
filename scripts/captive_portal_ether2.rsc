@@ -90,6 +90,15 @@
 # --- Isolar visitantes das redes internas (FORWARD) ---
 /ip firewall filter
 
+# EXCECAO: visitantes precisam alcançar o servidor do portal para autenticar.
+# Esta regra deve ficar ANTES dos drops abaixo.
+:if ([find comment="CP: permitir visitantes -> servidor captive portal"] = "") do={
+  add chain=forward src-address=$guestNet dst-address=$ubuntuIP \
+      action=accept place-before=0 \
+      comment="CP: permitir visitantes -> servidor captive portal"
+  :put "    OK: acesso ao servidor $ubuntuIP liberado para autenticacao"
+}
+
 :if ([find comment="CP: bloquear visitantes -> LAN interna 10.0.0.0/22"] = "") do={
   add chain=forward src-address=$guestNet dst-address=10.0.0.0/22 \
       action=drop place-before=0 \
@@ -97,11 +106,11 @@
   :put "    OK: bloqueio visitantes -> 10.0.0.0/22"
 }
 
-:if ([find comment="CP: bloquear visitantes -> LAN interna 192.168.0.0/24"] = "") do={
-  add chain=forward src-address=$guestNet dst-address=192.168.0.0/24 \
+:if ([find comment="CP: bloquear visitantes -> LAN interna 192.168.0.0/16"] = "") do={
+  add chain=forward src-address=$guestNet dst-address=192.168.0.0/16 \
       action=drop place-before=0 \
-      comment="CP: bloquear visitantes -> LAN interna 192.168.0.0/24"
-  :put "    OK: bloqueio visitantes -> 192.168.0.0/24"
+      comment="CP: bloquear visitantes -> LAN interna 192.168.0.0/16"
+  :put "    OK: bloqueio visitantes -> 192.168.0.0/16"
 }
 
 # --- Isolar LANs internas das visitas (retorno bloqueado) ---
@@ -109,7 +118,7 @@
   add chain=forward src-address=10.0.0.0/22 dst-address=$guestNet \
       action=drop place-before=0 \
       comment="CP: bloquear LAN interna -> visitantes"
-  add chain=forward src-address=192.168.0.0/24 dst-address=$guestNet \
+  add chain=forward src-address=192.168.0.0/16 dst-address=$guestNet \
       action=drop place-before=0 \
       comment="CP: bloquear LAN interna -> visitantes"
   :put "    OK: isolamento bidirecional configurado"
