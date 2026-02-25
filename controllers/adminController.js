@@ -599,25 +599,49 @@ exports.traffic = async (req, res) => {
 
 // ─── Estatísticas WAN ─────────────────────────────────────────────────────────
 
+// Agrega os deltas das últimas 24h somando TX e RX por interface.
+// Rows devem estar ordenadas por recorded_at DESC para que o primeiro
+// registro de cada interface seja o mais recente (is_up / router_name).
+function aggregateWanRows(rows) {
+  const map = {};
+  for (const r of rows) {
+    const key = r.interface_name;
+    if (!map[key]) {
+      map[key] = {
+        interface_name: key,
+        tx_total: 0,
+        rx_total: 0,
+        is_up: r.is_up,
+        router_name: r.router_name || '—',
+        latest_at: r.recorded_at
+      };
+    }
+    map[key].tx_total += Number(r.tx_bytes) || 0;
+    map[key].rx_total += Number(r.rx_bytes) || 0;
+  }
+  return Object.values(map).sort((a, b) => a.interface_name.localeCompare(b.interface_name));
+}
+
 exports.wan = async (req, res) => {
   try {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     const rows = await WanStat.findAll({
       where: { recorded_at: { [Op.gte]: since } },
-      order: [['interface_name', 'ASC'], ['recorded_at', 'DESC']],
-      limit: 500
+      order: [['recorded_at', 'DESC']],
+      raw: true
     });
 
-    const latestTs = rows.reduce((max, r) => (!max || r.recorded_at > max ? r.recorded_at : max), null);
+    const aggregated = aggregateWanRows(rows);
+    const latestTs = aggregated.reduce((max, r) => (!max || r.latest_at > max ? r.latest_at : max), null);
 
-    const stats = rows.map(r => ({
+    const stats = aggregated.map(r => ({
       interface_name: r.interface_name,
-      tx: formatBytes(r.tx_bytes),
-      rx: formatBytes(r.rx_bytes),
+      tx: formatBytes(r.tx_total),
+      rx: formatBytes(r.rx_total),
       is_up: r.is_up,
-      router_name: r.router_name || '—',
-      recorded_at: formatDate(r.recorded_at)
+      router_name: r.router_name,
+      recorded_at: formatDate(r.latest_at)
     }));
 
     res.render('admin/wan', {
@@ -741,17 +765,18 @@ exports.wanData = async (req, res) => {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const rows = await WanStat.findAll({
       where: { recorded_at: { [Op.gte]: since } },
-      order: [['interface_name', 'ASC'], ['recorded_at', 'DESC']],
-      limit: 500
+      order: [['recorded_at', 'DESC']],
+      raw: true
     });
-    const latestTs = rows.reduce((max, r) => (!max || r.recorded_at > max ? r.recorded_at : max), null);
-    const stats = rows.map(r => ({
+    const aggregated = aggregateWanRows(rows);
+    const latestTs = aggregated.reduce((max, r) => (!max || r.latest_at > max ? r.latest_at : max), null);
+    const stats = aggregated.map(r => ({
       interface_name: r.interface_name,
-      tx:          formatBytes(r.tx_bytes),
-      rx:          formatBytes(r.rx_bytes),
+      tx:          formatBytes(r.tx_total),
+      rx:          formatBytes(r.rx_total),
       is_up:       r.is_up,
-      router_name: r.router_name || '—',
-      recorded_at: formatDate(r.recorded_at)
+      router_name: r.router_name,
+      recorded_at: formatDate(r.latest_at)
     }));
     res.json({ stats, updatedAt: latestTs ? formatDate(latestTs) : null });
   } catch (err) {

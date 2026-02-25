@@ -17,7 +17,7 @@
     <h2 class="page-title">Estatísticas WAN &mdash; últimas 24h</h2>
 
     <% if (updatedAt) { %>
-      <p class="meta" id="meta-line">Último snapshot de <strong><%= updatedAt %></strong> &mdash; <%= stats.length %> registro(s) &mdash; atualiza em <span id="rt">30s</span></p>
+      <p class="meta" id="meta-line">Último recebimento: <strong><%= updatedAt %></strong> &mdash; <%= stats.length %> interface(s) &mdash; atualiza em <span id="rt">30s</span></p>
     <% } else { %>
       <p class="meta" id="meta-line">Nenhum dado recebido ainda. &mdash; atualiza em <span id="rt">30s</span></p>
     <% } %>
@@ -27,11 +27,11 @@
         <thead>
           <tr>
             <th>Interface</th>
-            <th>TX (delta)</th>
-            <th>RX (delta)</th>
+            <th>TX acumulado (24h)</th>
+            <th>RX acumulado (24h)</th>
             <th>Status</th>
             <th>Roteador</th>
-            <th>Registrado em</th>
+            <th>Último registro</th>
           </tr>
         </thead>
         <tbody id="tbody-data">
@@ -86,7 +86,7 @@
         document.getElementById('tbody-data').innerHTML = buildRows(data.stats);
         const meta = document.getElementById('meta-line');
         if (meta) meta.innerHTML = data.updatedAt
-          ? `Último snapshot de <strong>${data.updatedAt}</strong> &mdash; ${data.stats.length} registro(s) &mdash; atualiza em <span id="rt">30s</span>`
+          ? `Último recebimento: <strong>${data.updatedAt}</strong> &mdash; ${data.stats.length} interface(s) &mdash; atualiza em <span id="rt">30s</span>`
           : 'Nenhum dado recebido ainda. &mdash; atualiza em <span id="rt">30s</span>';
       } catch (e) {}
     }
