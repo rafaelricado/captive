@@ -12,13 +12,16 @@
 # NAO altera configuracoes existentes de ether3/ether4/ether5/ether6
 #############################################################
 
-:local ubuntuIP     "10.0.0.56"    # IP do servidor Ubuntu na rede interna
-:local apiPass      "JTU2850rf#"   # Senha do usuario captive_api
+# IP do servidor Ubuntu na rede interna
+:local ubuntuIP     "10.0.0.56"
+# Senha do usuario captive_api
+:local apiPass      "JTU2850rf#"
 :local guestNet     "15.1.1.0/24"
 :local guestGW      "15.1.1.1"
 :local guestMask    "24"
 :local dhcpPool     "15.1.1.10-15.1.1.254"
-:local leaseTime    "2d"            # 48h (alinhar com SESSION_DURATION_HOURS)
+# 48h - alinhar com SESSION_DURATION_HOURS no servidor
+:local leaseTime    "2d"
 :local iface        "ether2"
 :local hsProfile    "captive-profile"
 :local hsName       "portal-visitantes"
