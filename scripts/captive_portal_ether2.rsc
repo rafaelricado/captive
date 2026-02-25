@@ -127,6 +127,17 @@
   :put "    OK: isolamento bidirecional configurado"
 }
 
+# --- Rejeitar HTTPS para forcar deteccao de captive portal via HTTP ---
+# Dispositivos modernos tentam HTTPS primeiro; ao receber RST, caem no HTTP
+# e o hotspot redireciona para o portal. Regras dinamicas do hotspot para
+# usuarios autenticados tem precedencia sobre esta regra estatica.
+:if ([find comment="CP: rejeitar HTTPS visitantes nao autenticados"] = "") do={
+  add chain=forward src-address=$guestNet protocol=tcp dst-port=443 \
+      action=reject reject-with=tcp-reset place-before=0 \
+      comment="CP: rejeitar HTTPS visitantes nao autenticados"
+  :put "    OK: HTTPS rejeitado para forcar deteccao HTTP"
+}
+
 # --- Redirecionar HTTP dos visitantes para o portal (antes da autenticacao) ---
 /ip firewall nat
 :if ([find comment="CP: redirecionar HTTP visitantes para portal"] = "") do={
@@ -178,16 +189,12 @@
   :put "    OK: $ubuntuIP liberado no walled garden"
 }
 
-/ip hotspot walled-garden
-# DNS e NTP livres (necessarios para autenticacao funcionar em iOS/Android)
-:if ([find comment="CP: iOS captive detection"] = "") do={
-  add dst-host="*.apple.com" action=allow comment="CP: iOS captive detection"
-  add dst-host="captive.apple.com" action=allow comment="CP: iOS captive detection"
-  add dst-host="connectivitycheck.gstatic.com" action=allow comment="CP: Android captive detection"
-  add dst-host="clients3.google.com" action=allow comment="CP: Android captive detection"
-  add dst-host="www.msftconnecttest.com" action=allow comment="CP: Windows captive detection"
-  :put "    OK: deteccao de portal para iOS/Android/Windows configurada"
-}
+# NOTA: dominios de deteccao de captive portal (captive.apple.com,
+# connectivitycheck.gstatic.com, etc.) NAO devem estar no walled garden.
+# Se estiverem como "allow", o dispositivo alcanca o servidor Apple/Google
+# que responde "Success" e o popup nunca aparece. Deixando o hotspot
+# interceptar essas requisicoes HTTP, o dispositivo detecta o portal
+# e exibe o popup automaticamente.
 
 #------------------------------------------------------------
 # [7/8] Usuario API para o Node.js
