@@ -542,6 +542,8 @@ exports.wan = async (req, res) => {
       limit: 500
     });
 
+    const latestTs = rows.reduce((max, r) => (!max || r.recorded_at > max ? r.recorded_at : max), null);
+
     const stats = rows.map(r => ({
       interface_name: r.interface_name,
       tx: formatBytes(r.tx_bytes),
@@ -553,6 +555,7 @@ exports.wan = async (req, res) => {
 
     res.render('admin/wan', {
       stats,
+      updatedAt: latestTs ? formatDate(latestTs) : null,
       page: 'wan',
       pageObj: 'wan'
     });

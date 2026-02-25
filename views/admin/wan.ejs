@@ -16,7 +16,11 @@
   <main class="container">
     <h2 class="page-title">Estatísticas WAN &mdash; últimas 24h</h2>
 
-    <p class="meta"><%= stats.length %> registro(s)</p>
+    <% if (updatedAt) { %>
+      <p class="meta">Último snapshot de <strong><%= updatedAt %></strong> &mdash; <%= stats.length %> registro(s)</p>
+    <% } else { %>
+      <p class="meta">Nenhum dado recebido ainda.</p>
+    <% } %>
 
     <div class="table-wrap">
       <table>

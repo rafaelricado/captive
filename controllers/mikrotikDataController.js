@@ -1,5 +1,6 @@
+const crypto = require('crypto');
 const { Op } = require('sequelize');
-const { TrafficRanking, WanStat, ClientConnection, DnsEntry, Setting } = require('../models');
+const { TrafficRanking, WanStat, ClientConnection, DnsEntry, Setting, sequelize } = require('../models');
 const logger = require('../utils/logger');
 
 // Formata bytes em string legível (usado nos logs)
@@ -11,13 +12,24 @@ function fmtBytes(b) {
   return n + ' B';
 }
 
-// Valida a API key enviada pelo Mikrotik
+// Parseia inteiro grande de string sem perda de precisão acima de 2⁵³
+// Retorna string numérica: Sequelize envia BIGINT como string ao PostgreSQL
+function safeInt(s) {
+  const trimmed = (s || '').trim();
+  return /^\d+$/.test(trimmed) ? trimmed : '0';
+}
+
+// Valida a API key enviada pelo Mikrotik usando comparação em tempo constante
 async function isKeyValid(key) {
   if (!key) return false;
   const setting = await Setting.findOne({ where: { key: 'mikrotik_data_key' } });
   const configured = setting ? setting.value : (process.env.MIKROTIK_DATA_KEY || '');
   if (!configured) return false;
-  return key === configured;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(key), Buffer.from(configured));
+  } catch {
+    return false; // buffers de tamanhos diferentes
+  }
 }
 
 // Parse do CSV de clientes: "IP,Hostname[MAC],bytes_up,bytes_down;"
@@ -31,8 +43,8 @@ function parseClientsCsv(raw) {
 
     const ip = parts[0].trim();
     const hostAndMac = parts[1].trim(); // ex: "NOTEBOOK01 [AA:BB:CC:DD:EE:FF]"
-    const bytesUp = parseInt(parts[2], 10) || 0;
-    const bytesDown = parseInt(parts[3], 10) || 0;
+    const bytesUp   = safeInt(parts[2]);
+    const bytesDown = safeInt(parts[3]);
 
     // Extrai hostname e MAC: "Hostname [MAC]"
     const macMatch = hostAndMac.match(/\[([^\]]+)\]$/);
@@ -57,8 +69,8 @@ function parseIfaceCsv(raw) {
     if (parts.length < 4) continue;
     result.push({
       interface_name: parts[0].trim(),
-      tx_bytes: parseInt(parts[1], 10) || 0,
-      rx_bytes: parseInt(parts[2], 10) || 0,
+      tx_bytes: safeInt(parts[1]),
+      rx_bytes: safeInt(parts[2]),
       is_up: parts[3].trim().toLowerCase() === 'up'
     });
   }
@@ -73,12 +85,13 @@ function parseConnectionsCsv(raw) {
   for (const entry of entries) {
     const parts = entry.split(',');
     if (parts.length < 5) continue;
+    const port = parseInt(parts[2], 10);
     result.push({
-      src_ip: parts[0].trim(),
-      dst_ip: parts[1].trim(),
-      dst_port: parseInt(parts[2], 10) || null,
-      bytes_orig: parseInt(parts[3], 10) || 0,
-      bytes_reply: parseInt(parts[4], 10) || 0
+      src_ip:      parts[0].trim(),
+      dst_ip:      parts[1].trim(),
+      dst_port:    isNaN(port) ? null : port,
+      bytes_orig:  safeInt(parts[3]),
+      bytes_reply: safeInt(parts[4])
     });
   }
   return result;
@@ -159,23 +172,28 @@ exports.receiveDetails = async (req, res) => {
     const now = new Date();
     const routerName = (router || '').substring(0, 100);
 
-    // Substitui snapshot de conexões
     const connRows = parseConnectionsCsv(connections);
-    await ClientConnection.destroy({ where: {} });
-    if (connRows.length > 0) {
-      await ClientConnection.bulkCreate(
-        connRows.map(c => ({ ...c, router_name: routerName, recorded_at: now }))
-      );
-    }
+    const dnsRows  = parseDnsCsv(dns);
 
-    // Substitui snapshot de DNS
-    const dnsRows = parseDnsCsv(dns);
-    await DnsEntry.destroy({ where: {} });
-    if (dnsRows.length > 0) {
-      await DnsEntry.bulkCreate(
-        dnsRows.map(d => ({ ...d, router_name: routerName, recorded_at: now }))
-      );
-    }
+    // Operações atômicas: substitui snapshots dentro de uma transação
+    // Se bulkCreate falhar, o destroy é revertido e os dados anteriores são preservados
+    await sequelize.transaction(async (t) => {
+      await ClientConnection.destroy({ where: {}, transaction: t });
+      if (connRows.length > 0) {
+        await ClientConnection.bulkCreate(
+          connRows.map(c => ({ ...c, router_name: routerName, recorded_at: now })),
+          { transaction: t }
+        );
+      }
+
+      await DnsEntry.destroy({ where: {}, transaction: t });
+      if (dnsRows.length > 0) {
+        await DnsEntry.bulkCreate(
+          dnsRows.map(d => ({ ...d, router_name: routerName, recorded_at: now })),
+          { transaction: t }
+        );
+      }
+    });
 
     logger.info(`[MikrotikData] Details: ${connRows.length} conexões, ${dnsRows.length} entradas DNS (router: ${routerName})`);
     res.json({ ok: true });
