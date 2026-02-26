@@ -22,7 +22,6 @@ if (missing.length > 0) {
 const express = require('express');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
-const path = require('path');
 const cron = require('node-cron');
 const logger = require('./utils/logger');
 const { initDatabase, sequelize } = require('./models');
