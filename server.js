@@ -1,5 +1,11 @@
 require('dotenv').config();
 
+const fs = require('fs');
+const path = require('path');
+
+// ─── Diretórios necessários criados no startup (evita chamadas repetidas por rota) ─
+fs.mkdirSync(path.join(__dirname, 'public/uploads/logo'), { recursive: true });
+
 // Validação de variáveis de ambiente obrigatórias
 const requiredEnvVars = [
   'DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASS',
@@ -186,6 +192,15 @@ async function start() {
 
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
+
+    // ─── Handlers globais de erros não tratados ───────────────────────────────
+    process.on('unhandledRejection', (reason) => {
+      logger.error('[Servidor] UnhandledRejection', { reason: String(reason) });
+    });
+    process.on('uncaughtException', (err) => {
+      logger.error(`[Servidor] UncaughtException: ${err.message}`, { stack: err.stack });
+      process.exit(1);
+    });
 
   } catch (err) {
     logger.error(`[Servidor] Erro ao iniciar: ${err.message}`);

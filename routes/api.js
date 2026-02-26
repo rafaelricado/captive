@@ -3,6 +3,7 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const apiController = require('../controllers/apiController');
 const { getOrgSettings } = require('../utils/orgSettings');
+const logger = require('../utils/logger');
 
 // Limita cadastro e login: máximo 10 tentativas a cada 15 minutos por IP
 const authLimiter = rateLimit({
@@ -11,6 +12,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: async (req, res) => {
+    logger.warn(`[API] Rate limit atingido: ${req.path} — IP ${req.ip}`);
     const { mac, ip, linkOrig } = req.body;
     try {
       const org = await getOrgSettings();
@@ -35,7 +37,10 @@ const cepLimiter = rateLimit({
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Muitas consultas. Aguarde alguns minutos.' }
+  handler: (req, res) => {
+    logger.warn(`[API] Rate limit CEP atingido — IP ${req.ip}`);
+    res.status(429).json({ error: 'Muitas consultas. Aguarde alguns minutos.' });
+  }
 });
 
 router.post('/register', authLimiter, apiController.register);

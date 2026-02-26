@@ -51,24 +51,39 @@ function pingHost(ip, timeoutSecs = 2) {
   });
 }
 
+const DISPLAY_TIMEZONE = process.env.DISPLAY_TIMEZONE || 'America/Sao_Paulo';
+
+// Delays entre tentativas: 0s, 2s, 5s
+const WEBHOOK_RETRY_DELAYS = [0, 2000, 5000];
+
 /**
  * Envia alerta via webhook quando um AP fica offline.
+ * Tenta até 3 vezes com backoff antes de desistir.
  * Compatível com Slack, Discord, Microsoft Teams e qualquer receptor HTTP.
  */
 async function sendOfflineAlert(webhookUrl, ap) {
   if (!webhookUrl) return;
-  try {
-    const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-    const location = ap.location ? ` — ${ap.location}` : '';
-    // Suporte a múltiplos formatos: Slack/Teams usam "text", Discord usa "content"
-    await axios.post(webhookUrl, {
-      text: `⚠️ AP OFFLINE: ${ap.name} (${ap.ip_address})${location} | ${now}`,
-      content: `⚠️ AP OFFLINE: ${ap.name} (${ap.ip_address})${location} | ${now}`
-    }, { timeout: 5000 });
-    logger.info(`[Ping] Alerta de webhook enviado: ${ap.name} offline`);
-  } catch (err) {
-    logger.warn(`[Ping] Falha ao enviar alerta de webhook para ${ap.name}: ${err.message}`);
+  const now = new Date().toLocaleString('pt-BR', { timeZone: DISPLAY_TIMEZONE });
+  const location = ap.location ? ` — ${ap.location}` : '';
+  // Suporte a múltiplos formatos: Slack/Teams usam "text", Discord usa "content"
+  const payload = {
+    text: `⚠️ AP OFFLINE: ${ap.name} (${ap.ip_address})${location} | ${now}`,
+    content: `⚠️ AP OFFLINE: ${ap.name} (${ap.ip_address})${location} | ${now}`
+  };
+
+  for (let attempt = 0; attempt < WEBHOOK_RETRY_DELAYS.length; attempt++) {
+    if (WEBHOOK_RETRY_DELAYS[attempt] > 0) {
+      await new Promise(r => setTimeout(r, WEBHOOK_RETRY_DELAYS[attempt]));
+    }
+    try {
+      await axios.post(webhookUrl, payload, { timeout: 5000 });
+      logger.info(`[Ping] Alerta de webhook enviado: ${ap.name} offline (tentativa ${attempt + 1})`);
+      return;
+    } catch (err) {
+      logger.warn(`[Ping] Falha tentativa ${attempt + 1}/${WEBHOOK_RETRY_DELAYS.length} para ${ap.name}: ${err.message}`);
+    }
   }
+  logger.error(`[Ping] Todas as tentativas de webhook falharam para ${ap.name}`);
 }
 
 /**

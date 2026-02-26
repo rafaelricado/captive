@@ -32,6 +32,9 @@ async function isKeyValid(key) {
   }
 }
 
+// Valida formato MAC: AA:BB:CC:DD:EE:FF
+const MAC_RE = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
+
 // Parse do CSV de clientes: "IP,Hostname[MAC],bytes_up,bytes_down;"
 function parseClientsCsv(raw) {
   if (!raw) return [];
@@ -48,13 +51,17 @@ function parseClientsCsv(raw) {
 
     // Extrai hostname e MAC: "Hostname [MAC]"
     const macMatch = hostAndMac.match(/\[([^\]]+)\]$/);
-    const mac = macMatch ? macMatch[1].trim() : null;
-    const hostname = macMatch
+    const rawMac = macMatch ? macMatch[1].trim() : null;
+    // Valida formato MAC; descarta se inválido
+    const mac = rawMac && MAC_RE.test(rawMac) ? rawMac : null;
+    const rawHostname = macMatch
       ? hostAndMac.slice(0, macMatch.index).trim()
       : hostAndMac;
+    // Trunca hostname para evitar dados excessivos no banco
+    const hostname = rawHostname ? rawHostname.slice(0, 100) : null;
 
     if (!ip) continue;
-    result.push({ ip_address: ip, hostname: hostname || null, mac_address: mac, bytes_up: bytesUp, bytes_down: bytesDown });
+    result.push({ ip_address: ip, hostname, mac_address: mac, bytes_up: bytesUp, bytes_down: bytesDown });
   }
   return result;
 }
@@ -86,10 +93,11 @@ function parseConnectionsCsv(raw) {
     const parts = entry.split(',');
     if (parts.length < 5) continue;
     const port = parseInt(parts[2], 10);
+    const validPort = !isNaN(port) && port >= 0 && port <= 65535 ? port : null;
     result.push({
       src_ip:      parts[0].trim(),
       dst_ip:      parts[1].trim(),
-      dst_port:    isNaN(port) ? null : port,
+      dst_port:    validPort,
       bytes_orig:  safeInt(parts[3]),
       bytes_reply: safeInt(parts[4])
     });

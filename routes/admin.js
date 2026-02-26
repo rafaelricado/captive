@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const path = require('path');
-const fs = require('fs');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const adminAuth = require('../middleware/adminAuth');
@@ -9,9 +8,8 @@ const { csrfMiddleware, verifyCsrf } = require('../middleware/csrfProtection');
 const adminController = require('../controllers/adminController');
 const { Setting } = require('../models');
 
-// Garante que o diretório de upload existe
+// Diretório de upload garantido pelo startup em server.js
 const uploadsDir = path.join(__dirname, '../public/uploads/logo');
-fs.mkdirSync(uploadsDir, { recursive: true });
 
 // Multer: armazenamento de logo
 const storage = multer.diskStorage({

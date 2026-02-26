@@ -7,7 +7,10 @@ const { User, Session, Setting, AccessPoint, ApPingHistory,
 const mikrotikService = require('../services/mikrotikService');
 const { pingAllAccessPoints, isValidIPv4 } = require('../services/pingService');
 const logger = require('../utils/logger');
+const { audit } = require('../utils/auditLogger');
 const settingsCache = require('../utils/settingsCache');
+
+const DISPLAY_TIMEZONE = process.env.DISPLAY_TIMEZONE || 'America/Sao_Paulo';
 
 // ─── Bcrypt: hash da senha admin gerado sincronamente na carga do módulo ──────
 // hashSync é seguro aqui: roda uma única vez na inicialização, não bloqueia
@@ -26,7 +29,7 @@ function maskCpf(cpf) {
 
 function formatDate(date) {
   if (!date) return '—';
-  return new Date(date).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  return new Date(date).toLocaleString('pt-BR', { timeZone: DISPLAY_TIMEZONE });
 }
 
 function startOfDay() {
@@ -92,6 +95,7 @@ exports.login = async (req, res) => {
         }
         req.session.adminLoggedIn = true;
         logger.info(`[Admin] Login bem-sucedido: ${username} (${req.ip})`);
+        audit('admin.login', { username, ip: req.ip });
         res.redirect('/admin');
       });
       return;
@@ -106,6 +110,7 @@ exports.login = async (req, res) => {
 };
 
 exports.logout = (req, res) => {
+  audit('admin.logout', { ip: req.ip });
   req.session.destroy(err => {
     if (err) logger.warn(`[Admin] Erro ao destruir sessão: ${err.message}`);
     res.redirect('/admin/login');
@@ -243,13 +248,14 @@ exports.exportUsers = async (req, res) => {
       u.nome_completo, u.cpf, u.email, u.telefone,
       u.cidade || '', u.estado || '',
       u.data_nascimento || '', u.nome_mae || '',
-      new Date(u.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+      new Date(u.created_at).toLocaleString('pt-BR', { timeZone: DISPLAY_TIMEZONE })
     ].map(escapeCSV).join(','));
 
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="usuarios_${date}.csv"`);
     logger.info(`[Admin] Exportação de usuários: ${users.length} registros`);
+    audit('users.export', { count: users.length, ip: req.ip });
     res.send('\uFEFF' + header + '\n' + rows.join('\n'));
   } catch (err) {
     logger.error(`[Admin] Erro ao exportar usuários: ${err.message}`);
@@ -267,6 +273,7 @@ exports.deleteUser = async (req, res) => {
     await user.destroy();
 
     logger.info(`[Admin] Usuário excluído (LGPD): ${user.cpf}`);
+    audit('user.delete', { userId: user.id, ip: req.ip });
     res.redirect('/admin/users');
   } catch (err) {
     logger.error(`[Admin] Erro ao excluir usuário: ${err.message}`);
@@ -325,6 +332,7 @@ exports.terminateSession = async (req, res) => {
     await sess.save();
 
     logger.info(`[Admin] Sessão ${sess.id} encerrada manualmente`);
+    audit('session.terminate', { sessionId: sess.id, ip: req.ip });
     res.redirect('/admin/sessions');
   } catch (err) {
     logger.error(`[Admin] Erro ao encerrar sessão: ${err.message}`);
@@ -439,6 +447,7 @@ exports.saveSettings = async (req, res) => {
     settingsCache.invalidate('org_settings');
 
     logger.info('[Admin] Configurações atualizadas');
+    audit('settings.update', { ip: req.ip });
     await renderSettings('Configurações salvas com sucesso.', null);
   } catch (err) {
     logger.error(`[Admin] Erro ao salvar configurações: ${err.message}`);
@@ -500,6 +509,7 @@ exports.saveAccessPoint = async (req, res) => {
     });
 
     logger.info(`[Admin] AP adicionado: ${name.trim()} (${ip_address.trim()})`);
+    audit('ap.add', { name: name.trim(), ip: ip_address.trim(), adminIp: req.ip });
     res.redirect('/admin/access-points?success=1');
   } catch (err) {
     logger.error(`[Admin] Erro ao salvar AP: ${err.message}`);
@@ -512,6 +522,7 @@ exports.deleteAccessPoint = async (req, res) => {
     const ap = await AccessPoint.findByPk(req.params.id);
     if (ap) {
       logger.info(`[Admin] AP removido: ${ap.name} (${ap.ip_address})`);
+      audit('ap.delete', { name: ap.name, ip: ap.ip_address, adminIp: req.ip });
       // Remove histórico de pings associado
       await ApPingHistory.destroy({ where: { ap_id: ap.id } });
       await ap.destroy();
