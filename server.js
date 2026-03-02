@@ -27,6 +27,7 @@ const logger = require('./utils/logger');
 const { initDatabase, sequelize } = require('./models');
 const { expireSessions } = require('./services/sessionService');
 const { pingAllAccessPoints } = require('./services/pingService');
+const { startNetflowCollector } = require('./services/netflowCollector');
 
 const portalRoutes = require('./routes/portal');
 const apiRoutes = require('./routes/api');
@@ -164,6 +165,8 @@ async function start() {
         logger.error(`[Cron] Erro ao verificar pontos de acesso: ${err.message}`);
       }
     });
+
+    startNetflowCollector();
 
     const server = app.listen(PORT, '0.0.0.0', () => {
       logger.info(`[Servidor] Captive Portal rodando em http://0.0.0.0:${PORT}`);
