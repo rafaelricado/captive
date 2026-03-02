@@ -168,8 +168,18 @@ async function flush() {
 
 // ─── Inicialização do coletor UDP ─────────────────────────────────────────────
 function startNetflowCollector() {
+  let _debugCount = 0;
   const collector = Collector(function onPacket(data) {
     try {
+      // Debug temporário: loga os primeiros 3 pacotes completos
+      if (_debugCount < 3) {
+        _debugCount++;
+        logger.info(`[Netflow] DEBUG pacote #${_debugCount}: version=${data.header?.version} flowCount=${Array.isArray(data.flow) ? data.flow.length : 'N/A (tipo=' + typeof data.flow + ')'}`);
+        if (Array.isArray(data.flow) && data.flow.length > 0) {
+          logger.info(`[Netflow] DEBUG flow[0] keys: ${Object.keys(data.flow[0]).join(', ')}`);
+          logger.info(`[Netflow] DEBUG flow[0]: ${JSON.stringify(data.flow[0])}`);
+        }
+      }
       if (!Array.isArray(data.flow)) return;
       data.flow.forEach(processFlow);
     } catch (err) {
