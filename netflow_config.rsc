@@ -23,7 +23,7 @@
 # ============================================================
 :local serverIp    "10.0.0.56"
 :local serverPort  2055
-:local lanInterface "bridge"
+:local lanInterface "ether3,ether4"
 
 
 # ============================================================
