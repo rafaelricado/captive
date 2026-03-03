@@ -157,17 +157,25 @@ exports.dashboard = async (req, res) => {
       const total = Number(r.total_records);
       const up    = Number(r.up_count);
       wanMap[r.interface_name] = {
-        interface_name: r.interface_name,
-        volume:  formatBytes(Number(r.total_tx) + Number(r.total_rx)),
-        uptime:  total > 0 ? Math.round((up / total) * 100) : null,
-        is_up:   null
+        interface_name:  r.interface_name,
+        volume:          formatBytes(Number(r.total_tx) + Number(r.total_rx)),
+        uptime:          total > 0 ? Math.round((up / total) * 100) : null,
+        is_up:           null,
+        is_active_route: null
       };
     });
     wanLatest.forEach(r => {
       if (wanMap[r.interface_name]) {
-        wanMap[r.interface_name].is_up = r.is_up;
+        wanMap[r.interface_name].is_up           = r.is_up;
+        wanMap[r.interface_name].is_active_route = r.is_active_route;
       } else {
-        wanMap[r.interface_name] = { interface_name: r.interface_name, volume: '—', uptime: null, is_up: r.is_up };
+        wanMap[r.interface_name] = {
+          interface_name:  r.interface_name,
+          volume:          '—',
+          uptime:          null,
+          is_up:           r.is_up,
+          is_active_route: r.is_active_route
+        };
       }
     });
     const wanCards = Object.values(wanMap);

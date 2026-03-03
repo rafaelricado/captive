@@ -69,21 +69,27 @@ function processFlow(f) {
 }
 
 // ─── Detecção de interface WAN a partir de rota ───────────────────────────────
-// gateway pode ser:  "192.168.1.1"      → IP (retorna null)
-//                    "192.168.1.1%ether5" → IP%iface (retorna "ether5")
-//                    "pppoe-out1"        → nome de interface (retorna "pppoe-out1")
+// RouterOS 7 usa 'immediate-gw' = "192.168.1.1%ether5" ou "pppoe-out1"
+// (o campo 'gateway' pode ser um IP remoto de check-gateway, não a interface direta)
 function extractRouteInterface(r) {
+  // Tenta immediate-gw primeiro (RouterOS 7)
+  const igw = r['immediate-gw'] || '';
+  if (igw) {
+    if (igw.includes('%')) return igw.split('%')[1];
+    if (!/^\d+\.\d+\.\d+\.\d+$/.test(igw)) return igw;
+  }
+  // Fallback: gateway-interface (RouterOS 6) ou gateway como nome de interface
   if (r['gateway-interface']) return r['gateway-interface'];
   const gw = r.gateway || '';
   if (!gw) return null;
-  if (gw.includes('%')) return gw.split('%')[1];            // formato "IP%iface"
-  if (!/^\d+\.\d+\.\d+\.\d+$/.test(gw)) return gw;        // nome de interface
+  if (gw.includes('%')) return gw.split('%')[1];
+  if (!/^\d+\.\d+\.\d+\.\d+$/.test(gw)) return gw;
   return null;
 }
 
 // ─── Coleta de estatísticas WAN ───────────────────────────────────────────────
 async function collectWanStats(api, now) {
-  // Busca todas as rotas padrão (0.0.0.0/0) → identifica interfaces WAN
+  // Todas as rotas padrão (0.0.0.0/0) para identificar interfaces WAN
   const routes = await api.write('/ip/route/print', [
     '?dst-address=0.0.0.0/0'
   ]);
@@ -99,29 +105,7 @@ async function collectWanStats(api, now) {
     }
   }
 
-  // Para rotas com gateway=IP, tenta resolver a interface via ARP
-  const ipGwRoutes = routes.filter(r => {
-    const gw = r.gateway || '';
-    return /^\d+\.\d+\.\d+\.\d+$/.test(gw) && !gw.includes('%');
-  });
-  if (ipGwRoutes.length > 0) {
-    try {
-      const arpEntries = await api.write('/ip/arp/print', ['=.proplist=address,interface']);
-      const arpMap = new Map(arpEntries.map(a => [a.address, a.interface]));
-      for (const r of ipGwRoutes) {
-        const gwIface = arpMap.get(r.gateway);
-        if (gwIface) {
-          wanIfaceNames.add(gwIface);
-          if (r.active === 'true') activeIfaceSet.add(gwIface);
-        }
-      }
-    } catch (_) {
-      // ARP lookup é opcional — ignora se falhar
-    }
-  }
-
-  // WAN_INTERFACES env var: permite adicionar interfaces manualmente
-  // ex: WAN_INTERFACES=ether5,pppoe-out1
+  // WAN_INTERFACES env var: override/complemento manual (ex: WAN_INTERFACES=ether5,Vellon)
   const envWan = (process.env.WAN_INTERFACES || '').split(',').map(s => s.trim()).filter(Boolean);
   envWan.forEach(n => wanIfaceNames.add(n));
 
@@ -130,9 +114,9 @@ async function collectWanStats(api, now) {
     return;
   }
 
-  // Busca stats de todas as interfaces
+  // Stats de interface — inclui comment para nome amigável no painel
   const ifaces = await api.write('/interface/print', [
-    '=.proplist=name,tx-byte,rx-byte,running,disabled'
+    '=.proplist=name,comment,tx-byte,rx-byte,running,disabled'
   ]);
   const ifaceMap = new Map(ifaces.map(i => [i.name, i]));
 
@@ -150,12 +134,15 @@ async function collectWanStats(api, now) {
 
     if (!prev) continue;  // primeira leitura — sem delta ainda
 
-    // Delta: bytes transferidos desde a última leitura (trata reset de contador)
+    // Delta: bytes desde a última leitura (trata reset de contador)
     const txDelta = txCurr >= prev.tx ? txCurr - prev.tx : txCurr;
     const rxDelta = rxCurr >= prev.rx ? rxCurr - prev.rx : rxCurr;
 
+    // Usa comment como nome de exibição se disponível ("Gardeline Link1" → "Gardeline Link1")
+    const displayName = (iface.comment || iface.name).trim();
+
     records.push({
-      interface_name:  name,
+      interface_name:  displayName,
       tx_bytes:        txDelta.toString(),
       rx_bytes:        rxDelta.toString(),
       is_up:           iface.running === 'true',

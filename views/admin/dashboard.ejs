@@ -17,6 +17,9 @@
       box-shadow: 0 1px 6px rgba(0,0,0,.08);
       padding: 18px 20px;
     }
+    .badge-active  { background: #dcfce7; color: #16a34a; font-size: .72rem; padding: 3px 9px; border-radius: 99px; font-weight: 700; }
+    .badge-standby { background: #fef9c3; color: #a16207; font-size: .72rem; padding: 3px 9px; border-radius: 99px; font-weight: 700; }
+    .badge-inactive { background: #fee2e2; color: #dc2626; font-size: .72rem; padding: 3px 9px; border-radius: 99px; font-weight: 700; }
     .wan-card-header {
       display: flex; justify-content: space-between; align-items: center;
       margin-bottom: 14px;
@@ -75,10 +78,12 @@
               <span class="wan-name"><%= w.interface_name %></span>
               <% if (w.is_up === null) { %>
                 <span class="badge badge-gray">?</span>
-              <% } else if (w.is_up) { %>
-                <span class="badge badge-green">UP</span>
+              <% } else if (!w.is_up) { %>
+                <span class="badge-inactive">INATIVA</span>
+              <% } else if (w.is_active_route) { %>
+                <span class="badge-active">ROTA ATIVA</span>
               <% } else { %>
-                <span class="badge badge-red">DOWN</span>
+                <span class="badge-standby">AGUARDANDO</span>
               <% } %>
             </div>
             <div class="wan-row">
