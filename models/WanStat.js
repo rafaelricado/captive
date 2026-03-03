@@ -26,6 +26,11 @@ const WanStat = sequelize.define('WanStat', {
     allowNull: false,
     defaultValue: true
   },
+  is_active_route: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  },
   router_name: {
     type: DataTypes.STRING(100),
     allowNull: true

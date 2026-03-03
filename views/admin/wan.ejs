@@ -6,8 +6,9 @@
   <title>Estatísticas WAN &mdash; Captive Portal</title>
   <%- include('_head') %>
   <style>
-    .badge-up   { background: #dcfce7; color: #16a34a; }
-    .badge-down { background: #fee2e2; color: #dc2626; }
+    .badge-active  { background: #dcfce7; color: #16a34a; }
+    .badge-standby { background: #fef9c3; color: #a16207; }
+    .badge-down    { background: #fee2e2; color: #dc2626; }
     .section-title {
       font-size: 1rem;
       font-weight: 600;
@@ -66,10 +67,12 @@
               <td><%= s.tx %></td>
               <td><%= s.rx %></td>
               <td>
-                <% if (s.is_up) { %>
-                  <span class="badge badge-up">UP</span>
+                <% if (!s.is_up) { %>
+                  <span class="badge badge-down">INATIVA</span>
+                <% } else if (s.is_active_route) { %>
+                  <span class="badge badge-active">ROTA ATIVA</span>
                 <% } else { %>
-                  <span class="badge badge-down">DOWN</span>
+                  <span class="badge badge-standby">AGUARDANDO</span>
                 <% } %>
               </td>
               <td><%= s.router_name %></td>
@@ -103,10 +106,12 @@
               <td><%= h.tx %></td>
               <td><%= h.rx %></td>
               <td>
-                <% if (h.is_up) { %>
-                  <span class="badge badge-up">UP</span>
+                <% if (!h.is_up) { %>
+                  <span class="badge badge-down">INATIVA</span>
+                <% } else if (h.is_active_route) { %>
+                  <span class="badge badge-active">ROTA ATIVA</span>
                 <% } else { %>
-                  <span class="badge badge-down">DOWN</span>
+                  <span class="badge badge-standby">AGUARDANDO</span>
                 <% } %>
               </td>
               <td style="color:#6b7280;font-size:.85rem"><%= h.recorded_at %></td>
@@ -150,6 +155,11 @@
       return String(s == null ? '' : s)
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
+    function wanBadge(s) {
+      if (!s.is_up)           return '<span class="badge badge-down">INATIVA</span>';
+      if (s.is_active_route)  return '<span class="badge badge-active">ROTA ATIVA</span>';
+      return '<span class="badge badge-standby">AGUARDANDO</span>';
+    }
     function buildStatsRows(stats) {
       if (!stats.length)
         return '<tr><td colspan="6" style="text-align:center;color:#9ca3af">Nenhum dado disponível.</td></tr>';
@@ -157,7 +167,7 @@
         <td><strong>${esc(s.interface_name)}</strong></td>
         <td>${esc(s.tx)}</td>
         <td>${esc(s.rx)}</td>
-        <td><span class="badge ${s.is_up ? 'badge-up' : 'badge-down'}">${s.is_up ? 'UP' : 'DOWN'}</span></td>
+        <td>${wanBadge(s)}</td>
         <td>${esc(s.router_name)}</td>
         <td>${esc(s.recorded_at)}</td>
       </tr>`).join('');
@@ -169,7 +179,7 @@
         <td><strong>${esc(h.interface_name)}</strong></td>
         <td>${esc(h.tx)}</td>
         <td>${esc(h.rx)}</td>
-        <td><span class="badge ${h.is_up ? 'badge-up' : 'badge-down'}">${h.is_up ? 'UP' : 'DOWN'}</span></td>
+        <td>${wanBadge(h)}</td>
         <td style="color:#6b7280;font-size:.85rem">${esc(h.recorded_at)}</td>
       </tr>`).join('');
     }

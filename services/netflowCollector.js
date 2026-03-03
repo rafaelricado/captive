@@ -1,10 +1,10 @@
 'use strict';
 
-const Collector   = require('node-netflowv9');
+const Collector       = require('node-netflowv9');
 const { RouterOSAPI } = require('node-routeros');
-const { Op }      = require('sequelize');
-const logger      = require('../utils/logger');
-const { TrafficRanking } = require('../models');
+const { Op }          = require('sequelize');
+const logger          = require('../utils/logger');
+const { TrafficRanking, WanStat } = require('../models');
 
 // ─── Configuração ─────────────────────────────────────────────────────────────
 const FLUSH_INTERVAL_MS  = 5  * 60 * 1000;   // flush ao banco a cada 5 min
@@ -14,7 +14,7 @@ const LOCAL_SUBNET       = process.env.LOCAL_SUBNET || '10.0.0.0/22';
 const NETFLOW_PORT       = parseInt(process.env.NETFLOW_PORT || '2055', 10);
 
 // ─── Estado interno ───────────────────────────────────────────────────────────
-// acumulador: ip -> { up: Number, down: Number }
+// acumulador de tráfego: ip -> { up: Number, down: Number }
 const accumulator = new Map();
 let flushing = false;  // guard contra flush concorrente
 
@@ -22,6 +22,10 @@ let flushing = false;  // guard contra flush concorrente
 let leaseCache        = new Map();
 let lastLeaseRefresh  = 0;
 let routerIdentity    = null;
+
+// contadores acumulados de interface WAN (para calcular delta)
+// ifaceName → { tx: BigInt, rx: BigInt }
+const prevWanCounters = new Map();
 
 // ─── Utilitários de subnet ────────────────────────────────────────────────────
 function ipToUint32(ip) {
@@ -64,68 +68,186 @@ function processFlow(f) {
   // local→local ou externo→externo: ignorado
 }
 
-// ─── Cache de leases DHCP ─────────────────────────────────────────────────────
-async function refreshLeases() {
-  const now = Date.now();
-  if (now - lastLeaseRefresh < LEASE_REFRESH_MS) return;
-  // lastLeaseRefresh só é marcado após conexão bem-sucedida (dentro do try)
+// ─── Detecção de interface WAN a partir de rota ───────────────────────────────
+// gateway pode ser:  "192.168.1.1"      → IP (retorna null)
+//                    "192.168.1.1%ether5" → IP%iface (retorna "ether5")
+//                    "pppoe-out1"        → nome de interface (retorna "pppoe-out1")
+function extractRouteInterface(r) {
+  if (r['gateway-interface']) return r['gateway-interface'];
+  const gw = r.gateway || '';
+  if (!gw) return null;
+  if (gw.includes('%')) return gw.split('%')[1];            // formato "IP%iface"
+  if (!/^\d+\.\d+\.\d+\.\d+$/.test(gw)) return gw;        // nome de interface
+  return null;
+}
 
+// ─── Coleta de estatísticas WAN ───────────────────────────────────────────────
+async function collectWanStats(api, now) {
+  // Busca todas as rotas padrão (0.0.0.0/0) → identifica interfaces WAN
+  const routes = await api.write('/ip/route/print', [
+    '?dst-address=0.0.0.0/0'
+  ]);
+
+  const wanIfaceNames  = new Set();
+  const activeIfaceSet = new Set();
+
+  for (const r of routes) {
+    const ifaceName = extractRouteInterface(r);
+    if (ifaceName) {
+      wanIfaceNames.add(ifaceName);
+      if (r.active === 'true') activeIfaceSet.add(ifaceName);
+    }
+  }
+
+  // Para rotas com gateway=IP, tenta resolver a interface via ARP
+  const ipGwRoutes = routes.filter(r => {
+    const gw = r.gateway || '';
+    return /^\d+\.\d+\.\d+\.\d+$/.test(gw) && !gw.includes('%');
+  });
+  if (ipGwRoutes.length > 0) {
+    try {
+      const arpEntries = await api.write('/ip/arp/print', ['=.proplist=address,interface']);
+      const arpMap = new Map(arpEntries.map(a => [a.address, a.interface]));
+      for (const r of ipGwRoutes) {
+        const gwIface = arpMap.get(r.gateway);
+        if (gwIface) {
+          wanIfaceNames.add(gwIface);
+          if (r.active === 'true') activeIfaceSet.add(gwIface);
+        }
+      }
+    } catch (_) {
+      // ARP lookup é opcional — ignora se falhar
+    }
+  }
+
+  // WAN_INTERFACES env var: permite adicionar interfaces manualmente
+  // ex: WAN_INTERFACES=ether5,pppoe-out1
+  const envWan = (process.env.WAN_INTERFACES || '').split(',').map(s => s.trim()).filter(Boolean);
+  envWan.forEach(n => wanIfaceNames.add(n));
+
+  if (wanIfaceNames.size === 0) {
+    logger.warn('[Netflow] WAN stats: nenhuma interface WAN detectada. Defina WAN_INTERFACES no .env se necessário');
+    return;
+  }
+
+  // Busca stats de todas as interfaces
+  const ifaces = await api.write('/interface/print', [
+    '=.proplist=name,tx-byte,rx-byte,running,disabled'
+  ]);
+  const ifaceMap = new Map(ifaces.map(i => [i.name, i]));
+
+  const records = [];
+  for (const name of wanIfaceNames) {
+    const iface = ifaceMap.get(name);
+    if (!iface) continue;
+
+    const txCurr = BigInt(iface['tx-byte'] || '0');
+    const rxCurr = BigInt(iface['rx-byte'] || '0');
+    const prev   = prevWanCounters.get(name);
+
+    // Salva leitura atual para cálculo do delta no próximo ciclo
+    prevWanCounters.set(name, { tx: txCurr, rx: rxCurr });
+
+    if (!prev) continue;  // primeira leitura — sem delta ainda
+
+    // Delta: bytes transferidos desde a última leitura (trata reset de contador)
+    const txDelta = txCurr >= prev.tx ? txCurr - prev.tx : txCurr;
+    const rxDelta = rxCurr >= prev.rx ? rxCurr - prev.rx : rxCurr;
+
+    records.push({
+      interface_name:  name,
+      tx_bytes:        txDelta.toString(),
+      rx_bytes:        rxDelta.toString(),
+      is_up:           iface.running === 'true',
+      is_active_route: activeIfaceSet.has(name),
+      router_name:     routerIdentity || 'mikrotik',
+      recorded_at:     now
+    });
+  }
+
+  if (records.length > 0) {
+    await WanStat.bulkCreate(records);
+    logger.info(`[Netflow] WAN stats: ${records.length} interface(s) gravadas`);
+  } else {
+    logger.info('[Netflow] WAN stats: primeira leitura — próximo flush terá dados de delta');
+  }
+}
+
+// ─── Atualização de dados do Mikrotik (leases DHCP + WAN stats) ───────────────
+// Chamado em cada flush. Leases atualizam a cada 10 min; WAN stats, a cada flush.
+async function refreshMikrotikData() {
   const host     = process.env.MIKROTIK_HOST;
   const user     = process.env.MIKROTIK_USER;
   const password = process.env.MIKROTIK_PASS;
   const port     = parseInt(process.env.MIKROTIK_PORT || '8728', 10);
 
   if (!host || !user || !password) {
-    logger.warn('[Netflow] MIKROTIK_HOST/USER/PASS não configurados — hostname não disponível');
+    logger.warn('[Netflow] MIKROTIK_HOST/USER/PASS não configurados — hostname e WAN stats não disponíveis');
     return;
   }
+
+  const now        = Date.now();
+  const needLeases = now - lastLeaseRefresh >= LEASE_REFRESH_MS;
 
   let api;
   try {
     api = new RouterOSAPI({ host, user, password, port, timeout: 10 });
     await api.connect();
-    lastLeaseRefresh = now;  // marca como atualizado apenas após conexão bem-sucedida
-
-    const leases = await api.write('/ip/dhcp-server/lease/print', [
-      '=.proplist=address,host-name,mac-address',
-      '?status=bound'
-    ]);
 
     if (!routerIdentity) {
-      const identity = await api.write('/system/identity/print');
-      routerIdentity = identity[0]?.name || null;
+      const id = await api.write('/system/identity/print');
+      routerIdentity = id[0]?.name || null;
     }
 
-    const newCache = new Map();
-    for (const l of leases) {
-      if (l.address) {
-        newCache.set(l.address, {
-          hostname: l['host-name'] || null,
-          mac:      l['mac-address'] || null
-        });
+    // ── DHCP leases (a cada 10 min) ──────────────────────────────────────────
+    if (needLeases) {
+      try {
+        const leases = await api.write('/ip/dhcp-server/lease/print', [
+          '=.proplist=address,host-name,mac-address',
+          '?status=bound'
+        ]);
+        const newCache = new Map();
+        for (const l of leases) {
+          if (l.address) {
+            newCache.set(l.address, {
+              hostname: l['host-name']    || null,
+              mac:      l['mac-address'] || null
+            });
+          }
+        }
+        leaseCache = newCache;
+        lastLeaseRefresh = now;
+        logger.info(`[Netflow] Cache DHCP atualizado: ${newCache.size} leases`);
+      } catch (err) {
+        logger.warn(`[Netflow] Falha ao buscar leases DHCP: ${err.message}`);
+        lastLeaseRefresh = 0;  // permite nova tentativa no próximo flush
       }
     }
-    leaseCache = newCache;
-    logger.info(`[Netflow] Cache DHCP atualizado: ${newCache.size} leases`);
+
+    // ── WAN stats (todo flush = 5 min) ────────────────────────────────────────
+    try {
+      await collectWanStats(api, new Date());
+    } catch (err) {
+      logger.warn(`[Netflow] Falha ao coletar WAN stats: ${err.message}`);
+    }
 
   } catch (err) {
-    logger.warn(`[Netflow] Falha ao buscar leases DHCP: ${err.message}`);
-    lastLeaseRefresh = 0;  // permite nova tentativa no próximo flush
+    logger.warn(`[Netflow] Falha na conexão Mikrotik: ${err.message}`);
+    if (needLeases) lastLeaseRefresh = 0;
   } finally {
-    if (api) {
-      try { api.disconnect(); } catch (_) {}
-    }
+    if (api) { try { api.disconnect(); } catch (_) {} }
   }
 }
 
 // ─── Flush ao banco ───────────────────────────────────────────────────────────
 async function flush() {
+  // Atualiza dados do Mikrotik (WAN stats + leases se necessário)
+  await refreshMikrotikData();
+
   if (accumulator.size === 0) {
-    logger.info('[Netflow] Flush: nenhum dado acumulado');
+    logger.info('[Netflow] Flush: nenhum dado de tráfego acumulado');
     return;
   }
-
-  await refreshLeases();
 
   const now     = new Date();
   const records = [];
@@ -197,10 +319,10 @@ function startNetflowCollector() {
       .finally(() => { flushing = false; });
   }, FLUSH_INTERVAL_MS);
 
-  // Primeiro refresh de leases após a inicialização do banco
+  // Leitura inicial do Mikrotik: coleta identity, leases e primeira leitura de WAN
+  // (após 5s para aguardar o banco conectar)
   setTimeout(() => {
-    lastLeaseRefresh = 0;  // força refresh imediato
-    refreshLeases().catch(() => {});
+    refreshMikrotikData().catch(() => {});
   }, 5000);
 }
 

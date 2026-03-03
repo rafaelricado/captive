@@ -641,12 +641,13 @@ function aggregateWanRows(rows) {
     const key = r.interface_name;
     if (!map[key]) {
       map[key] = {
-        interface_name: key,
-        tx_total: 0,
-        rx_total: 0,
-        is_up: r.is_up,
-        router_name: r.router_name || '—',
-        latest_at: r.recorded_at
+        interface_name:  key,
+        tx_total:        0,
+        rx_total:        0,
+        is_up:           r.is_up,
+        is_active_route: r.is_active_route,
+        router_name:     r.router_name || '—',
+        latest_at:       r.recorded_at
       };
     }
     map[key].tx_total += Number(r.tx_bytes) || 0;
@@ -702,23 +703,25 @@ exports.wan = async (req, res) => {
     const latestTs = aggregated.reduce((max, r) => (!max || r.latest_at > max ? r.latest_at : max), null);
 
     const stats = aggregated.map(r => ({
-      interface_name: r.interface_name,
-      tx: formatBytes(r.tx_total),
-      rx: formatBytes(r.rx_total),
-      is_up: r.is_up,
-      router_name: r.router_name,
-      recorded_at: formatDate(r.latest_at)
+      interface_name:  r.interface_name,
+      tx:              formatBytes(r.tx_total),
+      rx:              formatBytes(r.rx_total),
+      is_up:           r.is_up,
+      is_active_route: r.is_active_route,
+      router_name:     r.router_name,
+      recorded_at:     formatDate(r.latest_at)
     }));
 
     const chartData = buildWanChart(rows);
 
     // Histórico: últimos 40 snapshots individuais para a tabela de histórico
     const history = rows.slice(0, 40).map(r => ({
-      interface_name: r.interface_name,
-      tx: formatBytes(Number(r.tx_bytes) || 0),
-      rx: formatBytes(Number(r.rx_bytes) || 0),
-      is_up: r.is_up,
-      recorded_at: formatDate(r.recorded_at)
+      interface_name:  r.interface_name,
+      tx:              formatBytes(Number(r.tx_bytes) || 0),
+      rx:              formatBytes(Number(r.rx_bytes) || 0),
+      is_up:           r.is_up,
+      is_active_route: r.is_active_route,
+      recorded_at:     formatDate(r.recorded_at)
     }));
 
     res.render('admin/wan', {
@@ -850,20 +853,22 @@ exports.wanData = async (req, res) => {
     const aggregated = aggregateWanRows(rows);
     const latestTs = aggregated.reduce((max, r) => (!max || r.latest_at > max ? r.latest_at : max), null);
     const stats = aggregated.map(r => ({
-      interface_name: r.interface_name,
-      tx:          formatBytes(r.tx_total),
-      rx:          formatBytes(r.rx_total),
-      is_up:       r.is_up,
-      router_name: r.router_name,
-      recorded_at: formatDate(r.latest_at)
+      interface_name:  r.interface_name,
+      tx:              formatBytes(r.tx_total),
+      rx:              formatBytes(r.rx_total),
+      is_up:           r.is_up,
+      is_active_route: r.is_active_route,
+      router_name:     r.router_name,
+      recorded_at:     formatDate(r.latest_at)
     }));
     const chartData = buildWanChart(rows);
     const history = rows.slice(0, 40).map(r => ({
-      interface_name: r.interface_name,
-      tx: formatBytes(Number(r.tx_bytes) || 0),
-      rx: formatBytes(Number(r.rx_bytes) || 0),
-      is_up: r.is_up,
-      recorded_at: formatDate(r.recorded_at)
+      interface_name:  r.interface_name,
+      tx:              formatBytes(Number(r.tx_bytes) || 0),
+      rx:              formatBytes(Number(r.rx_bytes) || 0),
+      is_up:           r.is_up,
+      is_active_route: r.is_active_route,
+      recorded_at:     formatDate(r.recorded_at)
     }));
     res.json({ stats, chartData, history, updatedAt: latestTs ? formatDate(latestTs) : null });
   } catch (err) {
