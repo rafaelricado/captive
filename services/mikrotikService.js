@@ -149,7 +149,7 @@ async function removeUser(cpf, fullDelete = false) {
 async function disconnect() {
   if (api) {
     try {
-      api.disconnect();
+      api.close();
     } catch (err) {
       // ignora erro ao fechar
     }

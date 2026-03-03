@@ -178,7 +178,12 @@ async function refreshMikrotikData() {
 
   let api;
   try {
-    api = new RouterOSAPI({ host, user, password, port, timeout: 10 });
+    api = new RouterOSAPI({ host, user, password, port, timeout: 30 });
+    // Silencia erros de socket que ocorrem após o fechamento da conexão
+    // (sem listener, o Node.js lançaria UncaughtException)
+    api.on('error', (err) => {
+      logger.warn(`[Netflow] RouterOS socket error (pós-fechamento): ${err.message}`);
+    });
     await api.connect();
 
     if (!routerIdentity) {
@@ -222,7 +227,7 @@ async function refreshMikrotikData() {
     logger.warn(`[Netflow] Falha na conexão Mikrotik: ${err.message}`);
     if (needLeases) lastLeaseRefresh = 0;
   } finally {
-    if (api) { try { api.disconnect(); } catch (_) {} }
+    if (api) { try { api.close(); } catch (_) {} }
   }
 }
 
