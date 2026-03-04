@@ -191,6 +191,13 @@ exports.dashboard = async (req, res) => {
         };
       }
     });
+    // Se há snapshot atual, remove entradas 24h com nomes antigos (fontes distintas podem
+    // usar nomes diferentes, ex: "ether5" vs "Gardeline"). Mantém apenas as interfaces
+    // presentes no snapshot mais recente para evitar cards duplicados.
+    if (wanLatest.length > 0) {
+      const currentIfaces = new Set(wanLatest.map(r => r.interface_name));
+      Object.keys(wanMap).forEach(k => { if (!currentIfaces.has(k)) delete wanMap[k]; });
+    }
     const wanCards = Object.values(wanMap);
 
     // Monta array de 7 dias com contagens de cadastros
