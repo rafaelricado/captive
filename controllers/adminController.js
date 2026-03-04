@@ -1,9 +1,9 @@
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
-const { Op } = require('sequelize');
+const { Op, fn, col } = require('sequelize');
 const { User, Session, Setting, AccessPoint, ApPingHistory,
-  TrafficRanking, WanStat, ClientConnection, DnsEntry, SecurityEvent, sequelize } = require('../models');
+  TrafficRanking, WanStat, ClientConnection, DnsEntry, SecurityEvent, DeviceHistory, sequelize } = require('../models');
 const mikrotikService = require('../services/mikrotikService');
 const { pingAllAccessPoints, isValidIPv4 } = require('../services/pingService');
 const logger = require('../utils/logger');
@@ -880,6 +880,98 @@ exports.dns = async (req, res) => {
     });
   } catch (err) {
     logger.error(`[Admin] Erro ao listar DNS: ${err.message}`);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+// ─── Histórico de Dispositivos ───────────────────────────────────────────────
+
+const MAC_RE_STRICT = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
+
+exports.devices = async (req, res) => {
+  try {
+    const page   = Math.max(0, parseInt(req.query.page || '0', 10) || 0);
+    const offset = page * PAGE_SIZE;
+    const q      = (req.query.q || '').trim();
+
+    const where = q ? {
+      [Op.or]: [
+        { mac_address: { [Op.iLike]: `%${q}%` } },
+        { ip_address:  { [Op.iLike]: `%${q}%` } },
+        { hostname:    { [Op.iLike]: `%${q}%` } }
+      ]
+    } : {};
+
+    const [devices, total] = await Promise.all([
+      DeviceHistory.findAll({
+        attributes: [
+          'mac_address',
+          [fn('MAX', col('hostname')),                          'hostname'],
+          [fn('COUNT', fn('DISTINCT', col('ip_address'))),      'ip_count'],
+          [fn('MIN', col('first_seen')),                        'first_seen'],
+          [fn('MAX', col('last_seen')),                         'last_seen'],
+          [fn('MAX', col('router_name')),                       'router_name']
+        ],
+        where,
+        group: ['mac_address'],
+        order: [[fn('MAX', col('last_seen')), 'DESC']],
+        limit: PAGE_SIZE,
+        offset,
+        raw: true
+      }),
+      DeviceHistory.count({ distinct: true, col: 'mac_address', where })
+    ]);
+
+    res.render('admin/devices', {
+      devices: devices.map(d => ({
+        mac_address: d.mac_address,
+        hostname:    d.hostname   || '—',
+        ip_count:    Number(d.ip_count),
+        first_seen:  formatDate(d.first_seen),
+        last_seen:   formatDate(d.last_seen),
+        router_name: d.router_name || '—'
+      })),
+      q, page,
+      totalPages: Math.ceil(total / PAGE_SIZE),
+      total,
+      pageLabel: page + 1,
+      pageObj: 'devices'
+    });
+  } catch (err) {
+    logger.error(`[Admin] Erro ao listar dispositivos: ${err.message}`);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+exports.deviceDetail = async (req, res) => {
+  try {
+    const mac = (req.params.mac || '').trim().toUpperCase();
+    if (!MAC_RE_STRICT.test(mac)) return res.status(400).send('MAC inválido.');
+
+    const entries = await DeviceHistory.findAll({
+      where: { mac_address: mac },
+      order: [['last_seen', 'DESC']],
+      raw: true
+    });
+
+    if (entries.length === 0) return res.status(404).send('Dispositivo não encontrado.');
+
+    const hostname = entries.find(e => e.hostname)?.hostname || mac;
+
+    res.render('admin/device_detail', {
+      mac,
+      hostname,
+      entries: entries.map(e => ({
+        ip_address:  e.ip_address,
+        hostname:    e.hostname    || '—',
+        first_seen:  formatDate(e.first_seen),
+        last_seen:   formatDate(e.last_seen),
+        router_name: e.router_name || '—'
+      })),
+      pageObj: 'devices'
+    });
+  } catch (err) {
+    logger.error(`[Admin] Erro ao detalhar dispositivo: ${err.message}`);
     res.status(500).send('Erro interno.');
   }
 };

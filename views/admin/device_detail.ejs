@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dispositivo <%= mac %> &mdash; Captive Portal</title>
+  <%- include('_head') %>
+</head>
+<body>
+  <%- include('_nav', { page: pageObj }) %>
+
+  <main class="container">
+    <div style="margin-bottom:16px">
+      <a href="/admin/devices" style="font-size:.875rem;color:#6b7280">&larr; Voltar para dispositivos</a>
+    </div>
+
+    <h2 class="page-title">
+      <span style="font-family:monospace"><%= mac %></span>
+      <% if (hostname !== mac) { %>
+        <span style="font-size:1rem;font-weight:400;color:#6b7280;margin-left:8px">&mdash; <%= hostname %></span>
+      <% } %>
+    </h2>
+
+    <p class="meta"><%= entries.length %> combinação(ões) IP encontrada(s)</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>IP</th>
+            <th>Hostname</th>
+            <th>Primeiro uso</th>
+            <th>Último uso</th>
+            <th>Roteador</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (entries.length === 0) { %>
+            <tr><td colspan="5" style="text-align:center;color:#9ca3af">Nenhum registro.</td></tr>
+          <% } %>
+          <% entries.forEach(e => { %>
+            <tr>
+              <td style="font-family:monospace"><%= e.ip_address %></td>
+              <td><%= e.hostname %></td>
+              <td style="font-size:.8rem;color:#6b7280"><%= e.first_seen %></td>
+              <td style="font-size:.8rem;color:#6b7280"><%= e.last_seen %></td>
+              <td><%= e.router_name %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <%- include('_footer') %>
+</body>
+</html>

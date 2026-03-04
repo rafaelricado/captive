@@ -9,6 +9,7 @@ const WanStat = require('./WanStat');
 const ClientConnection = require('./ClientConnection');
 const DnsEntry = require('./DnsEntry');
 const SecurityEvent = require('./SecurityEvent');
+const DeviceHistory = require('./DeviceHistory');
 
 // Associação: histórico pertence ao ponto de acesso
 ApPingHistory.belongsTo(AccessPoint, { foreignKey: 'ap_id', as: 'AccessPoint' });
@@ -68,6 +69,6 @@ const initDatabase = async () => {
 
 module.exports = {
   sequelize, User, Session, Setting, AccessPoint, ApPingHistory,
-  TrafficRanking, WanStat, ClientConnection, DnsEntry, SecurityEvent,
+  TrafficRanking, WanStat, ClientConnection, DnsEntry, SecurityEvent, DeviceHistory,
   initDatabase
 };

@@ -117,6 +117,11 @@ router.get('/wan', adminAuth, adminController.wan);
 router.get('/connections', adminAuth, adminController.connections);
 router.get('/dns', adminAuth, adminController.dns);
 
+// Histórico de dispositivos (protegido)
+// IMPORTANTE: rota estática '/devices' deve vir antes de '/devices/:mac'
+router.get('/devices',      adminAuth, adminController.devices);
+router.get('/devices/:mac', adminAuth, adminController.deviceDetail);
+
 // Endpoints JSON para auto-refresh das páginas (protegido)
 router.get('/traffic/data', adminAuth, adminController.trafficData);
 router.get('/wan/data', adminAuth, adminController.wanData);

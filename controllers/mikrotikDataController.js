@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { Op } = require('sequelize');
-const { TrafficRanking, WanStat, ClientConnection, DnsEntry, Setting, sequelize } = require('../models');
+const { TrafficRanking, WanStat, ClientConnection, DnsEntry, Setting, DeviceHistory, sequelize } = require('../models');
 const logger = require('../utils/logger');
 
 // Formata bytes em string legível (usado nos logs)
@@ -140,6 +140,23 @@ exports.receiveTraffic = async (req, res) => {
     if (clients.length > 0) {
       const rows = clients.map(c => ({ ...c, router_name: routerName, recorded_at: now }));
       await TrafficRanking.bulkCreate(rows);
+
+      // Upsert no histórico permanente de dispositivos (MAC → IP → primeira/última vez visto)
+      const histRows = clients
+        .filter(c => c.mac_address)
+        .map(c => ({
+          mac_address: c.mac_address,
+          ip_address:  c.ip_address,
+          hostname:    c.hostname || null,
+          router_name: routerName,
+          first_seen:  now,
+          last_seen:   now
+        }));
+      if (histRows.length > 0) {
+        await DeviceHistory.bulkCreate(histRows, {
+          updateOnDuplicate: ['last_seen', 'hostname']
+        });
+      }
     }
 
     // Parseia e insere estatísticas WAN
