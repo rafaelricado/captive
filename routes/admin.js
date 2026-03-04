@@ -63,7 +63,10 @@ async function getSecurityUnreadCount() {
   const value = await SecurityEvent.count({
     where: {
       acknowledged: false,
-      [Op.and]: [sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'attempt'`)]
+      [Op.and]: [
+        sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'attempt'`),
+        sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'register_attempt'`)
+      ]
     }
   });
   _securityCountCache = { value, expiresAt: Date.now() + 30_000 };
@@ -120,9 +123,10 @@ router.get('/wan/data', adminAuth, adminController.wanData);
 router.get('/connections/data', adminAuth, adminController.connectionsData);
 
 // Segurança — Eventos detectados (protegido)
-// IMPORTANTE: /acknowledge-all deve vir antes de /:id/acknowledge
+// IMPORTANTE: rotas estáticas devem vir antes de /:id/*
 router.get('/security', adminAuth, adminController.security);
 router.get('/security/data', adminAuth, adminController.securityData);
+router.get('/security/export', adminAuth, adminController.securityExport);
 router.post('/security/acknowledge-all', adminAuth, verifyCsrf, adminController.acknowledgeAllSecurityEvents);
 router.post('/security/:id/acknowledge', adminAuth, verifyCsrf, adminController.acknowledgeSecurityEvent);
 

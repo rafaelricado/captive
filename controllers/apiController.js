@@ -7,13 +7,15 @@ const { getOrgSettings } = require('../utils/orgSettings');
 const logger = require('../utils/logger');
 
 // Registra tentativa de autenticação falha para detecção de força bruta
+// details.subtype permite distinguir 'attempt' (login) de 'register_attempt' (cadastro)
 async function logAuthAttempt(req, reason, details = {}) {
   try {
+    const { subtype = 'attempt', ...rest } = details;
     await SecurityEvent.create({
       event_type: 'brute_force',
       severity: 'low',
       src_ip: req.ip || 'unknown',
-      details: { subtype: 'attempt', reason, ...details }
+      details: { subtype, reason, ...rest }
     });
   } catch (err) {
     logger.warn(`[Security] Falha ao registrar tentativa de auth: ${err.message}`);
@@ -79,7 +81,7 @@ exports.register = async (req, res) => {
     const existingUser = await User.findOne({ where: { cpf: cpfClean } });
 
     if (existingUser && existingUser.data_nascimento) {
-      await logAuthAttempt(req, 'cpf_ja_cadastrado', { tab: 'cadastro' });
+      await logAuthAttempt(req, 'cpf_ja_cadastrado', { subtype: 'register_attempt', tab: 'cadastro' });
       return await renderError('CPF já cadastrado. Use a aba "Já tenho cadastro" para acessar.');
     }
 

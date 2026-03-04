@@ -369,16 +369,37 @@ function isPrivateUrl(urlStr) {
 }
 
 async function fetchAllSettings() {
-  const [orgName, orgLogo, sessionDuration, bgColor1, bgColor2, alertWebhookUrl, mikrotikDataKey] = await Promise.all([
+  const [
+    orgName, orgLogo, sessionDuration, bgColor1, bgColor2, alertWebhookUrl, mikrotikDataKey,
+    securityWhitelistRaw, bruteForceThreshold, portScanThreshold,
+    registerThreshold, dnsThreshold, anomalyStddev
+  ] = await Promise.all([
     Setting.get('organization_name', 'Captive Portal'),
     Setting.get('organization_logo', ''),
     Setting.getSessionDuration(),
     Setting.get('portal_bg_color_1', '#0d4e8b'),
     Setting.get('portal_bg_color_2', '#1a7bc4'),
     Setting.get('alert_webhook_url', ''),
-    Setting.get('mikrotik_data_key', '')
+    Setting.get('mikrotik_data_key', ''),
+    Setting.get('security_ip_whitelist', '[]'),
+    Setting.get('security_brute_force_threshold', '5'),
+    Setting.get('security_port_scan_threshold', '20'),
+    Setting.get('security_register_threshold', '5'),
+    Setting.get('security_dns_threshold', '50'),
+    Setting.get('security_anomaly_stddev', '3')
   ]);
-  return { orgName, orgLogo, sessionDuration, bgColor1, bgColor2, alertWebhookUrl, mikrotikDataKey };
+
+  let securityWhitelist = '';
+  try {
+    const arr = JSON.parse(securityWhitelistRaw);
+    if (Array.isArray(arr)) securityWhitelist = arr.join('\n');
+  } catch (_) {}
+
+  return {
+    orgName, orgLogo, sessionDuration, bgColor1, bgColor2, alertWebhookUrl, mikrotikDataKey,
+    securityWhitelist, bruteForceThreshold, portScanThreshold,
+    registerThreshold, dnsThreshold, anomalyStddev
+  };
 }
 
 exports.showSettings = async (req, res) => {
@@ -450,6 +471,47 @@ exports.saveSettings = async (req, res) => {
 
     // Chave de ingestão Mikrotik (opcional — sobrescreve env se preenchida)
     await Setting.set('mikrotik_data_key', (mikrotik_data_key || '').trim());
+
+    // ── Configurações de segurança ──
+    const {
+      security_ip_whitelist,
+      security_brute_force_threshold, security_port_scan_threshold,
+      security_register_threshold, security_dns_threshold, security_anomaly_stddev
+    } = req.body;
+
+    // Whitelist: uma linha por IP, valida formato básico
+    const IP_RE = /^[\d.a-fA-F:]{1,45}$/;
+    const whitelistLines = (security_ip_whitelist || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
+    const invalidIps = whitelistLines.filter(ip => !IP_RE.test(ip));
+    if (invalidIps.length > 0) {
+      return await renderSettings(null, `IP(s) inválido(s) na whitelist: ${invalidIps.slice(0, 3).join(', ')}`);
+    }
+    if (whitelistLines.length > 100) {
+      return await renderSettings(null, 'Whitelist não pode ter mais de 100 IPs.');
+    }
+    await Setting.set('security_ip_whitelist', JSON.stringify(whitelistLines));
+
+    // Thresholds: inteiros >= 1
+    const thresholds = [
+      ['security_brute_force_threshold', security_brute_force_threshold, 1, 10000],
+      ['security_port_scan_threshold',   security_port_scan_threshold,   1, 10000],
+      ['security_register_threshold',    security_register_threshold,    1, 10000],
+      ['security_dns_threshold',         security_dns_threshold,         1, 10000]
+    ];
+    for (const [key, val, min, max] of thresholds) {
+      const n = parseInt(val, 10);
+      if (isNaN(n) || n < min || n > max) {
+        return await renderSettings(null, `Limiar inválido para ${key}. Use um valor entre ${min} e ${max}.`);
+      }
+      await Setting.set(key, String(n));
+    }
+
+    // Fator de desvio padrão: float 1.0–10.0
+    const stddev = parseFloat(security_anomaly_stddev);
+    if (isNaN(stddev) || stddev < 1 || stddev > 10) {
+      return await renderSettings(null, 'Fator de desvio padrão deve ser entre 1.0 e 10.0.');
+    }
+    await Setting.set('security_anomaly_stddev', String(stddev));
 
     // Invalida cache de settings de marca (chave usada em utils/orgSettings.js)
     settingsCache.invalidate('org_settings');
@@ -925,10 +987,15 @@ function formatSeverity(s) {
 
 function summarizeDetails(details) {
   if (!details) return '—';
-  if (details.subtype === 'attempt') return `Tentativa: ${details.reason || ''}`;
-  if (details.attempt_count) return `${details.attempt_count} tentativas em ${details.window_minutes || '?'} min`;
+  if (details.subtype === 'attempt')          return `Tentativa de login: ${details.reason || ''}`;
+  if (details.subtype === 'register_attempt') return `Tentativa de cadastro: ${details.reason || ''}`;
+  if (details.subtype === 'register_flood')   return `${details.attempt_count} cadastros repetidos em ${details.window_minutes || '?'} min`;
+  if (details.subtype === 'dns_tunneling')    return `${details.dns_count} queries DNS em ${details.window_minutes || '?'} min`;
+  if (details.subtype === 'mac_spoofing')     return `${details.mac_count} MACs distintos: ${(details.macs || []).join(', ')}`;
+  if (details.subtype === 'correlation')      return `Múltiplos ataques: ${(details.event_types || []).join(', ')}`;
+  if (details.attempt_count)  return `${details.attempt_count} tentativas em ${details.window_minutes || '?'} min`;
   if (details.distinct_ports) return `${details.distinct_ports} portas distintas em ${details.window_minutes || '?'} min`;
-  if (details.bytes_down_mb) return `${details.bytes_down_mb} MB baixados (${details.stddev_factor || '?'}× desvio padrão)`;
+  if (details.bytes_down_mb)  return `${details.bytes_down_mb} MB baixados (${details.stddev_factor || '?'}× desvio padrão)`;
   return JSON.stringify(details).slice(0, 80);
 }
 
@@ -947,16 +1014,39 @@ function buildSecurityList(events) {
 }
 
 const SECURITY_RETENTION_DAYS = 30;
+const VALID_EVENT_TYPES  = ['brute_force', 'port_scan', 'traffic_anomaly'];
+const VALID_SEVERITIES   = ['low', 'medium', 'high'];
+const VALID_PERIODS      = ['24h', '7d'];
+const IP_FILTER_RE       = /^[\d.a-fA-F:]{1,45}$/;
 
-async function fetchSecurityEvents() {
-  const since = new Date(Date.now() - SECURITY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+function parseSecurityFilters(query) {
+  return {
+    type:     VALID_EVENT_TYPES.includes(query.type)     ? query.type     : '',
+    severity: VALID_SEVERITIES.includes(query.severity)  ? query.severity : '',
+    ip:       IP_FILTER_RE.test(query.ip || '')          ? query.ip       : '',
+    period:   VALID_PERIODS.includes(query.period)       ? query.period   : ''
+  };
+}
+
+async function fetchSecurityEvents(filters = {}) {
+  const days = filters.period === '24h' ? 1 : SECURITY_RETENTION_DAYS;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  const where = {
+    detected_at: { [Op.gte]: since },
+    [Op.and]: [
+      sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'attempt'`),
+      sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'register_attempt'`)
+    ]
+  };
+  if (filters.type)     where.event_type = filters.type;
+  if (filters.severity) where.severity   = filters.severity;
+  if (filters.ip)       where.src_ip     = filters.ip;
+
   return SecurityEvent.findAll({
-    where: {
-      detected_at: { [Op.gte]: since },
-      [Op.and]: [sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'attempt'`)]
-    },
+    where,
     order: [['detected_at', 'DESC']],
-    limit: 200
+    limit: 500
   });
 }
 
@@ -971,7 +1061,10 @@ async function buildSecurityChart() {
     ],
     where: {
       detected_at: { [Op.gte]: since },
-      [Op.and]: [sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'attempt'`)]
+      [Op.and]: [
+        sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'attempt'`),
+        sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'register_attempt'`)
+      ]
     },
     group: [
       sequelize.fn('DATE', sequelize.fn('timezone', DISPLAY_TIMEZONE, sequelize.col('detected_at'))),
@@ -1003,16 +1096,59 @@ async function buildSecurityChart() {
   return { labels, datasets };
 }
 
+// Agrega eventos das últimas 24h por hora e por tipo para o gráfico horário
+async function buildSecurityHourlyChart() {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const rows = await SecurityEvent.findAll({
+    attributes: ['event_type', 'detected_at'],
+    where: {
+      detected_at: { [Op.gte]: since },
+      [Op.and]: [
+        sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'attempt'`),
+        sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'register_attempt'`)
+      ]
+    },
+    raw: true
+  });
+
+  // Gera slots horários para as últimas 24h (em UTC para matching)
+  const nowHour = Math.floor(Date.now() / 3600000) * 3600000;
+  const labels   = [];
+  const slotKeys = [];
+  for (let i = 23; i >= 0; i--) {
+    const slotStart = new Date(nowHour - i * 3600000);
+    labels.push(slotStart.toLocaleTimeString('pt-BR', { timeZone: DISPLAY_TIMEZONE, hour: '2-digit', minute: '2-digit' }));
+    slotKeys.push(slotStart.toISOString().slice(0, 13)); // "YYYY-MM-DDTHH" UTC
+  }
+
+  const types = ['brute_force', 'port_scan', 'traffic_anomaly'];
+  const datasets = {};
+  types.forEach(t => { datasets[t] = new Array(24).fill(0); });
+
+  rows.forEach(r => {
+    const key = new Date(Math.floor(new Date(r.detected_at).getTime() / 3600000) * 3600000).toISOString().slice(0, 13);
+    const idx = slotKeys.indexOf(key);
+    if (idx !== -1 && datasets[r.event_type]) datasets[r.event_type][idx]++;
+  });
+
+  return { labels, datasets };
+}
+
 exports.security = async (req, res) => {
   try {
-    const [events, chartData] = await Promise.all([fetchSecurityEvents(), buildSecurityChart()]);
+    const filters = parseSecurityFilters(req.query);
+    const qs = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v))).toString();
+    const [events, chartData, hourlyChart] = await Promise.all([
+      fetchSecurityEvents(filters), buildSecurityChart(), buildSecurityHourlyChart()
+    ]);
     const list = buildSecurityList(events);
     const unacknowledgedCount = list.filter(e => !e.acknowledged).length;
     const counts = { brute_force: 0, port_scan: 0, traffic_anomaly: 0 };
     list.forEach(e => { if (counts[e.event_type] !== undefined) counts[e.event_type]++; });
 
     res.render('admin/security', {
-      events: list, counts, unacknowledgedCount, chartData,
+      events: list, counts, unacknowledgedCount, chartData, hourlyChart,
+      filters, queryString: qs,
       page: 'security', pageObj: 'security',
       csrfToken: res.locals.csrfToken
     });
@@ -1024,15 +1160,48 @@ exports.security = async (req, res) => {
 
 exports.securityData = async (req, res) => {
   try {
-    const [events, chartData] = await Promise.all([fetchSecurityEvents(), buildSecurityChart()]);
+    const filters = parseSecurityFilters(req.query);
+    const [events, chartData, hourlyChart] = await Promise.all([
+      fetchSecurityEvents(filters), buildSecurityChart(), buildSecurityHourlyChart()
+    ]);
     const list = buildSecurityList(events);
     const unacknowledgedCount = list.filter(e => !e.acknowledged).length;
     const counts = { brute_force: 0, port_scan: 0, traffic_anomaly: 0 };
     list.forEach(e => { if (counts[e.event_type] !== undefined) counts[e.event_type]++; });
-    res.json({ events: list, counts, unacknowledgedCount, chartData });
+    res.json({ events: list, counts, unacknowledgedCount, chartData, hourlyChart });
   } catch (err) {
     logger.error(`[Admin] Erro em securityData: ${err.message}`);
     res.status(500).json({ error: 'Erro interno.' });
+  }
+};
+
+exports.securityExport = async (req, res) => {
+  try {
+    const filters = parseSecurityFilters(req.query);
+    const events = await fetchSecurityEvents(filters);
+    const list = buildSecurityList(events);
+
+    const escapeCSV = (val) => {
+      if (val == null) return '';
+      const s = String(val);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+
+    const header = 'Detectado em,Tipo,Severidade,IP Origem,Detalhes,Status';
+    const rows = list.map(e => [
+      e.detected_at, e.event_type_label, e.severity_label,
+      e.src_ip, e.details_summary, e.acknowledged ? 'Reconhecido' : 'Pendente'
+    ].map(escapeCSV).join(','));
+
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="seguranca_${date}.csv"`);
+    audit('security.export', { count: list.length, ip: req.ip });
+    res.send('\uFEFF' + header + '\n' + rows.join('\n'));
+  } catch (err) {
+    logger.error(`[Admin] Erro ao exportar segurança: ${err.message}`);
+    res.status(500).send('Erro interno.');
   }
 };
 

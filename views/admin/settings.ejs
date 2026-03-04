@@ -298,6 +298,64 @@
         </div>
       </div>
 
+      <!-- Segurança -->
+      <div class="settings-card">
+        <h3>Detecção de Ataques</h3>
+
+        <div class="field">
+          <label for="security_ip_whitelist">Whitelist de IPs (um por linha)</label>
+          <textarea id="security_ip_whitelist" name="security_ip_whitelist"
+                    rows="4" style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:.85rem;font-family:monospace;resize:vertical"
+                    placeholder="192.168.1.1&#10;10.0.0.1"><%= securityWhitelist %></textarea>
+          <p class="hint">IPs que nunca gerarão alertas de segurança (ex: admin, monitoramento).</p>
+        </div>
+
+        <p style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:12px">Limiares de detecção</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:4px">
+          <div class="field" style="margin-bottom:0">
+            <label for="security_brute_force_threshold">Força bruta (tentativas de login)</label>
+            <div class="input-with-suffix">
+              <input type="number" id="security_brute_force_threshold" name="security_brute_force_threshold"
+                     value="<%= bruteForceThreshold %>" min="1" max="10000">
+              <span>tentativas / 15 min</span>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label for="security_register_threshold">Flood de cadastro (tentativas)</label>
+            <div class="input-with-suffix">
+              <input type="number" id="security_register_threshold" name="security_register_threshold"
+                     value="<%= registerThreshold %>" min="1" max="10000">
+              <span>tentativas / 15 min</span>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label for="security_port_scan_threshold">Port scan (portas distintas)</label>
+            <div class="input-with-suffix">
+              <input type="number" id="security_port_scan_threshold" name="security_port_scan_threshold"
+                     value="<%= portScanThreshold %>" min="1" max="10000">
+              <span>portas / 10 min</span>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label for="security_dns_threshold">DNS tunneling (queries)</label>
+            <div class="input-with-suffix">
+              <input type="number" id="security_dns_threshold" name="security_dns_threshold"
+                     value="<%= dnsThreshold %>" min="1" max="10000">
+              <span>queries / 10 min</span>
+            </div>
+          </div>
+        </div>
+        <div class="field" style="margin-top:14px">
+          <label for="security_anomaly_stddev">Anomalia de tráfego (fator desvio padrão)</label>
+          <div class="input-with-suffix">
+            <input type="number" id="security_anomaly_stddev" name="security_anomaly_stddev"
+                   value="<%= anomalyStddev %>" min="1" max="10" step="0.1" style="flex:0 0 80px">
+            <span>× desvio padrão (padrão: 3)</span>
+          </div>
+          <p class="hint">Valores menores = mais sensível. Valores maiores = menos falsos positivos.</p>
+        </div>
+      </div>
+
       <button type="submit" class="btn-save">Salvar configurações</button>
     </form>
   </main>

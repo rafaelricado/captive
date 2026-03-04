@@ -54,6 +54,14 @@ const initDatabase = async () => {
     defaults: { value: process.env.MIKROTIK_DATA_KEY || '' }
   });
 
+  // Configurações do detector de segurança
+  await Setting.findOrCreate({ where: { key: 'security_ip_whitelist' },          defaults: { value: '[]' } });
+  await Setting.findOrCreate({ where: { key: 'security_brute_force_threshold' }, defaults: { value: '5' } });
+  await Setting.findOrCreate({ where: { key: 'security_port_scan_threshold' },   defaults: { value: '20' } });
+  await Setting.findOrCreate({ where: { key: 'security_register_threshold' },    defaults: { value: '5' } });
+  await Setting.findOrCreate({ where: { key: 'security_dns_threshold' },         defaults: { value: '50' } });
+  await Setting.findOrCreate({ where: { key: 'security_anomaly_stddev' },        defaults: { value: '3' } });
+
   const logger = require('../utils/logger');
   logger.info(`[DB] Banco sincronizado. Duração da sessão: ${sessionSetting.value}h`);
 };

@@ -18,7 +18,7 @@
     .btn-ack {
       background: none; border: 1px solid #16a34a; color: #16a34a;
       padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: .78rem;
-      transition: all .15s;
+      transition: all .15s; text-decoration: none; display: inline-block;
     }
     .btn-ack:hover { background: #16a34a; color: #fff; }
     .card-purple { border-top: 4px solid #7c3aed; }
@@ -32,6 +32,31 @@
       font-size: .7rem; padding: 2px 8px; font-weight: 700;
       vertical-align: middle; margin-left: 8px;
     }
+    .filter-bar {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+      padding: 12px 16px; margin-bottom: 16px;
+    }
+    .filter-bar select, .filter-bar input[type="text"] {
+      padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+      font-size: .82rem; color: #1f2937; background: #f9fafb;
+    }
+    .btn-filter {
+      padding: 6px 14px; background: #0d4e8b; color: #fff;
+      border: none; border-radius: 6px; font-size: .82rem;
+      cursor: pointer; font-weight: 600;
+    }
+    .btn-clear { font-size: .82rem; color: #6b7280; text-decoration: none; }
+    .btn-clear:hover { color: #0d4e8b; }
+    .ip-link { color: inherit; text-decoration: none; }
+    .ip-link:hover code { background: #dbeafe; }
+    .chart-wrap {
+      background: #fff; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08);
+      padding: 16px 24px;
+    }
+    .chart-title { font-size: .85rem; font-weight: 600; color: #374151; margin-bottom: 10px; }
+    .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    @media (max-width: 768px) { .charts-row { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -60,11 +85,45 @@
       </div>
     </div>
 
-    <div class="chart-wrap" style="background:#fff;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.08);padding:20px 24px;margin-bottom:24px">
-      <p style="font-size:.85rem;font-weight:600;color:#374151;margin-bottom:12px">Eventos nos últimos 7 dias</p>
-      <canvas id="security-chart" height="80"></canvas>
+    <!-- Gráficos lado a lado -->
+    <div class="charts-row">
+      <div class="chart-wrap">
+        <p class="chart-title">Eventos nos últimos 7 dias</p>
+        <canvas id="security-chart" height="120"></canvas>
+      </div>
+      <div class="chart-wrap">
+        <p class="chart-title">Eventos nas últimas 24 horas</p>
+        <canvas id="security-chart-hourly" height="120"></canvas>
+      </div>
     </div>
 
+    <!-- Filtros -->
+    <form method="GET" action="/admin/security" class="filter-bar">
+      <select name="type">
+        <option value="">Todos os tipos</option>
+        <option value="brute_force"     <%= filters.type === 'brute_force'     ? 'selected' : '' %>>Força Bruta</option>
+        <option value="port_scan"       <%= filters.type === 'port_scan'       ? 'selected' : '' %>>Port Scan</option>
+        <option value="traffic_anomaly" <%= filters.type === 'traffic_anomaly' ? 'selected' : '' %>>Anomalia</option>
+      </select>
+      <select name="severity">
+        <option value="">Todas as severidades</option>
+        <option value="low"    <%= filters.severity === 'low'    ? 'selected' : '' %>>Baixa</option>
+        <option value="medium" <%= filters.severity === 'medium' ? 'selected' : '' %>>Média</option>
+        <option value="high"   <%= filters.severity === 'high'   ? 'selected' : '' %>>Alta</option>
+      </select>
+      <input type="text" name="ip" value="<%= filters.ip || '' %>" placeholder="Filtrar por IP" style="width:140px">
+      <select name="period">
+        <option value="">30 dias</option>
+        <option value="7d"  <%= filters.period === '7d'  ? 'selected' : '' %>>7 dias</option>
+        <option value="24h" <%= filters.period === '24h' ? 'selected' : '' %>>24 horas</option>
+      </select>
+      <button type="submit" class="btn-filter">Filtrar</button>
+      <% if (filters.type || filters.severity || filters.ip || filters.period) { %>
+        <a href="/admin/security" class="btn-clear">Limpar</a>
+      <% } %>
+    </form>
+
+    <!-- Ações em massa -->
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
       <p class="meta" id="meta-line" style="margin:0">
         <%= events.length %> evento(s) &mdash; atualiza em <span id="rt">30s</span>
@@ -77,6 +136,10 @@
           </button>
         </form>
       <% } %>
+      <a href="/admin/security/export<%= queryString ? '?' + queryString : '' %>"
+         class="btn-ack" style="font-size:.8rem;padding:5px 14px">
+        Exportar CSV
+      </a>
     </div>
 
     <div class="table-wrap">
@@ -101,7 +164,11 @@
               <td><%= e.detected_at %></td>
               <td><span class="badge badge-type-<%= e.event_type %>"><%= e.event_type_label %></span></td>
               <td><span class="badge badge-severity-<%= e.severity %>"><%= e.severity_label %></span></td>
-              <td><code><%= e.src_ip %></code></td>
+              <td>
+                <a href="/admin/security?ip=<%= e.src_ip %>" class="ip-link">
+                  <code><%= e.src_ip %></code>
+                </a>
+              </td>
               <td><%= e.details_summary %></td>
               <td>
                 <% if (e.acknowledged) { %>
@@ -131,7 +198,7 @@
   (function () {
     const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-    /* ── Gráfico de eventos por dia ── */
+    /* ── Gráfico 7 dias (barras empilhadas) ── */
     const initChart = <%- JSON.stringify(chartData) %>;
     const ctx = document.getElementById('security-chart').getContext('2d');
     const secChart = new Chart(ctx, {
@@ -146,19 +213,50 @@
       },
       options: {
         responsive: true,
-        plugins: { legend: { position: 'top' } },
+        plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
         scales: {
-          x: { stacked: true, grid: { color: '#f3f4f6' } },
-          y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f3f4f6' } }
+          x: { stacked: true, grid: { color: '#f3f4f6' }, ticks: { font: { size: 11 } } },
+          y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: '#f3f4f6' } }
         }
       }
     });
+
+    /* ── Gráfico 24 horas (linhas) ── */
+    const initHourly = <%- JSON.stringify(hourlyChart) %>;
+    const ctxH = document.getElementById('security-chart-hourly').getContext('2d');
+    const hourlyChartObj = new Chart(ctxH, {
+      type: 'line',
+      data: {
+        labels: initHourly.labels,
+        datasets: [
+          { label: 'Força Bruta',        data: initHourly.datasets.brute_force,     borderColor: '#7c3aed', backgroundColor: '#ede9fe40', fill: true,  tension: 0.3, borderWidth: 2, pointRadius: 2 },
+          { label: 'Varredura de Portas', data: initHourly.datasets.port_scan,       borderColor: '#1d4ed8', backgroundColor: 'transparent', fill: false, tension: 0.3, borderWidth: 2, pointRadius: 2 },
+          { label: 'Anomalia Tráfego',   data: initHourly.datasets.traffic_anomaly, borderColor: '#065f46', backgroundColor: 'transparent', fill: false, tension: 0.3, borderWidth: 2, pointRadius: 2 }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
+        scales: {
+          x: { grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 }, maxTicksLimit: 8 } },
+          y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: '#f3f4f6' } }
+        }
+      }
+    });
+
     function updateChart(cd) {
       secChart.data.labels = cd.labels;
       secChart.data.datasets[0].data = cd.datasets.brute_force;
       secChart.data.datasets[1].data = cd.datasets.port_scan;
       secChart.data.datasets[2].data = cd.datasets.traffic_anomaly;
       secChart.update('none');
+    }
+    function updateHourlyChart(cd) {
+      hourlyChartObj.data.labels = cd.labels;
+      hourlyChartObj.data.datasets[0].data = cd.datasets.brute_force;
+      hourlyChartObj.data.datasets[1].data = cd.datasets.port_scan;
+      hourlyChartObj.data.datasets[2].data = cd.datasets.traffic_anomaly;
+      hourlyChartObj.update('none');
     }
 
     function esc(s) {
@@ -184,7 +282,7 @@
         <td>${esc(e.detected_at)}</td>
         <td>${typeBadge(e.event_type, e.event_type_label)}</td>
         <td>${severityBadge(e.severity, e.severity_label)}</td>
-        <td><code>${esc(e.src_ip)}</code></td>
+        <td><a href="/admin/security?ip=${esc(e.src_ip)}" class="ip-link"><code>${esc(e.src_ip)}</code></a></td>
         <td>${esc(e.details_summary)}</td>
         <td>${e.acknowledged
           ? '<span class="badge badge-green">Reconhecido</span>'
@@ -192,21 +290,24 @@
         <td>${e.acknowledged ? '' : ackForm(e.id)}</td>
       </tr>`).join('');
     }
+
     async function doRefresh() {
       try {
-        const r = await fetch('/admin/security/data', { credentials: 'same-origin' });
+        const qs = new URLSearchParams(window.location.search).toString();
+        const r = await fetch('/admin/security/data' + (qs ? '?' + qs : ''), { credentials: 'same-origin' });
         if (!r.ok) return;
         const data = await r.json();
         document.getElementById('tbody-data').innerHTML = buildRows(data.events);
-        // Atualiza cards de contagem
-        document.getElementById('count-brute-force').textContent    = data.counts.brute_force;
-        document.getElementById('count-port-scan').textContent      = data.counts.port_scan;
+        document.getElementById('count-brute-force').textContent     = data.counts.brute_force;
+        document.getElementById('count-port-scan').textContent       = data.counts.port_scan;
         document.getElementById('count-traffic-anomaly').textContent = data.counts.traffic_anomaly;
-        if (data.chartData) updateChart(data.chartData);
+        if (data.chartData)   updateChart(data.chartData);
+        if (data.hourlyChart) updateHourlyChart(data.hourlyChart);
         const meta = document.getElementById('meta-line');
         if (meta) meta.innerHTML = `${data.events.length} evento(s) &mdash; atualiza em <span id="rt">30s</span>`;
       } catch (e) {}
     }
+
     let ticks = 30;
     setInterval(() => {
       ticks--;
