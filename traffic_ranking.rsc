@@ -1,6 +1,8 @@
 # ============================================================
 # RANKING DE TRÁFEGO - COLETA E ENVIO PARA SERVIDOR LOCAL
 # Router: CCR1009-7G-1C-1S+ | RouterOS 7.20.6
+# Gerado em: 2026-03-04
+# Versão:    2 (fix: status WAN enviado mesmo sem trafego de clientes)
 # ============================================================
 # Usa Mangle Rules com passthrough em custom chains para
 # contabilizar tráfego individual de cada IP da rede.
