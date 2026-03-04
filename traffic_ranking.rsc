@@ -235,48 +235,47 @@
     :set count (\$count + 1)\r\
 }\r\
 \r\
+:local routerName [/system identity get name]\r\
+\r\
+# Coleta status das interfaces WAN (sempre, independente do trafego de clientes)\r\
+:local ifaceData \"\"\r\
+:do {\r\
+    :local e5rx [/interface get ether5 rx-byte]\r\
+    :local e5tx [/interface get ether5 tx-byte]\r\
+    :global rankPrevE5rx\r\
+    :global rankPrevE5tx\r\
+    :local deltaRx 0\r\
+    :local deltaTx 0\r\
+    :if ([:typeof \$rankPrevE5rx] != \"nothing\") do={\r\
+        :if (\$e5rx >= \$rankPrevE5rx) do={ :set deltaRx (\$e5rx - \$rankPrevE5rx) } else={ :set deltaRx \$e5rx }\r\
+        :if (\$e5tx >= \$rankPrevE5tx) do={ :set deltaTx (\$e5tx - \$rankPrevE5tx) } else={ :set deltaTx \$e5tx }\r\
+    }\r\
+    :set rankPrevE5rx \$e5rx\r\
+    :set rankPrevE5tx \$e5tx\r\
+    :local e5status \"down\"\r\
+    :if ([/interface get ether5 running]) do={ :set e5status \"up\" }\r\
+    :set ifaceData (\"Gardeline,\" . \$deltaTx . \",\" . \$deltaRx . \",\" . \$e5status . \";\")\r\
+} on-error={}\r\
+:do {\r\
+    :local vlrx [/interface get Vellon rx-byte]\r\
+    :local vltx [/interface get Vellon tx-byte]\r\
+    :global rankPrevVlrx\r\
+    :global rankPrevVltx\r\
+    :local deltaRx 0\r\
+    :local deltaTx 0\r\
+    :if ([:typeof \$rankPrevVlrx] != \"nothing\") do={\r\
+        :if (\$vlrx >= \$rankPrevVlrx) do={ :set deltaRx (\$vlrx - \$rankPrevVlrx) } else={ :set deltaRx \$vlrx }\r\
+        :if (\$vltx >= \$rankPrevVltx) do={ :set deltaTx (\$vltx - \$rankPrevVltx) } else={ :set deltaTx \$vltx }\r\
+    }\r\
+    :set rankPrevVlrx \$vlrx\r\
+    :set rankPrevVltx \$vltx\r\
+    :local vlstatus \"down\"\r\
+    :if ([/interface get Vellon running]) do={ :set vlstatus \"up\" }\r\
+    :set ifaceData (\$ifaceData . \"Vellon,\" . \$deltaTx . \",\" . \$deltaRx . \",\" . \$vlstatus . \";\")\r\
+} on-error={}\r\
+\r\
 :if (\$count > 0) do={\r\
-    :local routerName [/system identity get name]\r\
-\r\
-    # Dados de interfaces WAN (delta desde ultima execucao)\r\
-    :local ifaceData \"\"\r\
-    :do {\r\
-        :local e5rx [/interface get ether5 rx-byte]\r\
-        :local e5tx [/interface get ether5 tx-byte]\r\
-        :global rankPrevE5rx\r\
-        :global rankPrevE5tx\r\
-        :local deltaRx 0\r\
-        :local deltaTx 0\r\
-        :if ([:typeof \$rankPrevE5rx] != \"nothing\") do={\r\
-            :if (\$e5rx >= \$rankPrevE5rx) do={ :set deltaRx (\$e5rx - \$rankPrevE5rx) } else={ :set deltaRx \$e5rx }\r\
-            :if (\$e5tx >= \$rankPrevE5tx) do={ :set deltaTx (\$e5tx - \$rankPrevE5tx) } else={ :set deltaTx \$e5tx }\r\
-        }\r\
-        :set rankPrevE5rx \$e5rx\r\
-        :set rankPrevE5tx \$e5tx\r\
-        :local e5status \"down\"\r\
-        :if ([/interface get ether5 running]) do={ :set e5status \"up\" }\r\
-        :set ifaceData (\"Gardeline,\" . \$deltaTx . \",\" . \$deltaRx . \",\" . \$e5status . \";\")\r\
-    } on-error={}\r\
-    :do {\r\
-        :local vlrx [/interface get Vellon rx-byte]\r\
-        :local vltx [/interface get Vellon tx-byte]\r\
-        :global rankPrevVlrx\r\
-        :global rankPrevVltx\r\
-        :local deltaRx 0\r\
-        :local deltaTx 0\r\
-        :if ([:typeof \$rankPrevVlrx] != \"nothing\") do={\r\
-            :if (\$vlrx >= \$rankPrevVlrx) do={ :set deltaRx (\$vlrx - \$rankPrevVlrx) } else={ :set deltaRx \$vlrx }\r\
-            :if (\$vltx >= \$rankPrevVltx) do={ :set deltaTx (\$vltx - \$rankPrevVltx) } else={ :set deltaTx \$vltx }\r\
-        }\r\
-        :set rankPrevVlrx \$vlrx\r\
-        :set rankPrevVltx \$vltx\r\
-        :local vlstatus \"down\"\r\
-        :if ([/interface get Vellon running]) do={ :set vlstatus \"up\" }\r\
-        :set ifaceData (\$ifaceData . \"Vellon,\" . \$deltaTx . \",\" . \$deltaRx . \",\" . \$vlstatus . \";\")\r\
-    } on-error={}\r\
-\r\
     :local sendData (\"key=\" . \$apiKey . \"&router=\" . \$routerName . \"&data=\" . \$data . \"&iface=\" . \$ifaceData)\r\
-\r\
     :local sendOk 1\r\
     :do {\r\
         /tool fetch url=\$serverUrl mode=http http-method=post http-data=\$sendData http-header-field=\"Content-Type: application/x-www-form-urlencoded\" output=none\r\
@@ -285,7 +284,6 @@
         :set sendOk 0\r\
         :log error \"RANKING: Falha ao enviar dados para servidor local\"\r\
     }\r\
-\r\
     # Reseta contadores apos envio bem-sucedido\r\
     :if (\$sendOk = 1) do={\r\
         /ip firewall mangle reset-counters [find where chain~\"RANKING-\"]\r\
@@ -293,7 +291,18 @@
         :log warning \"RANKING: Contadores mantidos (envio falhou)\"\r\
     }\r\
 } else={\r\
-    :log info \"RANKING: Nenhum registro com trafego para enviar\"\r\
+    # Sem trafego de clientes - envia apenas status das interfaces WAN\r\
+    :if (\$ifaceData != \"\") do={\r\
+        :local sendData (\"key=\" . \$apiKey . \"&router=\" . \$routerName . \"&data=&iface=\" . \$ifaceData)\r\
+        :do {\r\
+            /tool fetch url=\$serverUrl mode=http http-method=post http-data=\$sendData http-header-field=\"Content-Type: application/x-www-form-urlencoded\" output=none\r\
+            :log info \"RANKING: Status WAN enviado (sem trafego de clientes)\"\r\
+        } on-error={\r\
+            :log error \"RANKING: Falha ao enviar status WAN\"\r\
+        }\r\
+    } else={\r\
+        :log info \"RANKING: Nenhum registro com trafego para enviar\"\r\
+    }\r\
 }\
 "
 
