@@ -41,7 +41,7 @@
           <% } %>
           <% devices.forEach(d => { %>
             <tr>
-              <td><a href="/admin/devices/<%= encodeURIComponent(d.mac_address) %>" style="font-family:monospace;font-size:.85rem"><%= d.mac_address %></a></td>
+              <td><a href="/admin/devices/<%= d.mac_address %>" style="font-family:monospace;font-size:.85rem"><%= d.mac_address %></a></td>
               <td><%= d.hostname %></td>
               <td style="text-align:center"><%= d.ip_count %></td>
               <td style="font-size:.8rem;color:#6b7280"><%= d.first_seen %></td>

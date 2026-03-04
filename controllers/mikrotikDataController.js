@@ -142,20 +142,27 @@ exports.receiveTraffic = async (req, res) => {
       await TrafficRanking.bulkCreate(rows);
 
       // Upsert no histórico permanente de dispositivos (MAC → IP → primeira/última vez visto)
-      const histRows = clients
-        .filter(c => c.mac_address)
-        .map(c => ({
-          mac_address: c.mac_address,
-          ip_address:  c.ip_address,
-          hostname:    c.hostname || null,
-          router_name: routerName,
-          first_seen:  now,
-          last_seen:   now
-        }));
-      if (histRows.length > 0) {
-        await DeviceHistory.bulkCreate(histRows, {
-          updateOnDuplicate: ['last_seen', 'hostname']
-        });
+      // Usa query raw: bulkCreate com updateOnDuplicate usa o PK (UUID) como conflict target
+      // no PostgreSQL, nunca disparando o upsert. O SQL abaixo usa a constraint composta.
+      const histRows = clients.filter(c => c.mac_address);
+      for (const c of histRows) {
+        await sequelize.query(
+          `INSERT INTO device_history (id, mac_address, ip_address, hostname, router_name, first_seen, last_seen)
+           VALUES (gen_random_uuid(), :mac, :ip, :hostname, :router, :now, :now)
+           ON CONFLICT (mac_address, ip_address, router_name) DO UPDATE SET
+             last_seen = EXCLUDED.last_seen,
+             hostname  = COALESCE(EXCLUDED.hostname, device_history.hostname)`,
+          {
+            replacements: {
+              mac:      c.mac_address,
+              ip:       c.ip_address,
+              hostname: c.hostname || null,
+              router:   routerName,
+              now:      now
+            },
+            type: sequelize.QueryTypes.INSERT
+          }
+        );
       }
     }
 
