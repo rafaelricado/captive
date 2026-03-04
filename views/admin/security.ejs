@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Segurança &mdash; Captive Portal</title>
+  <meta name="csrf-token" content="<%= csrfToken %>">
+  <%- include('_head') %>
+  <style>
+    .badge-severity-low    { background: #fef9c3; color: #92400e; }
+    .badge-severity-medium { background: #fef3c7; color: #d97706; }
+    .badge-severity-high   { background: #fee2e2; color: #dc2626; }
+    .badge-type-brute_force     { background: #ede9fe; color: #7c3aed; }
+    .badge-type-port_scan       { background: #dbeafe; color: #1d4ed8; }
+    .badge-type-traffic_anomaly { background: #d1fae5; color: #065f46; }
+    tr.unacked td { background: #fffbeb; }
+    tr.unacked:hover td { background: #fef3c7; }
+    .btn-ack {
+      background: none; border: 1px solid #16a34a; color: #16a34a;
+      padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: .78rem;
+      transition: all .15s;
+    }
+    .btn-ack:hover { background: #16a34a; color: #fff; }
+    .card-purple { border-top: 4px solid #7c3aed; }
+    .card-blue   { border-top: 4px solid #1d4ed8; }
+    .card-teal   { border-top: 4px solid #065f46; }
+    .card-purple .card-value { color: #7c3aed; }
+    .card-blue   .card-value { color: #1d4ed8; }
+    .card-teal   .card-value { color: #065f46; }
+    .unread-badge {
+      background: #dc2626; color: #fff; border-radius: 99px;
+      font-size: .7rem; padding: 2px 8px; font-weight: 700;
+      vertical-align: middle; margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+  <%- include('_nav', { page: pageObj }) %>
+
+  <main class="container">
+    <h2 class="page-title">
+      Detecção de Ataques
+      <% if (unacknowledgedCount > 0) { %>
+        <span class="unread-badge"><%= unacknowledgedCount %> pendente<%= unacknowledgedCount !== 1 ? 's' : '' %></span>
+      <% } %>
+    </h2>
+
+    <div class="cards">
+      <div class="card card-purple">
+        <div class="card-value" id="count-brute-force"><%= counts.brute_force %></div>
+        <div class="card-label">Força Bruta</div>
+      </div>
+      <div class="card card-blue">
+        <div class="card-value" id="count-port-scan"><%= counts.port_scan %></div>
+        <div class="card-label">Varredura de Portas</div>
+      </div>
+      <div class="card card-teal">
+        <div class="card-value" id="count-traffic-anomaly"><%= counts.traffic_anomaly %></div>
+        <div class="card-label">Anomalia de Tráfego</div>
+      </div>
+    </div>
+
+    <div class="chart-wrap" style="background:#fff;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.08);padding:20px 24px;margin-bottom:24px">
+      <p style="font-size:.85rem;font-weight:600;color:#374151;margin-bottom:12px">Eventos nos últimos 7 dias</p>
+      <canvas id="security-chart" height="80"></canvas>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+      <p class="meta" id="meta-line" style="margin:0">
+        <%= events.length %> evento(s) &mdash; atualiza em <span id="rt">30s</span>
+      </p>
+      <% if (unacknowledgedCount > 0) { %>
+        <form method="POST" action="/admin/security/acknowledge-all" style="margin:0">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <button type="submit" class="btn-ack" style="font-size:.8rem;padding:5px 14px">
+            Reconhecer todos (<%= unacknowledgedCount %>)
+          </button>
+        </form>
+      <% } %>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Detectado em</th>
+            <th>Tipo</th>
+            <th>Severidade</th>
+            <th>IP Origem</th>
+            <th>Detalhes</th>
+            <th>Status</th>
+            <th>Ação</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-data">
+          <% if (events.length === 0) { %>
+            <tr><td colspan="7" style="text-align:center;color:#9ca3af">Nenhum evento de ataque detectado.</td></tr>
+          <% } %>
+          <% events.forEach(e => { %>
+            <tr class="<%= e.acknowledged ? '' : 'unacked' %>">
+              <td><%= e.detected_at %></td>
+              <td><span class="badge badge-type-<%= e.event_type %>"><%= e.event_type_label %></span></td>
+              <td><span class="badge badge-severity-<%= e.severity %>"><%= e.severity_label %></span></td>
+              <td><code><%= e.src_ip %></code></td>
+              <td><%= e.details_summary %></td>
+              <td>
+                <% if (e.acknowledged) { %>
+                  <span class="badge badge-green">Reconhecido</span>
+                <% } else { %>
+                  <span class="badge badge-orange">Pendente</span>
+                <% } %>
+              </td>
+              <td>
+                <% if (!e.acknowledged) { %>
+                  <form method="POST" action="/admin/security/<%= e.id %>/acknowledge" style="display:inline">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="btn-ack">Reconhecer</button>
+                  </form>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <%- include('_footer') %>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script>
+  (function () {
+    const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    /* ── Gráfico de eventos por dia ── */
+    const initChart = <%- JSON.stringify(chartData) %>;
+    const ctx = document.getElementById('security-chart').getContext('2d');
+    const secChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: initChart.labels,
+        datasets: [
+          { label: 'Força Bruta',        data: initChart.datasets.brute_force,     backgroundColor: '#ede9fe', borderColor: '#7c3aed', borderWidth: 1 },
+          { label: 'Varredura de Portas', data: initChart.datasets.port_scan,       backgroundColor: '#dbeafe', borderColor: '#1d4ed8', borderWidth: 1 },
+          { label: 'Anomalia Tráfego',   data: initChart.datasets.traffic_anomaly, backgroundColor: '#d1fae5', borderColor: '#065f46', borderWidth: 1 }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'top' } },
+        scales: {
+          x: { stacked: true, grid: { color: '#f3f4f6' } },
+          y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f3f4f6' } }
+        }
+      }
+    });
+    function updateChart(cd) {
+      secChart.data.labels = cd.labels;
+      secChart.data.datasets[0].data = cd.datasets.brute_force;
+      secChart.data.datasets[1].data = cd.datasets.port_scan;
+      secChart.data.datasets[2].data = cd.datasets.traffic_anomaly;
+      secChart.update('none');
+    }
+
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    function severityBadge(s, label) {
+      return `<span class="badge badge-severity-${esc(s)}">${esc(label)}</span>`;
+    }
+    function typeBadge(t, label) {
+      return `<span class="badge badge-type-${esc(t)}">${esc(label)}</span>`;
+    }
+    function ackForm(id) {
+      return `<form method="POST" action="/admin/security/${esc(id)}/acknowledge" style="display:inline">
+        <input type="hidden" name="_csrf" value="${esc(csrf)}">
+        <button type="submit" class="btn-ack">Reconhecer</button>
+      </form>`;
+    }
+    function buildRows(events) {
+      if (!events.length)
+        return '<tr><td colspan="7" style="text-align:center;color:#9ca3af">Nenhum evento de ataque detectado.</td></tr>';
+      return events.map(e => `<tr class="${e.acknowledged ? '' : 'unacked'}">
+        <td>${esc(e.detected_at)}</td>
+        <td>${typeBadge(e.event_type, e.event_type_label)}</td>
+        <td>${severityBadge(e.severity, e.severity_label)}</td>
+        <td><code>${esc(e.src_ip)}</code></td>
+        <td>${esc(e.details_summary)}</td>
+        <td>${e.acknowledged
+          ? '<span class="badge badge-green">Reconhecido</span>'
+          : '<span class="badge badge-orange">Pendente</span>'}</td>
+        <td>${e.acknowledged ? '' : ackForm(e.id)}</td>
+      </tr>`).join('');
+    }
+    async function doRefresh() {
+      try {
+        const r = await fetch('/admin/security/data', { credentials: 'same-origin' });
+        if (!r.ok) return;
+        const data = await r.json();
+        document.getElementById('tbody-data').innerHTML = buildRows(data.events);
+        // Atualiza cards de contagem
+        document.getElementById('count-brute-force').textContent    = data.counts.brute_force;
+        document.getElementById('count-port-scan').textContent      = data.counts.port_scan;
+        document.getElementById('count-traffic-anomaly').textContent = data.counts.traffic_anomaly;
+        if (data.chartData) updateChart(data.chartData);
+        const meta = document.getElementById('meta-line');
+        if (meta) meta.innerHTML = `${data.events.length} evento(s) &mdash; atualiza em <span id="rt">30s</span>`;
+      } catch (e) {}
+    }
+    let ticks = 30;
+    setInterval(() => {
+      ticks--;
+      const el = document.getElementById('rt');
+      if (el) el.textContent = ticks + 's';
+      if (ticks <= 0) { ticks = 30; doRefresh(); }
+    }, 1000);
+  })();
+  </script>
+</body>
+</html>

@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { Op } = require('sequelize');
 const { User, Session, Setting, AccessPoint, ApPingHistory,
-  TrafficRanking, WanStat, ClientConnection, DnsEntry, sequelize } = require('../models');
+  TrafficRanking, WanStat, ClientConnection, DnsEntry, SecurityEvent, sequelize } = require('../models');
 const mikrotikService = require('../services/mikrotikService');
 const { pingAllAccessPoints, isValidIPv4 } = require('../services/pingService');
 const logger = require('../utils/logger');
@@ -909,5 +909,170 @@ exports.connectionsData = async (req, res) => {
   } catch (err) {
     logger.error(`[Admin] Erro em connectionsData: ${err.message}`);
     res.status(500).json({ error: 'Erro interno.' });
+  }
+};
+
+// ─── Segurança ────────────────────────────────────────────────────────────────
+
+function formatEventType(type) {
+  const map = { brute_force: 'Força Bruta', port_scan: 'Varredura de Portas', traffic_anomaly: 'Anomalia de Tráfego' };
+  return map[type] || type;
+}
+
+function formatSeverity(s) {
+  return { low: 'Baixa', medium: 'Média', high: 'Alta' }[s] || s;
+}
+
+function summarizeDetails(details) {
+  if (!details) return '—';
+  if (details.subtype === 'attempt') return `Tentativa: ${details.reason || ''}`;
+  if (details.attempt_count) return `${details.attempt_count} tentativas em ${details.window_minutes || '?'} min`;
+  if (details.distinct_ports) return `${details.distinct_ports} portas distintas em ${details.window_minutes || '?'} min`;
+  if (details.bytes_down_mb) return `${details.bytes_down_mb} MB baixados (${details.stddev_factor || '?'}× desvio padrão)`;
+  return JSON.stringify(details).slice(0, 80);
+}
+
+function buildSecurityList(events) {
+  return events.map(e => ({
+    id: e.id,
+    event_type: e.event_type,
+    event_type_label: formatEventType(e.event_type),
+    severity: e.severity,
+    severity_label: formatSeverity(e.severity),
+    src_ip: e.src_ip,
+    details_summary: summarizeDetails(e.details),
+    acknowledged: e.acknowledged,
+    detected_at: formatDate(e.detected_at)
+  }));
+}
+
+const SECURITY_RETENTION_DAYS = 30;
+
+async function fetchSecurityEvents() {
+  const since = new Date(Date.now() - SECURITY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  return SecurityEvent.findAll({
+    where: {
+      detected_at: { [Op.gte]: since },
+      [Op.and]: [sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'attempt'`)]
+    },
+    order: [['detected_at', 'DESC']],
+    limit: 200
+  });
+}
+
+// Agrega eventos dos últimos 7 dias por dia e por tipo para o gráfico
+async function buildSecurityChart() {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const rows = await SecurityEvent.findAll({
+    attributes: [
+      [sequelize.fn('DATE', sequelize.fn('timezone', DISPLAY_TIMEZONE, sequelize.col('detected_at'))), 'day'],
+      'event_type',
+      [sequelize.fn('COUNT', sequelize.col('id')), 'total']
+    ],
+    where: {
+      detected_at: { [Op.gte]: since },
+      [Op.and]: [sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'attempt'`)]
+    },
+    group: [
+      sequelize.fn('DATE', sequelize.fn('timezone', DISPLAY_TIMEZONE, sequelize.col('detected_at'))),
+      'event_type'
+    ],
+    order: [[sequelize.fn('DATE', sequelize.fn('timezone', DISPLAY_TIMEZONE, sequelize.col('detected_at'))), 'ASC']],
+    raw: true
+  });
+
+  // Gera labels para os últimos 7 dias
+  const labels = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+    labels.push(d.toLocaleDateString('pt-BR', { timeZone: DISPLAY_TIMEZONE, day: '2-digit', month: '2-digit' }));
+  }
+
+  const types = ['brute_force', 'port_scan', 'traffic_anomaly'];
+  const datasets = {};
+  types.forEach(t => { datasets[t] = new Array(7).fill(0); });
+
+  rows.forEach(r => {
+    const dayStr = new Date(r.day + 'T12:00:00Z').toLocaleDateString('pt-BR', { timeZone: DISPLAY_TIMEZONE, day: '2-digit', month: '2-digit' });
+    const idx = labels.indexOf(dayStr);
+    if (idx !== -1 && datasets[r.event_type]) {
+      datasets[r.event_type][idx] = Number(r.total);
+    }
+  });
+
+  return { labels, datasets };
+}
+
+exports.security = async (req, res) => {
+  try {
+    const [events, chartData] = await Promise.all([fetchSecurityEvents(), buildSecurityChart()]);
+    const list = buildSecurityList(events);
+    const unacknowledgedCount = list.filter(e => !e.acknowledged).length;
+    const counts = { brute_force: 0, port_scan: 0, traffic_anomaly: 0 };
+    list.forEach(e => { if (counts[e.event_type] !== undefined) counts[e.event_type]++; });
+
+    res.render('admin/security', {
+      events: list, counts, unacknowledgedCount, chartData,
+      page: 'security', pageObj: 'security',
+      csrfToken: res.locals.csrfToken
+    });
+  } catch (err) {
+    logger.error(`[Admin] Erro na página de segurança: ${err.message}`);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+exports.securityData = async (req, res) => {
+  try {
+    const [events, chartData] = await Promise.all([fetchSecurityEvents(), buildSecurityChart()]);
+    const list = buildSecurityList(events);
+    const unacknowledgedCount = list.filter(e => !e.acknowledged).length;
+    const counts = { brute_force: 0, port_scan: 0, traffic_anomaly: 0 };
+    list.forEach(e => { if (counts[e.event_type] !== undefined) counts[e.event_type]++; });
+    res.json({ events: list, counts, unacknowledgedCount, chartData });
+  } catch (err) {
+    logger.error(`[Admin] Erro em securityData: ${err.message}`);
+    res.status(500).json({ error: 'Erro interno.' });
+  }
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+exports.acknowledgeSecurityEvent = async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.redirect('/admin/security');
+  try {
+    const event = await SecurityEvent.findByPk(req.params.id);
+    if (!event) return res.redirect('/admin/security');
+    event.acknowledged = true;
+    await event.save();
+    // Invalida o cache do badge no nav para refletir a mudança imediatamente
+    try { require('../routes/admin').invalidateSecurityCount(); } catch (_) {}
+    logger.info(`[Admin] Evento de segurança reconhecido: ${event.id} (${event.event_type} / ${event.src_ip})`);
+    audit('security.acknowledge', { eventId: event.id, eventType: event.event_type, srcIp: event.src_ip, ip: req.ip });
+    res.redirect('/admin/security');
+  } catch (err) {
+    logger.error(`[Admin] Erro ao reconhecer evento de segurança: ${err.message}`);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+exports.acknowledgeAllSecurityEvents = async (req, res) => {
+  try {
+    const [count] = await SecurityEvent.update(
+      { acknowledged: true },
+      {
+        where: {
+          acknowledged: false,
+          [Op.and]: [sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'attempt'`)]
+        }
+      }
+    );
+    try { require('../routes/admin').invalidateSecurityCount(); } catch (_) {}
+    logger.info(`[Admin] ${count} evento(s) de segurança reconhecidos em massa.`);
+    audit('security.acknowledge_all', { count, ip: req.ip });
+    res.redirect('/admin/security');
+  } catch (err) {
+    logger.error(`[Admin] Erro ao reconhecer todos os eventos: ${err.message}`);
+    res.status(500).send('Erro interno.');
   }
 };

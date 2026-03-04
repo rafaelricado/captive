@@ -6,7 +6,8 @@ const rateLimit = require('express-rate-limit');
 const adminAuth = require('../middleware/adminAuth');
 const { csrfMiddleware, verifyCsrf } = require('../middleware/csrfProtection');
 const adminController = require('../controllers/adminController');
-const { Setting } = require('../models');
+const { Setting, SecurityEvent, sequelize } = require('../models');
+const { Op } = require('sequelize');
 
 // Diretório de upload garantido pelo startup em server.js
 const uploadsDir = path.join(__dirname, '../public/uploads/logo');
@@ -54,14 +55,31 @@ const adminLoginLimiter = rateLimit({
   }
 });
 
+// Cache simples do badge de segurança — evita query JSONB em cada requisição admin
+let _securityCountCache = { value: 0, expiresAt: 0 };
+function invalidateSecurityCount() { _securityCountCache.expiresAt = 0; }
+async function getSecurityUnreadCount() {
+  if (Date.now() < _securityCountCache.expiresAt) return _securityCountCache.value;
+  const value = await SecurityEvent.count({
+    where: {
+      acknowledged: false,
+      [Op.and]: [sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'attempt'`)]
+    }
+  });
+  _securityCountCache = { value, expiresAt: Date.now() + 30_000 };
+  return value;
+}
+
 // Middleware: injeta configurações de marca em res.locals para todas as rotas admin
 router.use(async (req, res, next) => {
   try {
     res.locals.orgName = await Setting.get('organization_name', 'Captive Portal');
     res.locals.orgLogo = await Setting.get('organization_logo', '');
+    res.locals.securityUnreadCount = await getSecurityUnreadCount();
   } catch (_) {
     res.locals.orgName = 'Captive Portal';
     res.locals.orgLogo = '';
+    res.locals.securityUnreadCount = 0;
   }
   next();
 });
@@ -101,6 +119,13 @@ router.get('/traffic/data', adminAuth, adminController.trafficData);
 router.get('/wan/data', adminAuth, adminController.wanData);
 router.get('/connections/data', adminAuth, adminController.connectionsData);
 
+// Segurança — Eventos detectados (protegido)
+// IMPORTANTE: /acknowledge-all deve vir antes de /:id/acknowledge
+router.get('/security', adminAuth, adminController.security);
+router.get('/security/data', adminAuth, adminController.securityData);
+router.post('/security/acknowledge-all', adminAuth, verifyCsrf, adminController.acknowledgeAllSecurityEvents);
+router.post('/security/:id/acknowledge', adminAuth, verifyCsrf, adminController.acknowledgeSecurityEvent);
+
 // Configurações (protegido)
 router.get('/settings', adminAuth, adminController.showSettings);
 router.post('/settings', adminAuth, verifyCsrf, (req, res, next) => {
@@ -134,3 +159,4 @@ router.post('/settings', adminAuth, verifyCsrf, (req, res, next) => {
 }, adminController.saveSettings);
 
 module.exports = router;
+module.exports.invalidateSecurityCount = invalidateSecurityCount;

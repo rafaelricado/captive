@@ -1,10 +1,24 @@
 const axios = require('axios');
-const { User, Session, Setting } = require('../models');
+const { User, Session, Setting, SecurityEvent } = require('../models');
 const { validateCPF } = require('../utils/cpfValidator');
 const sessionService = require('../services/sessionService');
 const mikrotikService = require('../services/mikrotikService');
 const { getOrgSettings } = require('../utils/orgSettings');
 const logger = require('../utils/logger');
+
+// Registra tentativa de autenticação falha para detecção de força bruta
+async function logAuthAttempt(req, reason, details = {}) {
+  try {
+    await SecurityEvent.create({
+      event_type: 'brute_force',
+      severity: 'low',
+      src_ip: req.ip || 'unknown',
+      details: { subtype: 'attempt', reason, ...details }
+    });
+  } catch (err) {
+    logger.warn(`[Security] Falha ao registrar tentativa de auth: ${err.message}`);
+  }
+}
 
 // Converte data de DD/MM/AAAA para YYYY-MM-DD (retorna null se inválida ou futura)
 function parseDateBR(str) {
@@ -65,6 +79,7 @@ exports.register = async (req, res) => {
     const existingUser = await User.findOne({ where: { cpf: cpfClean } });
 
     if (existingUser && existingUser.data_nascimento) {
+      await logAuthAttempt(req, 'cpf_ja_cadastrado', { tab: 'cadastro' });
       return await renderError('CPF já cadastrado. Use a aba "Já tenho cadastro" para acessar.');
     }
 
@@ -145,13 +160,17 @@ exports.login = async (req, res) => {
     if (!dataNascISO) return await renderError('Data de nascimento inválida. Use o formato DD/MM/AAAA.');
 
     const user = await User.findOne({ where: { cpf: cpfClean } });
-    if (!user) return await renderError('CPF ou data de nascimento incorretos.');
+    if (!user) {
+      await logAuthAttempt(req, 'cpf_nao_encontrado', { tab: 'login' });
+      return await renderError('CPF ou data de nascimento incorretos.');
+    }
 
     if (!user.data_nascimento) {
       return await renderError('Seus dados precisam ser atualizados. Use a aba "Primeiro Acesso" para se recadastrar.');
     }
 
     if (user.data_nascimento !== dataNascISO) {
+      await logAuthAttempt(req, 'data_nascimento_incorreta', { tab: 'login' });
       return await renderError('CPF ou data de nascimento incorretos.');
     }
 

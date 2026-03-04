@@ -28,6 +28,7 @@ const { initDatabase, sequelize } = require('./models');
 const { expireSessions } = require('./services/sessionService');
 const { pingAllAccessPoints } = require('./services/pingService');
 const { startNetflowCollector } = require('./services/netflowCollector');
+const { runAllDetectors } = require('./services/securityDetector');
 
 const portalRoutes = require('./routes/portal');
 const apiRoutes = require('./routes/api');
@@ -163,6 +164,15 @@ async function start() {
         await pingAllAccessPoints();
       } catch (err) {
         logger.error(`[Cron] Erro ao verificar pontos de acesso: ${err.message}`);
+      }
+    });
+
+    // Cron: detectar ataques e anomalias a cada 5 minutos
+    cron.schedule('*/5 * * * *', async () => {
+      try {
+        await runAllDetectors();
+      } catch (err) {
+        logger.error(`[Cron] Erro ao executar detectores de segurança: ${err.message}`);
       }
     });
 
