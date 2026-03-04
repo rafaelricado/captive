@@ -1,1 +1,104 @@
 <footer><%= locals.orgName %></footer>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+(function () {
+  /* ── Toast ────────────────────────────────────────────────────────── */
+  window.showToast = function (msg, type) {
+    type = type || 'info';
+    var container = document.getElementById('toast-container');
+    if (!container) return;
+    var t = document.createElement('div');
+    t.className = 'toast toast-' + type;
+    t.textContent = msg;
+    container.appendChild(t);
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { t.classList.add('show'); });
+    });
+    setTimeout(function () {
+      t.classList.remove('show');
+      setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
+    }, 3500);
+  };
+
+  /* Auto-toast via URL params ?toast=msg&toastType=success */
+  (function () {
+    var params = new URLSearchParams(window.location.search);
+    var msg = params.get('toast');
+    if (msg) {
+      var type = params.get('toastType') || 'info';
+      setTimeout(function () { window.showToast(decodeURIComponent(msg), type); }, 100);
+      /* Remove params from URL without reload */
+      var url = new URL(window.location.href);
+      url.searchParams.delete('toast');
+      url.searchParams.delete('toastType');
+      history.replaceState(null, '', url.toString());
+    }
+  })();
+
+  /* ── Countdown ────────────────────────────────────────────────────── */
+  window.startCountdown = function (elementId, seconds, onZero) {
+    var el = document.getElementById(elementId);
+    if (!el) return;
+    var remaining = seconds;
+    function tick() {
+      el.textContent = remaining + 's';
+      if (remaining <= 0) {
+        if (typeof onZero === 'function') onZero();
+        return;
+      }
+      remaining--;
+      setTimeout(tick, 1000);
+    }
+    tick();
+  };
+
+  /* ── Sortable tables ──────────────────────────────────────────────── */
+  window.initSortableTable = function (tableId) {
+    var table = document.getElementById(tableId);
+    if (!table) return;
+    var headers = table.querySelectorAll('thead th[data-sort]');
+    headers.forEach(function (th) {
+      th.classList.add('th-sortable');
+      th.addEventListener('click', function () {
+        var dir = th.dataset.dir || 'none';
+        /* Reset all */
+        headers.forEach(function (h) {
+          h.classList.remove('sort-asc', 'sort-desc');
+          delete h.dataset.dir;
+        });
+        dir = dir === 'asc' ? 'desc' : 'asc';
+        th.dataset.dir = dir;
+        th.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+
+        var colIdx = Array.from(th.parentNode.children).indexOf(th);
+        var type = th.dataset.sort; /* text | number | date */
+        var tbody = table.querySelector('tbody');
+        var rows = Array.from(tbody.querySelectorAll('tr'));
+
+        rows.sort(function (a, b) {
+          var aText = (a.cells[colIdx] ? a.cells[colIdx].textContent.trim() : '');
+          var bText = (b.cells[colIdx] ? b.cells[colIdx].textContent.trim() : '');
+          var aVal, bVal;
+          if (type === 'number') {
+            aVal = parseFloat(aText.replace(/[^\d.\-]/g, '')) || 0;
+            bVal = parseFloat(bText.replace(/[^\d.\-]/g, '')) || 0;
+          } else if (type === 'date') {
+            aVal = new Date(aText).getTime() || 0;
+            bVal = new Date(bText).getTime() || 0;
+          } else {
+            aVal = aText.toLowerCase();
+            bVal = bText.toLowerCase();
+          }
+          if (aVal < bVal) return dir === 'asc' ? -1 : 1;
+          if (aVal > bVal) return dir === 'asc' ? 1 : -1;
+          return 0;
+        });
+
+        rows.forEach(function (r) { tbody.appendChild(r); });
+      });
+    });
+  };
+})();
+</script>

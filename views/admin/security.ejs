@@ -135,6 +135,18 @@
             Reconhecer todos (<%= unacknowledgedCount %>)
           </button>
         </form>
+        <% if (filters.type || filters.severity || filters.ip || filters.period) { %>
+          <form method="POST" action="/admin/security/acknowledge-all" style="margin:0">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <% if (filters.type)     { %><input type="hidden" name="type"     value="<%= filters.type %>"><% } %>
+            <% if (filters.severity) { %><input type="hidden" name="severity" value="<%= filters.severity %>"><% } %>
+            <% if (filters.ip)       { %><input type="hidden" name="ip"       value="<%= filters.ip %>"><% } %>
+            <% if (filters.period)   { %><input type="hidden" name="period"   value="<%= filters.period %>"><% } %>
+            <button type="submit" class="btn-ack" style="font-size:.8rem;padding:5px 14px;border-color:#d97706;color:#d97706">
+              Reconhecer visíveis
+            </button>
+          </form>
+        <% } %>
       <% } %>
       <a href="/admin/security/export<%= queryString ? '?' + queryString : '' %>"
          class="btn-ack" style="font-size:.8rem;padding:5px 14px">
@@ -201,6 +213,7 @@
     /* ── Gráfico 7 dias (barras empilhadas) ── */
     const initChart = <%- JSON.stringify(chartData) %>;
     const ctx = document.getElementById('security-chart').getContext('2d');
+    const DATASET_TYPES = ['brute_force', 'port_scan', 'traffic_anomaly'];
     const secChart = new Chart(ctx, {
       type: 'bar',
       data: {
@@ -217,6 +230,17 @@
         scales: {
           x: { stacked: true, grid: { color: '#f3f4f6' }, ticks: { font: { size: 11 } } },
           y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: '#f3f4f6' } }
+        },
+        onClick: function (evt, elements) {
+          if (!elements.length) return;
+          var el = elements[0];
+          var type = DATASET_TYPES[el.datasetIndex];
+          var label = initChart.labels[el.index]; // "DD/MM"
+          if (!type || !label) return;
+          var params = new URLSearchParams(window.location.search);
+          params.set('type', type);
+          params.set('period', '7d');
+          window.location.href = '/admin/security?' + params.toString();
         }
       }
     });

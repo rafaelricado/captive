@@ -19,16 +19,16 @@
     <% } %>
 
     <div class="table-wrap">
-      <table>
+      <table id="conn-table">
         <thead>
           <tr>
             <th>#</th>
-            <th>Origem</th>
-            <th>Destino / Serviço</th>
-            <th>Porta</th>
-            <th>Enviado</th>
-            <th>Recebido</th>
-            <th>Roteador</th>
+            <th data-sort="text">Origem</th>
+            <th data-sort="text">Destino / Serviço</th>
+            <th data-sort="number">Porta</th>
+            <th data-sort="text">Enviado</th>
+            <th data-sort="text">Recebido</th>
+            <th data-sort="text">Roteador</th>
           </tr>
         </thead>
         <tbody id="tbody-data">
@@ -58,6 +58,7 @@
   </main>
 
   <%- include('_footer') %>
+  <script>window.initSortableTable && window.initSortableTable('conn-table');</script>
   <script>
   (function () {
     function esc(s) {

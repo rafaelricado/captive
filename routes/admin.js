@@ -101,6 +101,7 @@ router.get('/users', adminAuth, adminController.users);
 router.get('/users/export', adminAuth, adminController.exportUsers);
 router.post('/users/:id/delete', adminAuth, verifyCsrf, adminController.deleteUser);
 router.get('/sessions', adminAuth, adminController.sessions);
+router.get('/sessions/export', adminAuth, adminController.exportSessions);
 router.post('/sessions/:id/terminate', adminAuth, verifyCsrf, adminController.terminateSession);
 
 // Pontos de acesso (protegido)
@@ -113,14 +114,16 @@ router.post('/access-points/:id/delete', adminAuth, verifyCsrf, adminController.
 
 // Rede / Tráfego Mikrotik (protegido)
 router.get('/traffic', adminAuth, adminController.traffic);
+router.get('/traffic/export', adminAuth, adminController.exportTraffic);
 router.get('/wan', adminAuth, adminController.wan);
 router.get('/connections', adminAuth, adminController.connections);
 router.get('/dns', adminAuth, adminController.dns);
 
 // Histórico de dispositivos (protegido)
 // IMPORTANTE: rota estática '/devices' deve vir antes de '/devices/:mac'
-router.get('/devices',      adminAuth, adminController.devices);
-router.get('/devices/:mac', adminAuth, adminController.deviceDetail);
+router.get('/devices',        adminAuth, adminController.devices);
+router.get('/devices/export', adminAuth, adminController.exportDevices);
+router.get('/devices/:mac',   adminAuth, adminController.deviceDetail);
 
 // Endpoints JSON para auto-refresh das páginas (protegido)
 router.get('/traffic/data', adminAuth, adminController.trafficData);
@@ -137,6 +140,7 @@ router.post('/security/:id/acknowledge', adminAuth, verifyCsrf, adminController.
 
 // Configurações (protegido)
 router.get('/settings', adminAuth, adminController.showSettings);
+router.post('/settings/test-webhook', adminAuth, adminController.testWebhook);
 router.post('/settings', adminAuth, verifyCsrf, (req, res, next) => {
   upload.single('organization_logo')(req, res, async err => {
     if (err instanceof multer.MulterError || err) {

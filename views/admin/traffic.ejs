@@ -10,7 +10,10 @@
   <%- include('_nav', { page: pageObj }) %>
 
   <main class="container">
-    <h2 class="page-title">Tráfego de Clientes</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+      <h2 class="page-title" style="margin-bottom:0">Tráfego de Clientes</h2>
+      <a href="/admin/traffic/export" class="btn-outline" style="padding:6px 16px;font-size:.82rem">Exportar CSV</a>
+    </div>
 
     <% if (updatedAt) { %>
       <p class="meta" id="meta-line">Snapshot de <strong><%= updatedAt %></strong> &mdash; <%= clients.length %> cliente(s) &mdash; atualiza em <span id="rt">30s</span></p>

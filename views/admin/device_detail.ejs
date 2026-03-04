@@ -23,33 +23,24 @@
 
     <p class="meta"><%= entries.length %> combinação(ões) IP encontrada(s)</p>
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>IP</th>
-            <th>Hostname</th>
-            <th>Primeiro uso</th>
-            <th>Último uso</th>
-            <th>Roteador</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% if (entries.length === 0) { %>
-            <tr><td colspan="5" style="text-align:center;color:#9ca3af">Nenhum registro.</td></tr>
-          <% } %>
-          <% entries.forEach(e => { %>
-            <tr>
-              <td style="font-family:monospace"><%= e.ip_address %></td>
-              <td><%= e.hostname %></td>
-              <td style="font-size:.8rem;color:#6b7280"><%= e.first_seen %></td>
-              <td style="font-size:.8rem;color:#6b7280"><%= e.last_seen %></td>
-              <td><%= e.router_name %></td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </div>
+    <% if (entries.length === 0) { %>
+      <p style="color:#9ca3af">Nenhum registro.</p>
+    <% } else { %>
+      <div class="timeline">
+        <% entries.forEach(e => { %>
+          <div class="timeline-entry">
+            <div class="timeline-ip"><%= e.ip_address %></div>
+            <% if (e.hostname && e.hostname !== '—') { %>
+              <div class="timeline-host"><%= e.hostname %></div>
+            <% } %>
+            <div class="timeline-date">
+              Primeiro: <%= e.first_seen %> &mdash; Último: <%= e.last_seen %>
+            </div>
+            <div class="timeline-date" style="color:#9ca3af"><%= e.router_name %></div>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
   </main>
 
   <%- include('_footer') %>

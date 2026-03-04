@@ -19,7 +19,16 @@
   <main class="container">
     <h2 class="page-title">Sessões de acesso</h2>
 
-    <p class="meta"><%= total %> sessão(ões) no total &mdash; página <%= pageLabel %> de <%= totalPages || 1 %></p>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+      <div class="filter-tabs" style="margin-bottom:0">
+        <a href="/admin/sessions" class="filter-tab <%= statusFilter === '' ? 'active' : '' %>">Todas (<%= totalAll %>)</a>
+        <a href="/admin/sessions?status=active" class="filter-tab <%= statusFilter === 'active' ? 'active' : '' %>">Ativas (<%= totalActive %>)</a>
+        <a href="/admin/sessions?status=expired" class="filter-tab <%= statusFilter === 'expired' ? 'active' : '' %>">Expiradas (<%= totalExpired %>)</a>
+      </div>
+      <a href="/admin/sessions/export" class="btn-outline" style="padding:6px 16px;font-size:.82rem;margin-left:auto">Exportar CSV</a>
+    </div>
+
+    <p class="meta"><%= total %> sessão(ões)<% if (statusFilter) { %> (<%= statusFilter === 'active' ? 'ativas' : 'expiradas' %>)<% } %> &mdash; página <%= pageLabel %> de <%= totalPages || 1 %></p>
 
     <div class="table-wrap">
       <table>
@@ -71,11 +80,11 @@
 
     <div class="pagination">
       <% if (page > 0) { %>
-        <a href="/admin/sessions?page=<%= page - 1 %>">&larr; Anterior</a>
+        <a href="/admin/sessions?page=<%= page - 1 %><%= statusFilter ? '&status=' + statusFilter : '' %>">&larr; Anterior</a>
       <% } %>
       <span class="current">Página <%= pageLabel %></span>
       <% if (page + 1 < totalPages) { %>
-        <a href="/admin/sessions?page=<%= page + 1 %>">Próxima &rarr;</a>
+        <a href="/admin/sessions?page=<%= page + 1 %><%= statusFilter ? '&status=' + statusFilter : '' %>">Próxima &rarr;</a>
       <% } %>
     </div>
   </main>

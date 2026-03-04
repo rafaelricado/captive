@@ -10,7 +10,10 @@
   <%- include('_nav', { page: pageObj }) %>
 
   <main class="container">
-    <h2 class="page-title">Histórico de Dispositivos</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+      <h2 class="page-title" style="margin-bottom:0">Histórico de Dispositivos</h2>
+      <a href="/admin/devices/export" class="btn-outline" style="padding:6px 16px;font-size:.82rem">Exportar CSV</a>
+    </div>
 
     <p class="meta"><%= total %> dispositivo(s) único(s) no histórico</p>
 
@@ -24,15 +27,15 @@
     </form>
 
     <div class="table-wrap">
-      <table>
+      <table id="devices-table">
         <thead>
           <tr>
-            <th>MAC</th>
-            <th>Hostname</th>
-            <th>IPs usados</th>
-            <th>Primeiro acesso</th>
-            <th>Último acesso</th>
-            <th>Roteador</th>
+            <th data-sort="text">MAC</th>
+            <th data-sort="text">Hostname</th>
+            <th data-sort="number">IPs usados</th>
+            <th data-sort="date">Primeiro acesso</th>
+            <th data-sort="date">Último acesso</th>
+            <th data-sort="text">Roteador</th>
           </tr>
         </thead>
         <tbody>
@@ -41,7 +44,10 @@
           <% } %>
           <% devices.forEach(d => { %>
             <tr>
-              <td><a href="/admin/devices/<%= d.mac_address %>" style="font-family:monospace;font-size:.85rem"><%= d.mac_address %></a></td>
+              <td>
+                <% if (d.online) { %><span class="dot-online"></span><% } %>
+                <a href="/admin/devices/<%= d.mac_address %>" style="font-family:monospace;font-size:.85rem"><%= d.mac_address %></a>
+              </td>
               <td><%= d.hostname %></td>
               <td style="text-align:center"><%= d.ip_count %></td>
               <td style="font-size:.8rem;color:#6b7280"><%= d.first_seen %></td>
@@ -65,5 +71,6 @@
   </main>
 
   <%- include('_footer') %>
+  <script>window.initSortableTable && window.initSortableTable('devices-table');</script>
 </body>
 </html>

@@ -125,11 +125,24 @@ exports.dashboard = async (req, res) => {
 
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    const [totalUsers, activeSessions, novosHoje, novosSemana, wan24h, latestWanTime] = await Promise.all([
+    const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const [totalUsers, activeSessions, novosHoje, novosSemana, totalDevices, registrosDiaRaw, wan24h, latestWanTime] = await Promise.all([
       User.count(),
       Session.count({ where: { active: true, expires_at: { [Op.gt]: now } } }),
       User.count({ where: { created_at: { [Op.gte]: startOfDay() } } }),
       User.count({ where: { created_at: { [Op.gte]: startOfWeek() } } }),
+      DeviceHistory.count({ distinct: true, col: 'mac_address' }),
+      User.findAll({
+        attributes: [
+          [fn('DATE', fn('timezone', DISPLAY_TIMEZONE, col('created_at'))), 'day'],
+          [fn('COUNT', col('id')), 'count']
+        ],
+        where: { created_at: { [Op.gte]: since7d } },
+        group: [fn('DATE', fn('timezone', DISPLAY_TIMEZONE, col('created_at')))],
+        order: [[fn('DATE', fn('timezone', DISPLAY_TIMEZONE, col('created_at'))), 'ASC']],
+        raw: true
+      }),
       WanStat.findAll({
         attributes: [
           'interface_name',
@@ -180,8 +193,22 @@ exports.dashboard = async (req, res) => {
     });
     const wanCards = Object.values(wanMap);
 
+    // Monta array de 7 dias com contagens de cadastros
+    const registrosLabels = [];
+    const registrosData   = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+      const label = d.toLocaleDateString('pt-BR', { timeZone: DISPLAY_TIMEZONE, day: '2-digit', month: '2-digit' });
+      const dayStr = d.toLocaleDateString('en-CA', { timeZone: DISPLAY_TIMEZONE }); // YYYY-MM-DD
+      const found = registrosDiaRaw.find(r => r.day === dayStr);
+      registrosLabels.push(label);
+      registrosData.push(found ? Number(found.count) : 0);
+    }
+
     res.render('admin/dashboard', {
-      totalUsers, activeSessions, novosHoje, novosSemana, wanCards,
+      totalUsers, activeSessions, novosHoje, novosSemana, totalDevices,
+      registrosChart: { labels: registrosLabels, data: registrosData },
+      wanCards,
       page: 'dashboard'
     });
   } catch (err) {
@@ -271,6 +298,119 @@ exports.exportUsers = async (req, res) => {
   }
 };
 
+exports.exportSessions = async (req, res) => {
+  try {
+    const now = new Date();
+    const rows = await Session.findAll({
+      include: [{ model: User, attributes: ['nome_completo'] }],
+      order: [['started_at', 'DESC']]
+    });
+
+    const escapeCSV = (val) => {
+      if (val == null) return '';
+      const s = String(val);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+
+    const header = 'Nome,IP,MAC,Inicio,Expiracao,Status';
+    const lines = rows.map(s => [
+      s.User ? s.User.nome_completo : '',
+      s.ip_address || '', s.mac_address || '',
+      new Date(s.started_at).toLocaleString('pt-BR', { timeZone: DISPLAY_TIMEZONE }),
+      new Date(s.expires_at).toLocaleString('pt-BR', { timeZone: DISPLAY_TIMEZONE }),
+      s.active && new Date(s.expires_at) > now ? 'Ativa' : 'Expirada'
+    ].map(escapeCSV).join(','));
+
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="sessoes_${date}.csv"`);
+    audit('sessions.export', { count: rows.length, ip: req.ip });
+    res.send('\uFEFF' + header + '\n' + lines.join('\n'));
+  } catch (err) {
+    logger.error(`[Admin] Erro ao exportar sessões: ${err.message}`);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+exports.exportDevices = async (req, res) => {
+  try {
+    const rows = await DeviceHistory.findAll({
+      attributes: [
+        'mac_address',
+        [fn('MAX', col('hostname')),                     'hostname'],
+        [fn('COUNT', fn('DISTINCT', col('ip_address'))), 'ip_count'],
+        [fn('MIN', col('first_seen')),                   'first_seen'],
+        [fn('MAX', col('last_seen')),                    'last_seen'],
+        [fn('MAX', col('router_name')),                  'router_name']
+      ],
+      group: ['mac_address'],
+      order: [[fn('MAX', col('last_seen')), 'DESC']],
+      raw: true
+    });
+
+    const escapeCSV = (val) => {
+      if (val == null) return '';
+      const s = String(val);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+
+    const header = 'MAC,Hostname,IPs,Primeiro Acesso,Ultimo Acesso,Roteador';
+    const lines = rows.map(d => [
+      d.mac_address, d.hostname || '',
+      Number(d.ip_count),
+      new Date(d.first_seen).toLocaleString('pt-BR', { timeZone: DISPLAY_TIMEZONE }),
+      new Date(d.last_seen).toLocaleString('pt-BR', { timeZone: DISPLAY_TIMEZONE }),
+      d.router_name || ''
+    ].map(escapeCSV).join(','));
+
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="dispositivos_${date}.csv"`);
+    audit('devices.export', { count: rows.length, ip: req.ip });
+    res.send('\uFEFF' + header + '\n' + lines.join('\n'));
+  } catch (err) {
+    logger.error(`[Admin] Erro ao exportar dispositivos: ${err.message}`);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+exports.exportTraffic = async (req, res) => {
+  try {
+    const latest = await TrafficRanking.max('recorded_at');
+    const rows = latest ? await TrafficRanking.findAll({
+      where: { recorded_at: latest },
+      order: [['bytes_down', 'DESC']],
+      limit: 200
+    }) : [];
+
+    const escapeCSV = (val) => {
+      if (val == null) return '';
+      const s = String(val);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+
+    const header = 'IP,Hostname,MAC,Upload,Download,Total,Roteador';
+    const lines = rows.map(r => [
+      r.ip_address, r.hostname || '', r.mac_address || '',
+      formatBytes(r.bytes_up), formatBytes(r.bytes_down),
+      formatBytes(Number(r.bytes_up) + Number(r.bytes_down)),
+      r.router_name || ''
+    ].map(escapeCSV).join(','));
+
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="trafego_${date}.csv"`);
+    audit('traffic.export', { count: rows.length, ip: req.ip });
+    res.send('\uFEFF' + header + '\n' + lines.join('\n'));
+  } catch (err) {
+    logger.error(`[Admin] Erro ao exportar tráfego: ${err.message}`);
+    res.status(500).send('Erro interno.');
+  }
+};
+
 exports.deleteUser = async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
@@ -296,14 +436,24 @@ exports.sessions = async (req, res) => {
     const page = Math.max(0, parseInt(req.query.page || '0', 10) || 0);
     const offset = page * PAGE_SIZE;
     const now = new Date();
+    const statusFilter = ['active', 'expired'].includes(req.query.status) ? req.query.status : '';
 
-    const { count, rows } = await Session.findAndCountAll({
-      include: [{ model: User, attributes: ['nome_completo'] }],
-      distinct: true,
-      order: [['started_at', 'DESC']],
-      limit: PAGE_SIZE,
-      offset
-    });
+    const where = {};
+    if (statusFilter === 'active')  { where.active = true;  where.expires_at = { [Op.gt]: now }; }
+    if (statusFilter === 'expired') { where[Op.or] = [{ active: false }, { expires_at: { [Op.lte]: now } }]; }
+
+    const [{ count, rows }, totalActive, totalExpired] = await Promise.all([
+      Session.findAndCountAll({
+        where,
+        include: [{ model: User, attributes: ['nome_completo'] }],
+        distinct: true,
+        order: [['started_at', 'DESC']],
+        limit: PAGE_SIZE,
+        offset
+      }),
+      Session.count({ where: { active: true, expires_at: { [Op.gt]: now } } }),
+      Session.count({ where: { [Op.or]: [{ active: false }, { expires_at: { [Op.lte]: now } }] } })
+    ]);
 
     const sessions = rows.map(s => ({
       id: s.id,
@@ -320,7 +470,11 @@ exports.sessions = async (req, res) => {
       totalPages: Math.ceil(count / PAGE_SIZE),
       total: count,
       pageLabel: page + 1,
-      pageObj: 'sessions'
+      pageObj: 'sessions',
+      statusFilter,
+      totalActive,
+      totalExpired,
+      totalAll: totalActive + totalExpired
     });
   } catch (err) {
     logger.error(`[Admin] Erro ao listar sessões: ${err.message}`);
@@ -522,6 +676,39 @@ exports.saveSettings = async (req, res) => {
   } catch (err) {
     logger.error(`[Admin] Erro ao salvar configurações: ${err.message}`);
     await renderSettings(null, 'Erro ao salvar as configurações. Tente novamente.');
+  }
+};
+
+exports.testWebhook = async (req, res) => {
+  try {
+    const webhookUrl = await Setting.get('alert_webhook_url', '');
+    if (!webhookUrl) return res.json({ ok: false, error: 'Nenhuma URL de webhook configurada.' });
+    if (!URL_RE.test(webhookUrl) || isPrivateUrl(webhookUrl)) {
+      return res.json({ ok: false, error: 'URL de webhook inválida ou aponta para endereço interno.' });
+    }
+    const payload = JSON.stringify({
+      event: 'test',
+      message: 'Teste de webhook do Captive Portal',
+      timestamp: new Date().toISOString()
+    });
+    const u = new URL(webhookUrl);
+    const mod = u.protocol === 'https:' ? require('https') : require('http');
+    await new Promise((resolve, reject) => {
+      const httpReq = mod.request(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+        timeout: 5000
+      }, resolve);
+      httpReq.on('error', reject);
+      httpReq.on('timeout', () => { httpReq.destroy(); reject(new Error('Timeout')); });
+      httpReq.write(payload);
+      httpReq.end();
+    });
+    logger.info('[Admin] Teste de webhook enviado com sucesso.');
+    res.json({ ok: true });
+  } catch (err) {
+    logger.warn(`[Admin] Falha no teste de webhook: ${err.message}`);
+    res.json({ ok: false, error: err.message });
   }
 };
 
@@ -902,6 +1089,17 @@ exports.devices = async (req, res) => {
       ]
     } : {};
 
+    const latestTraffic = await TrafficRanking.max('recorded_at');
+    const onlineMacs = new Set(
+      latestTraffic
+        ? (await TrafficRanking.findAll({
+            where: { recorded_at: latestTraffic },
+            attributes: ['mac_address'],
+            raw: true
+          })).map(r => r.mac_address).filter(Boolean)
+        : []
+    );
+
     const [devices, total] = await Promise.all([
       DeviceHistory.findAll({
         attributes: [
@@ -929,7 +1127,8 @@ exports.devices = async (req, res) => {
         ip_count:    Number(d.ip_count),
         first_seen:  formatDate(d.first_seen),
         last_seen:   formatDate(d.last_seen),
-        router_name: d.router_name || '—'
+        router_name: d.router_name || '—',
+        online:      onlineMacs.has(d.mac_address)
       })),
       q, page,
       totalPages: Math.ceil(total / PAGE_SIZE),
@@ -1319,19 +1518,35 @@ exports.acknowledgeSecurityEvent = async (req, res) => {
 
 exports.acknowledgeAllSecurityEvents = async (req, res) => {
   try {
-    const [count] = await SecurityEvent.update(
-      { acknowledged: true },
-      {
-        where: {
-          acknowledged: false,
-          [Op.and]: [sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'attempt'`)]
-        }
-      }
-    );
+    // Aceita filtros do body (para "reconhecer visíveis") ou sem filtros (todos)
+    const filters = parseSecurityFilters(req.body || {});
+    const hasFilters = filters.type || filters.severity || filters.ip || filters.period;
+
+    let where = {
+      acknowledged: false,
+      [Op.and]: [
+        sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'attempt'`),
+        sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'register_attempt'`)
+      ]
+    };
+
+    if (hasFilters) {
+      const days = filters.period === '24h' ? 1 : SECURITY_RETENTION_DAYS;
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      where.detected_at = { [Op.gte]: since };
+      if (filters.type)     where.event_type = filters.type;
+      if (filters.severity) where.severity   = filters.severity;
+      if (filters.ip)       where.src_ip     = filters.ip;
+    }
+
+    const [count] = await SecurityEvent.update({ acknowledged: true }, { where });
     try { require('../routes/admin').invalidateSecurityCount(); } catch (_) {}
     logger.info(`[Admin] ${count} evento(s) de segurança reconhecidos em massa.`);
-    audit('security.acknowledge_all', { count, ip: req.ip });
-    res.redirect('/admin/security');
+    audit('security.acknowledge_all', { count, filters: hasFilters ? filters : 'all', ip: req.ip });
+
+    // Preserva filtros na redirect
+    const qs = hasFilters ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([, v]) => v))).toString() : '';
+    res.redirect('/admin/security' + qs);
   } catch (err) {
     logger.error(`[Admin] Erro ao reconhecer todos os eventos: ${err.message}`);
     res.status(500).send('Erro interno.');
