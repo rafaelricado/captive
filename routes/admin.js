@@ -5,9 +5,18 @@ const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const adminAuth = require('../middleware/adminAuth');
 const { csrfMiddleware, verifyCsrf } = require('../middleware/csrfProtection');
-const adminController = require('../controllers/adminController');
-const { Setting, SecurityEvent, sequelize } = require('../models');
-const { Op } = require('sequelize');
+const authController         = require('../controllers/admin/authController');
+const dashboardController    = require('../controllers/admin/dashboardController');
+const usersController        = require('../controllers/admin/usersController');
+const sessionsController     = require('../controllers/admin/sessionsController');
+const settingsController     = require('../controllers/admin/settingsController');
+const accessPointsController = require('../controllers/admin/accessPointsController');
+const networkController      = require('../controllers/admin/networkController');
+const devicesController      = require('../controllers/admin/devicesController');
+const securityController     = require('../controllers/admin/securityController');
+const managedIpsController   = require('../controllers/admin/managedIpsController');
+const { Setting } = require('../models');
+const securityCountCache = require('../utils/securityCountCache');
 
 // Diretório de upload garantido pelo startup em server.js
 const uploadsDir = path.join(__dirname, '../public/uploads/logo');
@@ -55,30 +64,12 @@ const adminLoginLimiter = rateLimit({
   }
 });
 
-// Cache simples do badge de segurança — evita query JSONB em cada requisição admin
-let _securityCountCache = { value: 0, expiresAt: 0 };
-function invalidateSecurityCount() { _securityCountCache.expiresAt = 0; }
-async function getSecurityUnreadCount() {
-  if (Date.now() < _securityCountCache.expiresAt) return _securityCountCache.value;
-  const value = await SecurityEvent.count({
-    where: {
-      acknowledged: false,
-      [Op.and]: [
-        sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'attempt'`),
-        sequelize.literal(`details->>'subtype' IS DISTINCT FROM 'register_attempt'`)
-      ]
-    }
-  });
-  _securityCountCache = { value, expiresAt: Date.now() + 30_000 };
-  return value;
-}
-
 // Middleware: injeta configurações de marca em res.locals para todas as rotas admin
 router.use(async (req, res, next) => {
   try {
     res.locals.orgName = await Setting.get('organization_name', 'Captive Portal');
     res.locals.orgLogo = await Setting.get('organization_logo', '');
-    res.locals.securityUnreadCount = await getSecurityUnreadCount();
+    res.locals.securityUnreadCount = await securityCountCache.getUnreadCount();
   } catch (_) {
     res.locals.orgName = 'Captive Portal';
     res.locals.orgLogo = '';
@@ -88,71 +79,72 @@ router.use(async (req, res, next) => {
 });
 
 // Login (público)
-router.get('/login', adminController.showLogin);
-router.post('/login', adminLoginLimiter, adminController.login);
-router.post('/logout', verifyCsrf, adminController.logout);
+router.get('/login', authController.showLogin);
+router.post('/login', adminLoginLimiter, authController.login);
+router.post('/logout', verifyCsrf, authController.logout);
 
 // Middleware CSRF em todas as rotas GET protegidas
 router.use(adminAuth, csrfMiddleware);
 
 // Painel (protegido)
-router.get('/', adminAuth, adminController.dashboard);
-router.get('/users', adminAuth, adminController.users);
-router.get('/users/export', adminAuth, adminController.exportUsers);
-router.post('/users/:id/delete', adminAuth, verifyCsrf, adminController.deleteUser);
-router.get('/sessions', adminAuth, adminController.sessions);
-router.get('/sessions/export', adminAuth, adminController.exportSessions);
-router.post('/sessions/:id/terminate', adminAuth, verifyCsrf, adminController.terminateSession);
+router.get('/', adminAuth, dashboardController.dashboard);
+router.get('/users', adminAuth, usersController.users);
+router.get('/users/export', adminAuth, usersController.exportUsers);
+router.post('/users/:id/delete', adminAuth, verifyCsrf, usersController.deleteUser);
+router.get('/sessions', adminAuth, sessionsController.sessions);
+router.get('/sessions/export', adminAuth, sessionsController.exportSessions);
+router.post('/sessions/:id/terminate', adminAuth, verifyCsrf, sessionsController.terminateSession);
 
 // Pontos de acesso (protegido)
 // IMPORTANTE: rota /ping deve vir antes de /:id/* para não ser capturada pelo param
-router.get('/access-points', adminAuth, adminController.accessPoints);
-router.post('/access-points/ping', adminAuth, verifyCsrf, adminController.pingAccessPoints);
-router.get('/access-points/:id/history', adminAuth, adminController.apHistory);
-router.post('/access-points', adminAuth, verifyCsrf, adminController.saveAccessPoint);
-router.post('/access-points/:id/delete', adminAuth, verifyCsrf, adminController.deleteAccessPoint);
+router.get('/access-points', adminAuth, accessPointsController.accessPoints);
+router.post('/access-points/ping', adminAuth, verifyCsrf, accessPointsController.pingAccessPoints);
+router.get('/access-points/:id/history', adminAuth, accessPointsController.apHistory);
+router.post('/access-points', adminAuth, verifyCsrf, accessPointsController.saveAccessPoint);
+router.post('/access-points/:id/delete', adminAuth, verifyCsrf, accessPointsController.deleteAccessPoint);
 
 // Rede / Tráfego Mikrotik (protegido)
-router.get('/traffic', adminAuth, adminController.traffic);
-router.get('/traffic/export', adminAuth, adminController.exportTraffic);
-router.get('/wan', adminAuth, adminController.wan);
-router.get('/connections', adminAuth, adminController.connections);
-router.get('/dns', adminAuth, adminController.dns);
+router.get('/traffic', adminAuth, networkController.traffic);
+router.get('/traffic/export', adminAuth, networkController.exportTraffic);
+router.get('/wan', adminAuth, networkController.wan);
+router.get('/connections', adminAuth, networkController.connections);
+router.get('/dns', adminAuth, networkController.dns);
 
 // Histórico de dispositivos (protegido)
 // IMPORTANTE: rota estática '/devices' deve vir antes de '/devices/:mac'
-router.get('/devices',        adminAuth, adminController.devices);
-router.get('/devices/export', adminAuth, adminController.exportDevices);
-router.get('/devices/:mac',   adminAuth, adminController.deviceDetail);
+router.get('/devices',        adminAuth, devicesController.devices);
+router.get('/devices/export', adminAuth, devicesController.exportDevices);
+router.get('/devices/:mac',   adminAuth, devicesController.deviceDetail);
 
 // IPs Gerenciados (protegido)
 // IMPORTANTE: rotas estáticas devem vir antes de /:id/*
-router.get('/managed-ips',                     adminAuth, adminController.managedIps);
-router.post('/managed-ips',                    adminAuth, verifyCsrf, adminController.saveManagedIp);
-router.get('/managed-ips/arp-table',           adminAuth, adminController.arpTable);
-router.get('/managed-ips/:id',                 adminAuth, adminController.managedIpDetail);
-router.post('/managed-ips/:id',                adminAuth, verifyCsrf, adminController.saveManagedIp);
-router.post('/managed-ips/:id/delete',         adminAuth, verifyCsrf, adminController.deleteManagedIp);
-router.get('/managed-ips/:id/live',            adminAuth, adminController.managedIpLive);
-router.post('/managed-ips/:id/sync',           adminAuth, verifyCsrf, adminController.syncManagedIp);
-router.post('/managed-ips/:id/identify',       adminAuth, verifyCsrf, adminController.identifyManagedIp);
+router.get('/managed-ips',                     adminAuth, managedIpsController.managedIps);
+router.post('/managed-ips',                    adminAuth, verifyCsrf, managedIpsController.saveManagedIp);
+router.get('/managed-ips/arp-table',           adminAuth, managedIpsController.arpTable);
+router.get('/managed-ips/:id',                 adminAuth, managedIpsController.managedIpDetail);
+router.post('/managed-ips/:id',                adminAuth, verifyCsrf, managedIpsController.saveManagedIp);
+router.post('/managed-ips/:id/delete',         adminAuth, verifyCsrf, managedIpsController.deleteManagedIp);
+router.get('/managed-ips/:id/live',            adminAuth, managedIpsController.managedIpLive);
+router.post('/managed-ips/:id/sync',           adminAuth, verifyCsrf, managedIpsController.syncManagedIp);
+router.post('/managed-ips/:id/identify',       adminAuth, verifyCsrf, managedIpsController.identifyManagedIp);
 
 // Endpoints JSON para auto-refresh das páginas (protegido)
-router.get('/traffic/data', adminAuth, adminController.trafficData);
-router.get('/wan/data', adminAuth, adminController.wanData);
-router.get('/connections/data', adminAuth, adminController.connectionsData);
+router.get('/traffic/data', adminAuth, networkController.trafficData);
+router.get('/wan/data', adminAuth, networkController.wanData);
+router.get('/connections/data', adminAuth, networkController.connectionsData);
 
 // Segurança — Eventos detectados (protegido)
 // IMPORTANTE: rotas estáticas devem vir antes de /:id/*
-router.get('/security', adminAuth, adminController.security);
-router.get('/security/data', adminAuth, adminController.securityData);
-router.get('/security/export', adminAuth, adminController.securityExport);
-router.post('/security/acknowledge-all', adminAuth, verifyCsrf, adminController.acknowledgeAllSecurityEvents);
-router.post('/security/:id/acknowledge', adminAuth, verifyCsrf, adminController.acknowledgeSecurityEvent);
+router.get('/security', adminAuth, securityController.security);
+router.get('/security/data', adminAuth, securityController.securityData);
+router.get('/security/export', adminAuth, securityController.securityExport);
+router.post('/security/acknowledge-all', adminAuth, verifyCsrf, securityController.acknowledgeAllSecurityEvents);
+router.post('/security/:id/acknowledge', adminAuth, verifyCsrf, securityController.acknowledgeSecurityEvent);
 
 // Configurações (protegido)
-router.get('/settings', adminAuth, adminController.showSettings);
-router.post('/settings/test-webhook', adminAuth, adminController.testWebhook);
+router.get('/settings', adminAuth, settingsController.showSettings);
+router.get('/settings/traffic-script', adminAuth, settingsController.downloadTrafficScript);
+router.post('/settings/test-webhook', adminAuth, settingsController.testWebhook);
 router.post('/settings', adminAuth, verifyCsrf, (req, res, next) => {
   upload.single('organization_logo')(req, res, err => {
     if (err instanceof multer.MulterError || err) {
@@ -161,7 +153,7 @@ router.post('/settings', adminAuth, verifyCsrf, (req, res, next) => {
     }
     next();
   });
-}, adminController.saveSettings);
+}, settingsController.saveSettings);
 
 module.exports = router;
-module.exports.invalidateSecurityCount = invalidateSecurityCount;
+module.exports.invalidateSecurityCount = securityCountCache.invalidate;

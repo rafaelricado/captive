@@ -141,27 +141,24 @@ exports.receiveTraffic = async (req, res) => {
       const rows = clients.map(c => ({ ...c, router_name: routerName, recorded_at: now }));
       await TrafficRanking.bulkCreate(rows);
 
-      // Upsert no histórico permanente de dispositivos (MAC → IP → primeira/última vez visto)
-      // Usa query raw: bulkCreate com updateOnDuplicate usa o PK (UUID) como conflict target
-      // no PostgreSQL, nunca disparando o upsert. O SQL abaixo usa a constraint composta.
+      // Upsert em lote no histórico permanente de dispositivos (MAC → IP → primeira/última vez visto)
+      // Uma única query para todos os dispositivos com MAC válido, usando parâmetros posicionais
+      // para evitar SQL injection. A constraint composta dispara o ON CONFLICT corretamente.
       const histRows = clients.filter(c => c.mac_address);
-      for (const c of histRows) {
+      if (histRows.length > 0) {
+        const bind = [];
+        const placeholders = histRows.map((c) => {
+          const base = bind.length;
+          bind.push(c.mac_address, c.ip_address, c.hostname || null, routerName, now);
+          return `(gen_random_uuid(), $${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+5})`;
+        });
         await sequelize.query(
           `INSERT INTO device_history (id, mac_address, ip_address, hostname, router_name, first_seen, last_seen)
-           VALUES (gen_random_uuid(), :mac, :ip, :hostname, :router, :now, :now)
+           VALUES ${placeholders.join(', ')}
            ON CONFLICT (mac_address, ip_address, router_name) DO UPDATE SET
              last_seen = EXCLUDED.last_seen,
              hostname  = COALESCE(EXCLUDED.hostname, device_history.hostname)`,
-          {
-            replacements: {
-              mac:      c.mac_address,
-              ip:       c.ip_address,
-              hostname: c.hostname || null,
-              router:   routerName,
-              now:      now
-            },
-            type: sequelize.QueryTypes.INSERT
-          }
+          { bind, type: sequelize.QueryTypes.INSERT }
         );
       }
     }
@@ -172,15 +169,6 @@ exports.receiveTraffic = async (req, res) => {
       const rows = ifaces.map(i => ({ ...i, router_name: routerName, recorded_at: now }));
       await WanStat.bulkCreate(rows);
     }
-
-    // Limpeza de dados antigos (assíncrona, não bloqueia a resposta)
-    TrafficRanking.destroy({
-      where: { recorded_at: { [Op.lt]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } }
-    }).catch(err => logger.warn(`[MikrotikData] Erro ao limpar traffic_rankings: ${err.message}`));
-
-    WanStat.destroy({
-      where: { recorded_at: { [Op.lt]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }
-    }).catch(err => logger.warn(`[MikrotikData] Erro ao limpar wan_stats: ${err.message}`));
 
     logger.info(`[MikrotikData] Traffic: ${clients.length} clientes, ${ifaces.length} interfaces (router: ${routerName})`);
     res.json({ ok: true });

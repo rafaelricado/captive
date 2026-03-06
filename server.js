@@ -176,6 +176,26 @@ async function start() {
       }
     });
 
+    // Cron: limpeza de dados antigos todo dia às 03:00
+    // traffic_rankings: retém 30 dias | wan_stats: retém 7 dias | security_events: retém 30 dias
+    cron.schedule('0 3 * * *', async () => {
+      try {
+        const { TrafficRanking, WanStat, SecurityEvent } = require('./models');
+        const { Op } = require('sequelize');
+        const now = Date.now();
+
+        const [tr, ws, se] = await Promise.all([
+          TrafficRanking.destroy({ where: { recorded_at: { [Op.lt]: new Date(now - 30 * 24 * 60 * 60 * 1000) } } }),
+          WanStat.destroy({        where: { recorded_at: { [Op.lt]: new Date(now -  7 * 24 * 60 * 60 * 1000) } } }),
+          SecurityEvent.destroy({  where: { detected_at: { [Op.lt]: new Date(now - 30 * 24 * 60 * 60 * 1000) } } })
+        ]);
+
+        logger.info(`[Cron] Limpeza noturna: ${tr} traffic_rankings, ${ws} wan_stats, ${se} security_events removidos`);
+      } catch (err) {
+        logger.error(`[Cron] Erro na limpeza noturna: ${err.message}`);
+      }
+    });
+
     startNetflowCollector();
 
     const server = app.listen(PORT, '0.0.0.0', () => {
