@@ -1775,7 +1775,13 @@ exports.arpTable = async (req, res) => {
     const managedSet = new Set(managed.map(m => m.ip_address));
 
     const entries = arpEntries
-      .filter(e => e.address && e['mac-address'])
+      .filter(e =>
+        e.address &&
+        e['mac-address'] &&
+        e.address !== '0.0.0.0' &&   // exclui entradas de bridge/proxy ARP sem IP real
+        e.complete  !== 'false' &&    // exclui hosts que não responderam ao ARP
+        e.disabled  !== 'true'        // exclui entradas desabilitadas manualmente
+      )
       .map(e => ({
         ip:         e.address,
         mac:        e['mac-address'],
