@@ -321,7 +321,7 @@
 # Formato conexões: srcIP,dstIP,dstPort,origBytes,replBytes;...
 # Formato DNS:      domain>ip;domain>ip;...
 #
-# Roda a cada 15 minutos (menos frequente que o tráfego).
+# Roda a cada 5 minutos (alinhado com o detector de segurança do servidor).
 
 /system script add name="traffic-ranking-send-details" policy=read,write,test source="\
 :local serverUrl \"http://10.0.0.56:3000/api/mikrotik/details\"\r\
@@ -331,7 +331,10 @@
 :local connCount 0\r\
 :local maxConns 200\r\
 \r\
-:foreach c in=[/ip firewall connection find where src-address~\"10.0.\"] do={\r\
+# Captura conexoes da rede interna (10.0.x.x) e da rede de visitantes (15.1.1.x)\r\
+:local connsInt [/ip firewall connection find where src-address~\"10.0.\"]\r\
+:local connsVis [/ip firewall connection find where src-address~\"15.1.\"]\r\
+:foreach c in=($connsInt,$connsVis) do={\r\
     :if (\$connCount < \$maxConns) do={\r\
         :do {\r\
             :local src [:tostr [/ip firewall connection get \$c src-address]]\r\
@@ -365,7 +368,10 @@
                 }\r\
             }\r\
             :local totalB (\$origB + \$replB)\r\
-            :if (\$totalB > 10000 and \$isLocal = 0) do={\r\
+            # Inclui porta 53 (DNS) sem threshold de tamanho — necessario para detectar DNS tunneling\r\
+            :local isDns 0\r\
+            :if (\$dport = \"53\") do={ :set isDns 1 }\r\
+            :if ((\$totalB > 10000 or \$isDns = 1) and \$isLocal = 0) do={\r\
                 :set connData (\$connData . \$srcIP . \",\" . \$dstIP . \",\" . \$dport . \",\" . \$origB . \",\" . \$replB . \";\")\r\
                 :set connCount (\$connCount + 1)\r\
             }\r\
@@ -422,7 +428,7 @@
 
 /system scheduler add name="traffic-ranking-scheduler" interval=5m on-event="/system script run traffic-ranking-send" start-time=startup comment="RANKING: Envio periodico para servidor local"
 
-/system scheduler add name="traffic-ranking-details" interval=15m on-event="/system script run traffic-ranking-send-details" start-time=startup comment="RANKING: Envio detalhes conexoes+DNS"
+/system scheduler add name="traffic-ranking-details" interval=5m on-event="/system script run traffic-ranking-send-details" start-time=startup comment="RANKING: Envio detalhes conexoes+DNS"
 
 :log info "RANKING: Schedulers criados (sync 30min, trafego 5min, detalhes 15min)"
 
@@ -436,7 +442,7 @@
 :log warning "  Trafego local excluido (address-list)"
 :log warning "  Sync de regras: a cada 30 min"
 :log warning "  Envio trafego: a cada 5 min"
-:log warning "  Envio detalhes: a cada 15 min"
+:log warning "  Envio detalhes: a cada 5 min"
 :log warning "============================================"
 
 

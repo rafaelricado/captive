@@ -7,8 +7,8 @@ const DISPLAY_TIMEZONE = process.env.DISPLAY_TIMEZONE || 'America/Sao_Paulo';
 
 // ─── Constantes fixas ──────────────────────────────────────────────────────────
 const BRUTE_FORCE_WINDOW_MS = 15 * 60 * 1000; // 15 min
-const PORT_SCAN_WINDOW_MS   = 10 * 60 * 1000; // 10 min
-const DNS_TUNNEL_WINDOW_MS  = 10 * 60 * 1000; // 10 min
+const PORT_SCAN_WINDOW_MS   = 15 * 60 * 1000; // 15 min (script envia a cada 5 min)
+const DNS_TUNNEL_WINDOW_MS  = 15 * 60 * 1000; // 15 min (script envia a cada 5 min)
 const MAC_SPOOF_WINDOW_MS   = 2 * 60 * 60 * 1000; // 2 h
 const DEDUP_WINDOW_MS       = 60 * 60 * 1000; // 1 h
 const EVENT_RETENTION_DAYS  = 30;
