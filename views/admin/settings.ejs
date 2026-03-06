@@ -311,11 +311,19 @@
         <h3>Detecção de Ataques</h3>
 
         <div class="field">
-          <label for="security_ip_whitelist">Whitelist de IPs (um por linha)</label>
+          <label for="security_ip_whitelist">Whitelist global de IPs (um por linha)</label>
           <textarea id="security_ip_whitelist" name="security_ip_whitelist"
                     rows="4" style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:.85rem;font-family:monospace;resize:vertical"
                     placeholder="192.168.1.1&#10;10.0.0.1"><%= securityWhitelist %></textarea>
-          <p class="hint">IPs que nunca gerarão alertas de segurança (ex: admin, monitoramento).</p>
+          <p class="hint">IPs que nunca gerarão <strong>nenhum</strong> alerta de segurança (ex: admin, monitoramento).</p>
+        </div>
+
+        <div class="field">
+          <label for="security_anomaly_ip_whitelist">Whitelist de anomalia de tráfego (um por linha)</label>
+          <textarea id="security_anomaly_ip_whitelist" name="security_anomaly_ip_whitelist"
+                    rows="4" style="width:100%;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:.85rem;font-family:monospace;resize:vertical"
+                    placeholder="10.0.0.10&#10;10.0.0.20"><%= securityAnomalyWhitelist %></textarea>
+          <p class="hint">IPs que <strong>não</strong> gerarão alertas de anomalia de tráfego, mas ainda disparam força bruta e port scan (ex: servidores de backup, câmeras, NAS).</p>
         </div>
 
         <p style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:12px">Limiares de detecção</p>

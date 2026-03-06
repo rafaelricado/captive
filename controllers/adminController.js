@@ -534,7 +534,7 @@ function isPrivateUrl(urlStr) {
 async function fetchAllSettings() {
   const [
     orgName, orgLogo, sessionDuration, bgColor1, bgColor2, alertWebhookUrl, mikrotikDataKey,
-    securityWhitelistRaw, bruteForceThreshold, portScanThreshold,
+    securityWhitelistRaw, securityAnomalyWhitelistRaw, bruteForceThreshold, portScanThreshold,
     registerThreshold, dnsThreshold, anomalyStddev
   ] = await Promise.all([
     Setting.get('organization_name', 'Captive Portal'),
@@ -545,6 +545,7 @@ async function fetchAllSettings() {
     Setting.get('alert_webhook_url', ''),
     Setting.get('mikrotik_data_key', ''),
     Setting.get('security_ip_whitelist', '[]'),
+    Setting.get('security_anomaly_ip_whitelist', '[]'),
     Setting.get('security_brute_force_threshold', '5'),
     Setting.get('security_port_scan_threshold', '20'),
     Setting.get('security_register_threshold', '5'),
@@ -558,9 +559,15 @@ async function fetchAllSettings() {
     if (Array.isArray(arr)) securityWhitelist = arr.join('\n');
   } catch (_) {}
 
+  let securityAnomalyWhitelist = '';
+  try {
+    const arr = JSON.parse(securityAnomalyWhitelistRaw);
+    if (Array.isArray(arr)) securityAnomalyWhitelist = arr.join('\n');
+  } catch (_) {}
+
   return {
     orgName, orgLogo, sessionDuration, bgColor1, bgColor2, alertWebhookUrl, mikrotikDataKey,
-    securityWhitelist, bruteForceThreshold, portScanThreshold,
+    securityWhitelist, securityAnomalyWhitelist, bruteForceThreshold, portScanThreshold,
     registerThreshold, dnsThreshold, anomalyStddev
   };
 }
@@ -637,22 +644,29 @@ exports.saveSettings = async (req, res) => {
 
     // ── Configurações de segurança ──
     const {
-      security_ip_whitelist,
+      security_ip_whitelist, security_anomaly_ip_whitelist,
       security_brute_force_threshold, security_port_scan_threshold,
       security_register_threshold, security_dns_threshold, security_anomaly_stddev
     } = req.body;
 
-    // Whitelist: uma linha por IP, valida formato básico
+    // Whitelist helper: uma linha por IP, valida formato básico
     const IP_RE = /^[\d.a-fA-F:]{1,45}$/;
-    const whitelistLines = (security_ip_whitelist || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
-    const invalidIps = whitelistLines.filter(ip => !IP_RE.test(ip));
-    if (invalidIps.length > 0) {
-      return await renderSettings(null, `IP(s) inválido(s) na whitelist: ${invalidIps.slice(0, 3).join(', ')}`);
+    function parseWhitelist(raw, label) {
+      const lines = (raw || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
+      const invalid = lines.filter(ip => !IP_RE.test(ip));
+      if (invalid.length > 0) throw new Error(`IP(s) inválido(s) na ${label}: ${invalid.slice(0, 3).join(', ')}`);
+      if (lines.length > 100) throw new Error(`${label} não pode ter mais de 100 IPs.`);
+      return lines;
     }
-    if (whitelistLines.length > 100) {
-      return await renderSettings(null, 'Whitelist não pode ter mais de 100 IPs.');
+    let whitelistLines, anomalyWhitelistLines;
+    try {
+      whitelistLines        = parseWhitelist(security_ip_whitelist,         'whitelist global');
+      anomalyWhitelistLines = parseWhitelist(security_anomaly_ip_whitelist, 'whitelist de anomalia');
+    } catch (e) {
+      return await renderSettings(null, e.message);
     }
-    await Setting.set('security_ip_whitelist', JSON.stringify(whitelistLines));
+    await Setting.set('security_ip_whitelist',         JSON.stringify(whitelistLines));
+    await Setting.set('security_anomaly_ip_whitelist', JSON.stringify(anomalyWhitelistLines));
 
     // Thresholds: inteiros >= 1
     const thresholds = [

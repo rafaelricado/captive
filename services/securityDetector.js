@@ -51,10 +51,11 @@ async function sendSecurityAlert(event) {
 // ─── Configurações dinâmicas ──────────────────────────────────────────────────
 async function loadSecuritySettings() {
   const [
-    whitelist_raw, bf_threshold, ps_threshold,
+    whitelist_raw, anomaly_whitelist_raw, bf_threshold, ps_threshold,
     reg_threshold, dns_threshold, stddev_factor
   ] = await Promise.all([
     Setting.get('security_ip_whitelist', '[]'),
+    Setting.get('security_anomaly_ip_whitelist', '[]'),
     Setting.get('security_brute_force_threshold', '5'),
     Setting.get('security_port_scan_threshold', '20'),
     Setting.get('security_register_threshold', '5'),
@@ -66,8 +67,13 @@ async function loadSecuritySettings() {
   try { whitelist = JSON.parse(whitelist_raw); } catch (_) {}
   if (!Array.isArray(whitelist)) whitelist = [];
 
+  let anomalyWhitelist = [];
+  try { anomalyWhitelist = JSON.parse(anomaly_whitelist_raw); } catch (_) {}
+  if (!Array.isArray(anomalyWhitelist)) anomalyWhitelist = [];
+
   return {
     whitelist,
+    anomalyWhitelist,
     bruteForceThreshold: Math.max(1, parseInt(bf_threshold, 10) || 5),
     portScanThreshold:   Math.max(1, parseInt(ps_threshold, 10) || 20),
     registerThreshold:   Math.max(1, parseInt(reg_threshold, 10) || 5),
@@ -256,7 +262,7 @@ async function detectDnsTunneling({ whitelist, dnsThreshold }) {
 }
 
 // ─── Detector: MAC Spoofing ───────────────────────────────────────────────────
-async function detectMacSpoofing({ whitelist }) {
+async function detectMacSpoofing({ whitelist, anomalyWhitelist }) {
   const since = new Date(Date.now() - MAC_SPOOF_WINDOW_MS);
 
   const rows = await TrafficRanking.findAll({
@@ -276,7 +282,7 @@ async function detectMacSpoofing({ whitelist }) {
   for (const row of rows) {
     const src_ip = row.ip_address;
     if (!src_ip) continue;
-    if (isWhitelisted(src_ip, whitelist)) continue;
+    if (isWhitelisted(src_ip, whitelist) || isWhitelisted(src_ip, anomalyWhitelist)) continue;
     const mac_count = Number(row.mac_count);
     if (await isDuplicateSubtype(src_ip, 'mac_spoofing')) continue;
 
@@ -299,7 +305,7 @@ async function detectMacSpoofing({ whitelist }) {
 }
 
 // ─── Detector: Anomalia de Tráfego ───────────────────────────────────────────
-async function detectTrafficAnomalies({ whitelist, anomalyStddev }) {
+async function detectTrafficAnomalies({ whitelist, anomalyWhitelist, anomalyStddev }) {
   const latest = await TrafficRanking.max('recorded_at');
   if (!latest) return;
   if (Date.now() - new Date(latest).getTime() > 15 * 60 * 1000) return;
@@ -320,7 +326,7 @@ async function detectTrafficAnomalies({ whitelist, anomalyStddev }) {
     if (bytes_down <= threshold) continue;
     const src_ip = row.ip_address;
     if (!src_ip) continue;
-    if (isWhitelisted(src_ip, whitelist)) continue;
+    if (isWhitelisted(src_ip, whitelist) || isWhitelisted(src_ip, anomalyWhitelist)) continue;
     if (await isDuplicate('traffic_anomaly', src_ip)) continue;
 
     const factor = ((bytes_down - mean) / stddev).toFixed(1);

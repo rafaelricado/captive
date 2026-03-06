@@ -58,6 +58,7 @@ const initDatabase = async () => {
 
   // Configurações do detector de segurança
   await Setting.findOrCreate({ where: { key: 'security_ip_whitelist' },          defaults: { value: '[]' } });
+  await Setting.findOrCreate({ where: { key: 'security_anomaly_ip_whitelist' },  defaults: { value: '[]' } });
   await Setting.findOrCreate({ where: { key: 'security_brute_force_threshold' }, defaults: { value: '5' } });
   await Setting.findOrCreate({ where: { key: 'security_port_scan_threshold' },   defaults: { value: '20' } });
   await Setting.findOrCreate({ where: { key: 'security_register_threshold' },    defaults: { value: '5' } });
