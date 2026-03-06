@@ -154,30 +154,10 @@ router.post('/security/:id/acknowledge', adminAuth, verifyCsrf, adminController.
 router.get('/settings', adminAuth, adminController.showSettings);
 router.post('/settings/test-webhook', adminAuth, adminController.testWebhook);
 router.post('/settings', adminAuth, verifyCsrf, (req, res, next) => {
-  upload.single('organization_logo')(req, res, async err => {
+  upload.single('organization_logo')(req, res, err => {
     if (err instanceof multer.MulterError || err) {
-      let bgColor1 = '#0d4e8b', bgColor2 = '#1a7bc4', sessionDuration = 48;
-      let alertWebhookUrl = '';
-      try {
-        [bgColor1, bgColor2, sessionDuration, alertWebhookUrl] = await Promise.all([
-          Setting.get('portal_bg_color_1', '#0d4e8b'),
-          Setting.get('portal_bg_color_2', '#1a7bc4'),
-          Setting.getSessionDuration(),
-          Setting.get('alert_webhook_url', '')
-        ]);
-      } catch (_) { /* mantém os defaults acima */ }
-
-      return res.render('admin/settings', {
-        orgName: res.locals.orgName,
-        orgLogo: res.locals.orgLogo,
-        sessionDuration,
-        bgColor1,
-        bgColor2,
-        alertWebhookUrl,
-        page: 'settings',
-        success: null,
-        error: err.message || 'Erro ao processar o arquivo enviado.'
-      });
+      // Propaga o erro de upload para o controller que já tem o helper renderSettings completo
+      req.uploadError = err.message || 'Erro ao processar o arquivo enviado.';
     }
     next();
   });

@@ -588,6 +588,11 @@ exports.saveSettings = async (req, res) => {
     res.render('admin/settings', { ...s, page: 'settings', success, error });
   };
 
+  // Erro de upload propagado pelo middleware multer na rota
+  if (req.uploadError) {
+    return await renderSettings(null, req.uploadError);
+  }
+
   try {
     const {
       organization_name, session_duration_hours,
