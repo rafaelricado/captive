@@ -1883,8 +1883,8 @@ exports.syncManagedIp = async (req, res) => {
     const macForId = updates.mac_address || managed.mac_address;
     if (macForId) {
       const identified = await ouiLookup.identify(macForId);
-      if (identified.vendor)      updates.vendor      = identified.vendor;
-      if (identified.device_type) updates.device_type = identified.device_type;
+      if (identified.vendor)                               updates.vendor      = identified.vendor;
+      if (identified.device_type !== 'unknown')            updates.device_type = identified.device_type;
     }
 
     if (Object.keys(updates).length > 0) {
@@ -1907,7 +1907,7 @@ exports.identifyManagedIp = async (req, res) => {
     if (!managed) return res.status(404).json({ error: 'IP não encontrado.' });
 
     if (!managed.mac_address) {
-      return res.status(400).json({ error: 'Sem MAC cadastrado. Sincronize com o Mikrotik primeiro.' });
+      return res.json({ ok: false, message: 'Sem MAC cadastrado. Sincronize com o Mikrotik primeiro.' });
     }
 
     const { vendor, device_type } = await ouiLookup.identify(managed.mac_address);
