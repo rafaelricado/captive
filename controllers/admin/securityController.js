@@ -28,7 +28,8 @@ function summarizeDetails(details) {
   if (details.subtype === 'register_flood')   return `${details.attempt_count} cadastros repetidos em ${details.window_minutes || '?'} min`;
   if (details.subtype === 'dns_tunneling')    return `${details.dns_count} queries DNS em ${details.window_minutes || '?'} min`;
   if (details.subtype === 'mac_spoofing')     return `${details.mac_count} MACs distintos: ${(details.macs || []).join(', ')}`;
-  if (details.subtype === 'correlation')      return `Múltiplos ataques: ${(details.event_types || []).join(', ')}`;
+  if (details.subtype === 'correlation')           return `Múltiplos ataques: ${(details.event_types || []).join(', ')}`;
+  if (details.subtype === 'mikrotik_brute_force')  return `${details.attempt_count} tentativas no Mikrotik via ${(details.services || []).join(', ')}`;
   if (details.attempt_count)  return `${details.attempt_count} tentativas em ${details.window_minutes || '?'} min`;
   if (details.distinct_ports) return `${details.distinct_ports} portas distintas em ${details.window_minutes || '?'} min`;
   if (details.bytes_down_mb)  return `${details.bytes_down_mb} MB baixados (${details.stddev_factor || '?'}× desvio padrão)`;

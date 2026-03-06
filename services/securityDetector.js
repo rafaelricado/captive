@@ -1,12 +1,14 @@
 const axios = require('axios');
 const { Op } = require('sequelize');
 const { SecurityEvent, ClientConnection, TrafficRanking, Setting, sequelize } = require('../models');
+const mikrotikService = require('./mikrotikService');
 const logger = require('../utils/logger');
 
 const DISPLAY_TIMEZONE = process.env.DISPLAY_TIMEZONE || 'America/Sao_Paulo';
 
 // ─── Constantes fixas ──────────────────────────────────────────────────────────
-const BRUTE_FORCE_WINDOW_MS = 15 * 60 * 1000; // 15 min
+const BRUTE_FORCE_WINDOW_MS    = 15 * 60 * 1000; // 15 min
+const MIKROTIK_LOG_WINDOW_MS   = 15 * 60 * 1000; // 15 min
 const PORT_SCAN_WINDOW_MS   = 15 * 60 * 1000; // 15 min (script envia a cada 5 min)
 const DNS_TUNNEL_WINDOW_MS  = 15 * 60 * 1000; // 15 min (script envia a cada 5 min)
 const MAC_SPOOF_WINDOW_MS   = 2 * 60 * 60 * 1000; // 2 h
@@ -105,7 +107,7 @@ async function isDuplicate(event_type, src_ip) {
 }
 
 // Subtypes válidos para consulta de deduplicação (whitelist para evitar interpolação arbitrária)
-const VALID_SUBTYPES = new Set(['register_flood', 'dns_tunneling', 'mac_spoofing', 'correlation']);
+const VALID_SUBTYPES = new Set(['register_flood', 'dns_tunneling', 'mac_spoofing', 'correlation', 'mikrotik_brute_force']);
 
 /** Verifica duplicata de evento com subtype específico nos últimos 60 min */
 async function isDuplicateSubtype(src_ip, subtype) {
@@ -119,6 +121,89 @@ async function isDuplicateSubtype(src_ip, subtype) {
     }
   });
   return !!existing;
+}
+
+// ─── Parser de tempo do log RouterOS ─────────────────────────────────────────
+// Formatos possíveis: "HH:MM:SS" (hoje), "mon/dd HH:MM:SS" (este ano),
+// "mon/dd/yyyy HH:MM:SS" (data completa)
+const MIKROTIK_MONTHS = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
+
+function parseMikrotikLogTime(timeStr) {
+  if (!timeStr) return null;
+  const now = new Date();
+
+  // "HH:MM:SS"
+  if (/^\d{2}:\d{2}:\d{2}$/.test(timeStr)) {
+    const [h, m, s] = timeStr.split(':').map(Number);
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, s).getTime();
+  }
+
+  // "mon/dd HH:MM:SS"
+  let match = timeStr.match(/^([a-z]{3})\/(\d{1,2}) (\d{2}):(\d{2}):(\d{2})$/i);
+  if (match) {
+    const mon = MIKROTIK_MONTHS[match[1].toLowerCase()];
+    if (mon === undefined) return null;
+    return new Date(now.getFullYear(), mon, +match[2], +match[3], +match[4], +match[5]).getTime();
+  }
+
+  // "mon/dd/yyyy HH:MM:SS"
+  match = timeStr.match(/^([a-z]{3})\/(\d{1,2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})$/i);
+  if (match) {
+    const mon = MIKROTIK_MONTHS[match[1].toLowerCase()];
+    if (mon === undefined) return null;
+    return new Date(+match[3], mon, +match[2], +match[4], +match[5], +match[6]).getTime();
+  }
+
+  return null;
+}
+
+// ─── Detector: Brute Force no Mikrotik ───────────────────────────────────────
+async function detectMikrotikBruteForce({ whitelist, bruteForceThreshold }) {
+  const entries = await mikrotikService.getMikrotikLoginFailures();
+  if (!entries || entries.length === 0) return;
+
+  const now      = Date.now();
+  const since    = now - MIKROTIK_LOG_WINDOW_MS;
+  const ipCounts   = {};
+  const ipServices = {};
+
+  for (const entry of entries) {
+    const message  = entry.message || '';
+    // "login failure for user X from Y.Y.Y.Y via Z"
+    const ipMatch  = message.match(/from ([\d.a-fA-F:]+) via (\w+)/);
+    if (!ipMatch) continue;
+
+    const ip      = ipMatch[1];
+    const service = ipMatch[2];
+
+    const entryTs = parseMikrotikLogTime(entry.time || '');
+    if (!entryTs || entryTs < since) continue;
+
+    if (!ipCounts[ip]) { ipCounts[ip] = 0; ipServices[ip] = new Set(); }
+    ipCounts[ip]++;
+    ipServices[ip].add(service);
+  }
+
+  for (const [ip, count] of Object.entries(ipCounts)) {
+    if (isWhitelisted(ip, whitelist)) continue;
+    if (count < bruteForceThreshold) continue;
+    if (await isDuplicateSubtype(ip, 'mikrotik_brute_force')) continue;
+
+    const services  = [...ipServices[ip]];
+    const severity  = count >= 20 ? 'high' : count >= 10 ? 'medium' : 'low';
+    const event     = await SecurityEvent.create({
+      event_type: 'brute_force', severity, src_ip: ip,
+      details: {
+        subtype: 'mikrotik_brute_force',
+        attempt_count:   count,
+        window_minutes:  MIKROTIK_LOG_WINDOW_MS / 60000,
+        services,
+        threshold:       bruteForceThreshold
+      }
+    });
+    logger.warn(`[Security] Brute force no Mikrotik: ${ip} — ${count} tentativas via ${services.join(', ')}`);
+    sendSecurityAlert(event).catch(err => logger.error(`[Security] Webhook: ${err.message}`));
+  }
 }
 
 // ─── Detector: Força Bruta ────────────────────────────────────────────────────
@@ -434,14 +519,15 @@ async function runAllDetectors() {
 
   // Detectores primários em paralelo
   await Promise.allSettled([
-    detectBruteForce(settings).catch(err       => logger.error(`[Security] Força bruta: ${err.message}`)),
-    detectRegisterFlood(settings).catch(err    => logger.error(`[Security] Flood registro: ${err.message}`)),
-    detectPortScans(settings).catch(err        => logger.error(`[Security] Port scan: ${err.message}`)),
-    detectDnsTunneling(settings).catch(err     => logger.error(`[Security] DNS tunneling: ${err.message}`)),
-    detectTrafficAnomalies(settings).catch(err => logger.error(`[Security] Tráfego: ${err.message}`)),
-    detectMacSpoofing(settings).catch(err      => logger.error(`[Security] MAC spoofing: ${err.message}`)),
-    cleanOldAttempts().catch(err               => logger.error(`[Security] Limpeza tentativas: ${err.message}`)),
-    cleanOldEvents().catch(err                 => logger.error(`[Security] Limpeza eventos: ${err.message}`))
+    detectBruteForce(settings).catch(err             => logger.error(`[Security] Força bruta: ${err.message}`)),
+    detectRegisterFlood(settings).catch(err          => logger.error(`[Security] Flood registro: ${err.message}`)),
+    detectPortScans(settings).catch(err              => logger.error(`[Security] Port scan: ${err.message}`)),
+    detectDnsTunneling(settings).catch(err           => logger.error(`[Security] DNS tunneling: ${err.message}`)),
+    detectTrafficAnomalies(settings).catch(err       => logger.error(`[Security] Tráfego: ${err.message}`)),
+    detectMacSpoofing(settings).catch(err            => logger.error(`[Security] MAC spoofing: ${err.message}`)),
+    detectMikrotikBruteForce(settings).catch(err     => logger.error(`[Security] Mikrotik brute force: ${err.message}`)),
+    cleanOldAttempts().catch(err                     => logger.error(`[Security] Limpeza tentativas: ${err.message}`)),
+    cleanOldEvents().catch(err                       => logger.error(`[Security] Limpeza eventos: ${err.message}`))
   ]);
 
   // Correlação roda após os primários para capturar os eventos recém-criados

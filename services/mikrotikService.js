@@ -170,6 +170,17 @@ async function getDhcpLeases() {
   }
 }
 
+async function getMikrotikLoginFailures() {
+  try {
+    const conn = await getApi();
+    const entries = await conn.write('/log/print', ['?~message=login failure']);
+    return entries;
+  } catch (err) {
+    logger.warn(`[Mikrotik] Erro ao buscar logs de login: ${err.message}`);
+    return null;
+  }
+}
+
 async function disconnect() {
   if (api) {
     try {
@@ -182,4 +193,4 @@ async function disconnect() {
   }
 }
 
-module.exports = { authorizeUser, removeUser, disconnect, getArpTable, getDhcpLeases };
+module.exports = { authorizeUser, removeUser, disconnect, getArpTable, getDhcpLeases, getMikrotikLoginFailures };
