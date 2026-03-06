@@ -125,6 +125,17 @@ router.get('/devices',        adminAuth, adminController.devices);
 router.get('/devices/export', adminAuth, adminController.exportDevices);
 router.get('/devices/:mac',   adminAuth, adminController.deviceDetail);
 
+// IPs Gerenciados (protegido)
+// IMPORTANTE: rotas estáticas devem vir antes de /:id/*
+router.get('/managed-ips',                     adminAuth, adminController.managedIps);
+router.post('/managed-ips',                    adminAuth, verifyCsrf, adminController.saveManagedIp);
+router.get('/managed-ips/arp-table',           adminAuth, adminController.arpTable);
+router.get('/managed-ips/:id',                 adminAuth, adminController.managedIpDetail);
+router.post('/managed-ips/:id',                adminAuth, verifyCsrf, adminController.saveManagedIp);
+router.post('/managed-ips/:id/delete',         adminAuth, verifyCsrf, adminController.deleteManagedIp);
+router.get('/managed-ips/:id/live',            adminAuth, adminController.managedIpLive);
+router.post('/managed-ips/:id/sync',           adminAuth, verifyCsrf, adminController.syncManagedIp);
+
 // Endpoints JSON para auto-refresh das páginas (protegido)
 router.get('/traffic/data', adminAuth, adminController.trafficData);
 router.get('/wan/data', adminAuth, adminController.wanData);

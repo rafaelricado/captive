@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= managed.ip_address %> &mdash; IP Gerenciado</title>
+  <%- include('_head') %>
+  <style>
+    .section-card {
+      background:#fff;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.08);
+      padding:24px 28px;margin-bottom:24px;
+    }
+    .section-title {
+      font-size:1rem;font-weight:700;color:#0d4e8b;margin-bottom:16px;
+      display:flex;align-items:center;gap:10px;
+    }
+    .form-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px; }
+    .form-group { display:flex;flex-direction:column;gap:4px; }
+    .form-group label { font-size:.78rem;font-weight:600;color:#374151; }
+    .form-group input, .form-group textarea, .form-group select {
+      padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;
+      font-size:.875rem;font-family:inherit;
+    }
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+      outline:none;border-color:#0d4e8b;box-shadow:0 0 0 2px rgba(13,78,139,.15);
+    }
+    .form-actions { display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;align-items:center; }
+    .btn-primary {
+      padding:8px 22px;background:#0d4e8b;color:#fff;border:none;
+      border-radius:8px;font-size:.875rem;font-weight:600;cursor:pointer;transition:background .15s;
+    }
+    .btn-primary:hover { background:#0b4070; }
+    .btn-danger {
+      padding:8px 18px;background:#fff;color:#dc2626;border:1px solid #dc2626;
+      border-radius:8px;font-size:.875rem;font-weight:600;cursor:pointer;transition:all .15s;
+    }
+    .btn-danger:hover { background:#fee2e2; }
+    .btn-sync {
+      padding:8px 18px;background:#fff;color:#0d4e8b;border:1px solid #0d4e8b;
+      border-radius:8px;font-size:.875rem;font-weight:600;cursor:pointer;transition:all .15s;
+    }
+    .btn-sync:hover { background:#e0edff; }
+    .live-box {
+      display:grid;grid-template-columns:1fr 1fr;gap:16px;
+    }
+    .live-card {
+      background:#f9fafb;border-radius:10px;padding:16px;border:1px solid #e5e7eb;
+    }
+    .live-card h4 { font-size:.85rem;font-weight:700;color:#374151;margin-bottom:10px; }
+    .live-row { display:flex;gap:8px;margin-bottom:6px;font-size:.82rem; }
+    .live-label { color:#6b7280;min-width:120px;flex-shrink:0; }
+    .live-value { color:#1f2937;font-family:monospace;word-break:break-all; }
+    .live-na    { color:#9ca3af;font-style:italic; }
+    #live-status { font-size:.78rem;color:#6b7280;margin-left:8px; }
+    @media(max-width:600px){ .live-box { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <%- include('_nav', { page: pageObj }) %>
+
+  <main class="container">
+    <div style="margin-bottom:16px">
+      <a href="/admin/managed-ips" style="font-size:.875rem;color:#6b7280">&larr; Voltar para IPs Gerenciados</a>
+    </div>
+
+    <h2 class="page-title">
+      <span style="font-family:monospace"><%= managed.ip_address %></span>
+      <% if (managed.hostname) { %>
+        <span style="font-size:1rem;font-weight:400;color:#6b7280;margin-left:8px">&mdash; <%= managed.hostname %></span>
+      <% } %>
+    </h2>
+
+    <!-- ─── Formulário de edição ─────────────────────────────────────── -->
+    <div class="section-card">
+      <div class="section-title">Dados do IP</div>
+      <form method="POST" action="/admin/managed-ips/<%= managed.id %>">
+        <input type="hidden" name="_csrf"      value="<%= locals.csrfToken || '' %>">
+        <input type="hidden" name="id"         value="<%= managed.id %>">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Endereço IP *</label>
+            <input type="text" name="ip_address" value="<%= managed.ip_address %>" required style="font-family:monospace;font-weight:700">
+          </div>
+          <div class="form-group">
+            <label>MAC Address</label>
+            <input type="text" name="mac_address" id="field-mac" value="<%= managed.mac_address || '' %>" placeholder="AA:BB:CC:DD:EE:FF" style="font-family:monospace">
+          </div>
+          <div class="form-group">
+            <label>Hostname</label>
+            <input type="text" name="hostname" id="field-hostname" value="<%= managed.hostname || '' %>" placeholder="notebook-ti">
+          </div>
+          <div class="form-group">
+            <label>Localização</label>
+            <input type="text" name="location" value="<%= managed.location || '' %>" placeholder="Sala 201 - Rack A - U12">
+          </div>
+          <div class="form-group">
+            <label>Setor / Departamento</label>
+            <input type="text" name="department" value="<%= managed.department || '' %>" placeholder="TI">
+          </div>
+          <div class="form-group">
+            <label>Responsável</label>
+            <input type="text" name="responsible" value="<%= managed.responsible || '' %>" placeholder="João Silva">
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select name="is_active">
+              <option value="true"  <%= managed.is_active ? 'selected' : '' %>>Ativo</option>
+              <option value="false" <%= !managed.is_active ? 'selected' : '' %>>Inativo</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:14px">
+          <label>Observações</label>
+          <textarea name="notes" rows="3" style="resize:vertical"><%= managed.notes || '' %></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Salvar alterações</button>
+          <button type="button" class="btn-sync" id="btn-sync">Sincronizar com Mikrotik</button>
+          <span id="sync-status"></span>
+          <button type="button" class="btn-danger" id="btn-delete" style="margin-left:auto">Remover</button>
+        </div>
+      </form>
+
+      <!-- Formulário de exclusão fora do form de edição (forms aninhados são HTML inválido) -->
+      <form id="form-delete" method="POST" action="/admin/managed-ips/<%= managed.id %>/delete" style="display:none">
+        <input type="hidden" name="_csrf" value="<%= locals.csrfToken || '' %>">
+      </form>
+    </div>
+
+    <!-- ─── Dados live do Mikrotik ───────────────────────────────────── -->
+    <div class="section-card">
+      <div class="section-title">
+        Dados do Mikrotik (tempo real)
+        <button class="btn-sync" id="btn-refresh-live" style="font-size:.78rem;padding:4px 12px">Atualizar</button>
+        <span id="live-status">Carregando...</span>
+      </div>
+      <div class="live-box" id="live-box">
+        <div class="live-card" id="live-arp">
+          <h4>Tabela ARP</h4>
+          <p class="live-na">Carregando...</p>
+        </div>
+        <div class="live-card" id="live-lease">
+          <h4>Lease DHCP</h4>
+          <p class="live-na">Carregando...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Histórico de tráfego ─────────────────────────────────────── -->
+    <div class="section-card">
+      <div class="section-title">Histórico de tráfego (últimos 30 dias)</div>
+      <% if (trafficHistory.length === 0) { %>
+        <p style="color:#9ca3af">Nenhum dado de tráfego registrado.</p>
+      <% } else { %>
+        <div class="table-wrap">
+          <table id="traffic-table">
+            <thead>
+              <tr>
+                <th data-sort="date">Registrado em</th>
+                <th data-sort="text">MAC</th>
+                <th data-sort="text">Hostname</th>
+                <th data-sort="text">Upload</th>
+                <th data-sort="text">Download</th>
+                <th data-sort="text">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% trafficHistory.forEach(r => { %>
+                <tr>
+                  <td style="font-size:.8rem;color:#6b7280"><%= r.recorded_at %></td>
+                  <td style="font-family:monospace;font-size:.82rem"><%= r.mac_address %></td>
+                  <td><%= r.hostname %></td>
+                  <td style="font-size:.82rem"><%= r.bytes_up %></td>
+                  <td style="font-size:.82rem"><%= r.bytes_down %></td>
+                  <td style="font-size:.82rem;font-weight:600"><%= r.total %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- ─── Histórico de dispositivos (por MAC) ──────────────────────── -->
+    <div class="section-card">
+      <div class="section-title">Dispositivos vistos neste IP</div>
+      <% if (deviceEntries.length === 0) { %>
+        <p style="color:#9ca3af">Nenhum dispositivo registrado para este IP.</p>
+      <% } else { %>
+        <div class="timeline">
+          <% deviceEntries.forEach(e => { %>
+            <div class="timeline-entry">
+              <div class="timeline-ip">
+                <a href="/admin/devices/<%= e.mac_address %>" style="color:inherit;text-decoration:none">
+                  <%= e.mac_address %>
+                </a>
+              </div>
+              <% if (e.hostname && e.hostname !== '—') { %>
+                <div class="timeline-host"><%= e.hostname %></div>
+              <% } %>
+              <div class="timeline-date">
+                Primeiro: <%= e.first_seen %> &mdash; Último: <%= e.last_seen %>
+              </div>
+              <div class="timeline-date" style="color:#9ca3af"><%= e.router_name %></div>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- ─── Conexões ativas ──────────────────────────────────────────── -->
+    <div class="section-card">
+      <div class="section-title">Conexões recentes (snapshot atual)</div>
+      <% if (connections.length === 0) { %>
+        <p style="color:#9ca3af">Nenhuma conexão registrada.</p>
+      <% } else { %>
+        <div class="table-wrap">
+          <table id="connections-table">
+            <thead>
+              <tr>
+                <th data-sort="text">Destino</th>
+                <th data-sort="number">Porta</th>
+                <th data-sort="text">Enviado</th>
+                <th data-sort="text">Recebido</th>
+                <th data-sort="date">Registrado em</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% connections.forEach(c => { %>
+                <tr>
+                  <td style="font-family:monospace;font-size:.82rem"><%= c.dst_ip %></td>
+                  <td style="text-align:center"><%= c.dst_port %></td>
+                  <td style="font-size:.82rem"><%= c.bytes_orig %></td>
+                  <td style="font-size:.82rem"><%= c.bytes_reply %></td>
+                  <td style="font-size:.8rem;color:#6b7280"><%= c.recorded_at %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div>
+
+  </main>
+
+  <%- include('_footer') %>
+
+  <script>
+  (function () {
+    var csrfToken = '<%= locals.csrfToken || "" %>';
+    var managedId = '<%= managed.id %>';
+
+    // ── Remover IP gerenciado ──────────────────────────────────────────
+    document.getElementById('btn-delete').addEventListener('click', function () {
+      if (confirm('Remover este IP gerenciado? Esta ação não pode ser desfeita.')) {
+        document.getElementById('form-delete').submit();
+      }
+    });
+
+    // ── Sincronizar MAC/hostname com Mikrotik ──────────────────────────
+    document.getElementById('btn-sync').addEventListener('click', function () {
+      var btn    = this;
+      var status = document.getElementById('sync-status');
+      btn.disabled = true;
+      btn.textContent = 'Sincronizando...';
+      status.textContent = '';
+
+      fetch('/admin/managed-ips/' + managedId + '/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          btn.disabled = false;
+          btn.textContent = 'Sincronizar com Mikrotik';
+          if (data.ok) {
+            if (data.updates.mac_address) {
+              document.getElementById('field-mac').value = data.updates.mac_address;
+            }
+            if (data.updates.hostname) {
+              document.getElementById('field-hostname').value = data.updates.hostname;
+            }
+            status.textContent = Object.keys(data.updates).length > 0
+              ? 'Sincronizado: ' + Object.keys(data.updates).join(', ')
+              : 'Nenhuma atualização disponível.';
+            status.style.color = '#16a34a';
+            if (typeof window.showToast === 'function') window.showToast('Sincronizado com o Mikrotik.', 'success');
+          } else {
+            status.textContent = data.message || 'IP não encontrado no ARP.';
+            status.style.color = '#d97706';
+          }
+        })
+        .catch(function () {
+          btn.disabled = false;
+          btn.textContent = 'Sincronizar com Mikrotik';
+          status.textContent = 'Erro ao sincronizar.';
+          status.style.color = '#dc2626';
+        });
+    });
+
+    // ── Dados live do Mikrotik ─────────────────────────────────────────
+    function loadLive() {
+      var liveStatus = document.getElementById('live-status');
+      var arpBox     = document.getElementById('live-arp');
+      var leaseBox   = document.getElementById('live-lease');
+      liveStatus.textContent = 'Carregando...';
+
+      fetch('/admin/managed-ips/' + managedId + '/live')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          liveStatus.textContent = 'Atualizado agora';
+
+          if (data.arp) {
+            arpBox.innerHTML = '<h4>Tabela ARP</h4>' +
+              row('MAC', data.arp.mac) +
+              row('Interface', data.arp.interface) +
+              row('Status', data.arp.complete ? 'Resolvido' : 'Incompleto') +
+              (data.arp.status ? row('Estado', data.arp.status) : '');
+          } else {
+            arpBox.innerHTML = '<h4>Tabela ARP</h4><p class="live-na">IP não encontrado na tabela ARP.</p>';
+          }
+
+          if (data.lease) {
+            leaseBox.innerHTML = '<h4>Lease DHCP</h4>' +
+              row('Hostname',  data.lease.hostname) +
+              row('MAC',       data.lease.mac) +
+              row('Expira em', data.lease.expires_after) +
+              row('Servidor',  data.lease.server);
+          } else {
+            leaseBox.innerHTML = '<h4>Lease DHCP</h4><p class="live-na">Nenhum lease DHCP ativo para este IP.</p>';
+          }
+        })
+        .catch(function () {
+          liveStatus.textContent = 'Erro ao carregar';
+          arpBox.innerHTML   = '<h4>Tabela ARP</h4><p class="live-na">Falha na conexão com o Mikrotik.</p>';
+          leaseBox.innerHTML = '<h4>Lease DHCP</h4><p class="live-na">—</p>';
+        });
+    }
+
+    function row(label, value) {
+      if (!value) return '';
+      return '<div class="live-row"><span class="live-label">' + label + '</span>' +
+             '<span class="live-value">' + value + '</span></div>';
+    }
+
+    document.getElementById('btn-refresh-live').addEventListener('click', loadLive);
+    loadLive();
+
+    window.initSortableTable && window.initSortableTable('traffic-table');
+    window.initSortableTable && window.initSortableTable('connections-table');
+  })();
+  </script>
+</body>
+</html>

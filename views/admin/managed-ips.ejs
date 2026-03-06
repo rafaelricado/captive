@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IPs Gerenciados &mdash; Captive Portal</title>
+  <%- include('_head') %>
+  <style>
+    .status-dot { width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle; }
+    .status-dot.active   { background:#16a34a;box-shadow:0 0 0 2px #dcfce7; }
+    .status-dot.inactive { background:#9ca3af;box-shadow:0 0 0 2px #f3f4f6; }
+    #arp-modal {
+      display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;
+      align-items:flex-start;justify-content:center;padding-top:60px;
+    }
+    #arp-modal.open { display:flex; }
+    #arp-modal-box {
+      background:#fff;border-radius:14px;padding:28px 32px;
+      max-width:780px;width:100%;max-height:80vh;overflow-y:auto;
+      box-shadow:0 8px 32px rgba(0,0,0,.22);position:relative;
+    }
+    #arp-modal-box h3 { font-size:1.1rem;font-weight:700;color:#0d4e8b;margin-bottom:16px; }
+    .arp-row {
+      display:flex;align-items:center;gap:12px;padding:9px 0;
+      border-bottom:1px solid #f3f4f6;flex-wrap:wrap;
+    }
+    .arp-row:last-child { border-bottom:none; }
+    .arp-ip   { font-family:monospace;font-weight:700;min-width:120px; }
+    .arp-mac  { font-family:monospace;font-size:.8rem;color:#6b7280;min-width:140px; }
+    .arp-host { font-size:.85rem;color:#374151;flex:1; }
+    .arp-iface { font-size:.75rem;color:#9ca3af; }
+    .btn-add-arp {
+      padding:5px 14px;font-size:.78rem;border-radius:6px;cursor:pointer;
+      border:1px solid #0d4e8b;background:#fff;color:#0d4e8b;transition:all .15s;
+    }
+    .btn-add-arp:hover { background:#0d4e8b;color:#fff; }
+    .btn-add-arp:disabled { opacity:.45;cursor:default; }
+    .badge-managed { background:#dcfce7;color:#16a34a;border-radius:99px;font-size:.7rem;padding:2px 8px;font-weight:700; }
+    #arp-search { padding:7px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:.85rem;width:100%;margin-bottom:14px; }
+    #arp-loading { text-align:center;color:#6b7280;padding:24px 0; }
+    #arp-error   { color:#dc2626;padding:12px 0; }
+    .modal-close {
+      position:absolute;top:16px;right:20px;background:none;border:none;
+      font-size:1.4rem;cursor:pointer;color:#6b7280;line-height:1;
+    }
+    .modal-close:hover { color:#1f2937; }
+    #new-ip-form { background:#fff;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.08);padding:24px 28px;margin-bottom:28px; }
+    #new-ip-form h3 { font-size:1rem;font-weight:700;color:#0d4e8b;margin-bottom:16px; }
+    .form-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px; }
+    .form-group { display:flex;flex-direction:column;gap:4px; }
+    .form-group label { font-size:.78rem;font-weight:600;color:#374151; }
+    .form-group input, .form-group textarea, .form-group select {
+      padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;
+      font-size:.875rem;font-family:inherit;
+    }
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+      outline:none;border-color:#0d4e8b;box-shadow:0 0 0 2px rgba(13,78,139,.15);
+    }
+    .form-actions { display:flex;gap:10px;margin-top:16px;flex-wrap:wrap; }
+    .btn-primary {
+      padding:8px 22px;background:#0d4e8b;color:#fff;border:none;
+      border-radius:8px;font-size:.875rem;font-weight:600;cursor:pointer;transition:background .15s;
+    }
+    .btn-primary:hover { background:#0b4070; }
+  </style>
+</head>
+<body>
+  <%- include('_nav', { page: pageObj }) %>
+
+  <main class="container">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+      <h2 class="page-title" style="margin-bottom:0">IPs Gerenciados</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-outline" id="btn-new-ip" style="padding:6px 16px;font-size:.82rem">+ Novo IP</button>
+        <button class="btn-outline" id="btn-import-arp" style="padding:6px 16px;font-size:.82rem">Importar do Mikrotik (ARP)</button>
+      </div>
+    </div>
+
+    <p class="meta"><%= total %> IP(s) cadastrado(s)</p>
+
+    <!-- Formulário de novo IP (oculto por padrão) -->
+    <div id="new-ip-form" style="display:none">
+      <h3>Cadastrar novo IP</h3>
+      <form method="POST" action="/admin/managed-ips">
+        <input type="hidden" name="_csrf" value="<%= locals.csrfToken || '' %>">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>IP *</label>
+            <input type="text" name="ip_address" placeholder="10.0.0.10" required>
+          </div>
+          <div class="form-group">
+            <label>MAC</label>
+            <input type="text" name="mac_address" placeholder="AA:BB:CC:DD:EE:FF" style="font-family:monospace">
+          </div>
+          <div class="form-group">
+            <label>Hostname</label>
+            <input type="text" name="hostname" placeholder="notebook-ti">
+          </div>
+          <div class="form-group">
+            <label>Localização</label>
+            <input type="text" name="location" placeholder="Sala 201 - Rack A">
+          </div>
+          <div class="form-group">
+            <label>Setor</label>
+            <input type="text" name="department" placeholder="TI">
+          </div>
+          <div class="form-group">
+            <label>Responsável</label>
+            <input type="text" name="responsible" placeholder="João Silva">
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:12px">
+          <label>Observações</label>
+          <textarea name="notes" rows="2" style="resize:vertical" placeholder="Impressora da recepção, sem suporte a IPv6..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Salvar</button>
+          <button type="button" class="btn-outline" id="btn-cancel-new" style="padding:8px 18px">Cancelar</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Busca -->
+    <form method="GET" action="/admin/managed-ips" style="margin-bottom:16px;display:flex;gap:8px">
+      <input type="text" name="q" value="<%= q %>" placeholder="Buscar por IP, MAC, hostname, localização..."
+             style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:.875rem;flex:1;max-width:420px">
+      <button type="submit" class="btn-outline" style="padding:8px 18px">Buscar</button>
+      <% if (q) { %>
+        <a href="/admin/managed-ips" class="btn-outline" style="padding:8px 18px">Limpar</a>
+      <% } %>
+    </form>
+
+    <!-- Tabela -->
+    <div class="table-wrap">
+      <table id="managed-ips-table">
+        <thead>
+          <tr>
+            <th data-sort="text">IP</th>
+            <th data-sort="text">MAC</th>
+            <th data-sort="text">Hostname</th>
+            <th data-sort="text">Localização</th>
+            <th data-sort="text">Setor</th>
+            <th data-sort="text">Responsável</th>
+            <th data-sort="text">Tráfego 30d</th>
+            <th data-sort="date">Último visto</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (ips.length === 0) { %>
+            <tr><td colspan="9" style="text-align:center;color:#9ca3af">Nenhum IP cadastrado.</td></tr>
+          <% } %>
+          <% ips.forEach(ip => { %>
+            <tr style="cursor:pointer" onclick="location.href='/admin/managed-ips/<%= ip.id %>'">
+              <td>
+                <span class="status-dot <%= ip.is_active ? 'active' : 'inactive' %>"></span>
+                <a href="/admin/managed-ips/<%= ip.id %>" style="font-family:monospace;font-weight:700;color:#0d4e8b"><%= ip.ip_address %></a>
+              </td>
+              <td style="font-family:monospace;font-size:.82rem"><%= ip.mac_address || '—' %></td>
+              <td><%= ip.hostname || '—' %></td>
+              <td><%= ip.location || '—' %></td>
+              <td><%= ip.department || '—' %></td>
+              <td><%= ip.responsible || '—' %></td>
+              <td style="font-size:.82rem;color:#374151"><%= ip.total_traffic %></td>
+              <td style="font-size:.8rem;color:#6b7280"><%= ip.last_seen %></td>
+              <td>
+                <% if (ip.is_active) { %>
+                  <span class="badge badge-green">Ativo</span>
+                <% } else { %>
+                  <span class="badge badge-gray">Inativo</span>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <% if (page > 0) { %>
+        <a href="/admin/managed-ips?page=<%= page - 1 %>&q=<%= encodeURIComponent(q) %>">&larr; Anterior</a>
+      <% } %>
+      <span class="current">Página <%= pageLabel %></span>
+      <% if (page + 1 < totalPages) { %>
+        <a href="/admin/managed-ips?page=<%= page + 1 %>&q=<%= encodeURIComponent(q) %>">Próxima &rarr;</a>
+      <% } %>
+    </div>
+  </main>
+
+  <!-- Modal de importação ARP -->
+  <div id="arp-modal">
+    <div id="arp-modal-box">
+      <button class="modal-close" id="arp-modal-close" aria-label="Fechar">&times;</button>
+      <h3>Importar da tabela ARP do Mikrotik</h3>
+      <input type="text" id="arp-search" placeholder="Filtrar por IP, MAC ou hostname...">
+      <div id="arp-loading">Carregando...</div>
+      <div id="arp-error" style="display:none"></div>
+      <div id="arp-list"></div>
+    </div>
+  </div>
+
+  <%- include('_footer') %>
+
+  <script>
+  (function () {
+    var csrfToken = '<%= locals.csrfToken || "" %>';
+
+    // Toggle formulário novo IP
+    document.getElementById('btn-new-ip').addEventListener('click', function () {
+      var f = document.getElementById('new-ip-form');
+      f.style.display = f.style.display === 'none' ? 'block' : 'none';
+    });
+    document.getElementById('btn-cancel-new').addEventListener('click', function () {
+      document.getElementById('new-ip-form').style.display = 'none';
+    });
+
+    // Modal ARP
+    var modal    = document.getElementById('arp-modal');
+    var arpList  = document.getElementById('arp-list');
+    var arpLoad  = document.getElementById('arp-loading');
+    var arpErr   = document.getElementById('arp-error');
+    var arpSearch = document.getElementById('arp-search');
+    var allEntries = [];
+
+    document.getElementById('btn-import-arp').addEventListener('click', function () {
+      modal.classList.add('open');
+      if (allEntries.length === 0) loadArp();
+    });
+    document.getElementById('arp-modal-close').addEventListener('click', function () {
+      modal.classList.remove('open');
+    });
+    modal.addEventListener('click', function (e) {
+      if (e.target === modal) modal.classList.remove('open');
+    });
+
+    arpSearch.addEventListener('input', function () {
+      renderArp(arpSearch.value.trim().toLowerCase());
+    });
+
+    function loadArp() {
+      arpLoad.style.display = 'block';
+      arpErr.style.display  = 'none';
+      arpList.innerHTML     = '';
+
+      fetch('/admin/managed-ips/arp-table')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          arpLoad.style.display = 'none';
+          if (data.error) {
+            arpErr.textContent = data.error;
+            arpErr.style.display = 'block';
+            return;
+          }
+          allEntries = data.entries || [];
+          renderArp('');
+        })
+        .catch(function (err) {
+          arpLoad.style.display = 'none';
+          arpErr.textContent = 'Erro ao carregar tabela ARP.';
+          arpErr.style.display = 'block';
+        });
+    }
+
+    function renderArp(filter) {
+      var filtered = filter
+        ? allEntries.filter(function (e) {
+            return e.ip.includes(filter) ||
+                   e.mac.toLowerCase().includes(filter) ||
+                   (e.hostname || '').toLowerCase().includes(filter);
+          })
+        : allEntries;
+
+      if (filtered.length === 0) {
+        arpList.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:16px 0">Nenhuma entrada encontrada.</p>';
+        return;
+      }
+
+      arpList.innerHTML = filtered.map(function (e) {
+        var isManaged = e.is_managed;
+        return '<div class="arp-row">' +
+          '<span class="arp-ip">' + e.ip + '</span>' +
+          '<span class="arp-mac">' + e.mac + '</span>' +
+          '<span class="arp-host">' + (e.hostname || '<em style="color:#9ca3af">sem hostname</em>') + '</span>' +
+          '<span class="arp-iface">' + (e.interface || '') + '</span>' +
+          (isManaged
+            ? '<span class="badge-managed">Já cadastrado</span>'
+            : '<button class="btn-add-arp" data-ip="' + e.ip + '" data-mac="' + e.mac + '" data-host="' + (e.hostname || '') + '">+ Adicionar</button>'
+          ) +
+          '</div>';
+      }).join('');
+
+      arpList.querySelectorAll('.btn-add-arp').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var ip   = btn.dataset.ip;
+          var mac  = btn.dataset.mac;
+          var host = btn.dataset.host;
+          btn.disabled = true;
+          btn.textContent = 'Adicionando...';
+
+          var form = document.createElement('form');
+          form.method = 'POST';
+          form.action = '/admin/managed-ips';
+          form.style.display = 'none';
+
+          function addField(name, value) {
+            var input = document.createElement('input');
+            input.type = 'hidden'; input.name = name; input.value = value;
+            form.appendChild(input);
+          }
+
+          addField('_csrf',       csrfToken);
+          addField('ip_address',  ip);
+          addField('mac_address', mac);
+          addField('hostname',    host);
+          addField('is_active',   'true');
+
+          document.body.appendChild(form);
+          form.submit();
+        });
+      });
+    }
+
+    window.initSortableTable && window.initSortableTable('managed-ips-table');
+  })();
+  </script>
+</body>
+</html>

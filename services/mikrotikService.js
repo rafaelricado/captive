@@ -146,6 +146,30 @@ async function removeUser(cpf, fullDelete = false) {
   }
 }
 
+async function getArpTable() {
+  try {
+    const conn = await getApi();
+    const entries = await conn.write('/ip/arp/print');
+    return entries;
+  } catch (err) {
+    logger.error(`[Mikrotik] Erro ao buscar tabela ARP: ${err.message}`);
+    apiConnected = false;
+    return null;
+  }
+}
+
+async function getDhcpLeases() {
+  try {
+    const conn = await getApi();
+    const leases = await conn.write('/ip/dhcp-server/lease/print', ['?status=bound']);
+    return leases;
+  } catch (err) {
+    logger.error(`[Mikrotik] Erro ao buscar leases DHCP: ${err.message}`);
+    apiConnected = false;
+    return null;
+  }
+}
+
 async function disconnect() {
   if (api) {
     try {
@@ -158,4 +182,4 @@ async function disconnect() {
   }
 }
 
-module.exports = { authorizeUser, removeUser, disconnect };
+module.exports = { authorizeUser, removeUser, disconnect, getArpTable, getDhcpLeases };

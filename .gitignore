@@ -22,3 +22,6 @@ Thumbs.db
 
 # Claude Code (ferramenta interna)
 .claude/
+
+# Arquivos de instrução local (podem conter dados sensíveis)
+instru.txt
