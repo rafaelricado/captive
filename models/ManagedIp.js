@@ -36,6 +36,15 @@ const ManagedIp = sequelize.define('ManagedIp', {
     type: DataTypes.TEXT,
     allowNull: true
   },
+  vendor: {
+    type: DataTypes.STRING(150),
+    allowNull: true
+  },
+  device_type: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    defaultValue: 'unknown'
+  },
   is_active: {
     type: DataTypes.BOOLEAN,
     defaultValue: true,

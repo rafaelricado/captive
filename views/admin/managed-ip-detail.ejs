@@ -102,6 +102,23 @@
             <input type="text" name="responsible" value="<%= managed.responsible || '' %>" placeholder="João Silva">
           </div>
           <div class="form-group">
+            <label>Fabricante (OUI)</label>
+            <input type="text" id="field-vendor" name="vendor" value="<%= managed.vendor || '' %>" placeholder="Detectado automaticamente">
+          </div>
+          <div class="form-group">
+            <label>Tipo de dispositivo</label>
+            <select name="device_type" id="field-device-type">
+              <option value="unknown"  <%= (managed.device_type||'unknown')==='unknown'  ? 'selected':'' %>>Desconhecido</option>
+              <option value="computer" <%= managed.device_type==='computer' ? 'selected':'' %>>Computador / Notebook</option>
+              <option value="mobile"   <%= managed.device_type==='mobile'   ? 'selected':'' %>>Celular / Tablet</option>
+              <option value="printer"  <%= managed.device_type==='printer'  ? 'selected':'' %>>Impressora</option>
+              <option value="network"  <%= managed.device_type==='network'  ? 'selected':'' %>>Equipamento de Rede</option>
+              <option value="camera"   <%= managed.device_type==='camera'   ? 'selected':'' %>>Câmera IP</option>
+              <option value="tv"       <%= managed.device_type==='tv'       ? 'selected':'' %>>Smart TV</option>
+              <option value="iot"      <%= managed.device_type==='iot'      ? 'selected':'' %>>IoT / Embarcado</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label>Status</label>
             <select name="is_active">
               <option value="true"  <%= managed.is_active ? 'selected' : '' %>>Ativo</option>
@@ -116,6 +133,7 @@
         <div class="form-actions">
           <button type="submit" class="btn-primary">Salvar alterações</button>
           <button type="button" class="btn-sync" id="btn-sync">Sincronizar com Mikrotik</button>
+          <button type="button" class="btn-sync" id="btn-identify" style="border-color:#7c3aed;color:#7c3aed">Identificar dispositivo</button>
           <span id="sync-status"></span>
           <button type="button" class="btn-danger" id="btn-delete" style="margin-left:auto">Remover</button>
         </div>
@@ -274,12 +292,10 @@
           btn.disabled = false;
           btn.textContent = 'Sincronizar com Mikrotik';
           if (data.ok) {
-            if (data.updates.mac_address) {
-              document.getElementById('field-mac').value = data.updates.mac_address;
-            }
-            if (data.updates.hostname) {
-              document.getElementById('field-hostname').value = data.updates.hostname;
-            }
+            if (data.updates.mac_address) document.getElementById('field-mac').value      = data.updates.mac_address;
+            if (data.updates.hostname)    document.getElementById('field-hostname').value = data.updates.hostname;
+            if (data.updates.vendor)      document.getElementById('field-vendor').value   = data.updates.vendor;
+            if (data.updates.device_type) document.getElementById('field-device-type').value = data.updates.device_type;
             status.textContent = Object.keys(data.updates).length > 0
               ? 'Sincronizado: ' + Object.keys(data.updates).join(', ')
               : 'Nenhuma atualização disponível.';
@@ -294,6 +310,41 @@
           btn.disabled = false;
           btn.textContent = 'Sincronizar com Mikrotik';
           status.textContent = 'Erro ao sincronizar.';
+          status.style.color = '#dc2626';
+        });
+    });
+
+    // ── Identificar tipo de dispositivo via OUI ────────────────────────
+    document.getElementById('btn-identify').addEventListener('click', function () {
+      var btn    = this;
+      var status = document.getElementById('sync-status');
+      btn.disabled = true;
+      btn.textContent = 'Identificando...';
+      status.textContent = '';
+
+      fetch('/admin/managed-ips/' + managedId + '/identify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          btn.disabled = false;
+          btn.textContent = 'Identificar dispositivo';
+          if (data.ok) {
+            if (data.vendor)      document.getElementById('field-vendor').value      = data.vendor;
+            if (data.device_type) document.getElementById('field-device-type').value = data.device_type;
+            status.textContent = 'Identificado: ' + (data.label || data.device_type);
+            status.style.color = '#7c3aed';
+            if (typeof window.showToast === 'function') window.showToast('Dispositivo identificado: ' + (data.label || data.device_type), 'success');
+          } else {
+            status.textContent = data.message || 'Não foi possível identificar (MAC não cadastrado?).';
+            status.style.color = '#d97706';
+          }
+        })
+        .catch(function () {
+          btn.disabled = false;
+          btn.textContent = 'Identificar dispositivo';
+          status.textContent = 'Erro ao identificar.';
           status.style.color = '#dc2626';
         });
     });

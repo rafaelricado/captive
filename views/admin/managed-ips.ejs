@@ -36,6 +36,16 @@
     .btn-add-arp:hover { background:#0d4e8b;color:#fff; }
     .btn-add-arp:disabled { opacity:.45;cursor:default; }
     .badge-managed { background:#dcfce7;color:#16a34a;border-radius:99px;font-size:.7rem;padding:2px 8px;font-weight:700; }
+    .badge-type { border-radius:99px;font-size:.7rem;padding:2px 8px;font-weight:700;white-space:nowrap; }
+    .bt-computer { background:#dbeafe;color:#1d4ed8; }
+    .bt-mobile   { background:#ede9fe;color:#6d28d9; }
+    .bt-printer  { background:#fef3c7;color:#b45309; }
+    .bt-network  { background:#cffafe;color:#0e7490; }
+    .bt-camera   { background:#fee2e2;color:#b91c1c; }
+    .bt-tv       { background:#d1fae5;color:#065f46; }
+    .bt-iot      { background:#ffedd5;color:#c2410c; }
+    .bt-unknown  { background:#f3f4f6;color:#6b7280; }
+    .vendor-text { font-size:.72rem;color:#9ca3af;display:block;margin-top:2px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
     #arp-search { padding:7px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:.85rem;width:100%;margin-bottom:14px; }
     #arp-loading { text-align:center;color:#6b7280;padding:24px 0; }
     #arp-error   { color:#dc2626;padding:12px 0; }
@@ -141,6 +151,7 @@
             <th data-sort="text">Localização</th>
             <th data-sort="text">Setor</th>
             <th data-sort="text">Responsável</th>
+            <th data-sort="text">Tipo</th>
             <th data-sort="text">Tráfego 30d</th>
             <th data-sort="date">Último visto</th>
             <th>Status</th>
@@ -148,8 +159,20 @@
         </thead>
         <tbody>
           <% if (ips.length === 0) { %>
-            <tr><td colspan="9" style="text-align:center;color:#9ca3af">Nenhum IP cadastrado.</td></tr>
+            <tr><td colspan="10" style="text-align:center;color:#9ca3af">Nenhum IP cadastrado.</td></tr>
           <% } %>
+          <%
+            const TYPE_CSS = {
+              computer:'bt-computer', mobile:'bt-mobile', printer:'bt-printer',
+              network:'bt-network',   camera:'bt-camera', tv:'bt-tv',
+              iot:'bt-iot',           unknown:'bt-unknown'
+            };
+            const TYPE_LABELS = {
+              computer:'Computador', mobile:'Celular/Tablet', printer:'Impressora',
+              network:'Rede',        camera:'Câmera IP',      tv:'Smart TV',
+              iot:'IoT',             unknown:'Desconhecido'
+            };
+          %>
           <% ips.forEach(ip => { %>
             <tr style="cursor:pointer" onclick="location.href='/admin/managed-ips/<%= ip.id %>'">
               <td>
@@ -161,6 +184,11 @@
               <td><%= ip.location || '—' %></td>
               <td><%= ip.department || '—' %></td>
               <td><%= ip.responsible || '—' %></td>
+              <td>
+                <% const dt = ip.device_type || 'unknown'; %>
+                <span class="badge-type <%= TYPE_CSS[dt] || 'bt-unknown' %>"><%= TYPE_LABELS[dt] || dt %></span>
+                <% if (ip.vendor) { %><span class="vendor-text" title="<%= ip.vendor %>"><%= ip.vendor %></span><% } %>
+              </td>
               <td style="font-size:.82rem;color:#374151"><%= ip.total_traffic %></td>
               <td style="font-size:.8rem;color:#6b7280"><%= ip.last_seen %></td>
               <td>

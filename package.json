@@ -16,6 +16,7 @@
     "express": "^4.21.0",
     "express-rate-limit": "^8.2.1",
     "express-session": "^1.18.0",
+    "mac-oui-lookup": "^1.1.4",
     "multer": "^2.0.2",
     "node-cron": "^3.0.3",
     "node-netflowv9": "^0.2.16",

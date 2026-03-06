@@ -135,6 +135,7 @@ router.post('/managed-ips/:id',                adminAuth, verifyCsrf, adminContr
 router.post('/managed-ips/:id/delete',         adminAuth, verifyCsrf, adminController.deleteManagedIp);
 router.get('/managed-ips/:id/live',            adminAuth, adminController.managedIpLive);
 router.post('/managed-ips/:id/sync',           adminAuth, verifyCsrf, adminController.syncManagedIp);
+router.post('/managed-ips/:id/identify',       adminAuth, verifyCsrf, adminController.identifyManagedIp);
 
 // Endpoints JSON para auto-refresh das páginas (protegido)
 router.get('/traffic/data', adminAuth, adminController.trafficData);

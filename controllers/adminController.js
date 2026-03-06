@@ -10,6 +10,7 @@ const { pingAllAccessPoints, isValidIPv4 } = require('../services/pingService');
 const logger = require('../utils/logger');
 const { audit } = require('../utils/auditLogger');
 const settingsCache = require('../utils/settingsCache');
+const ouiLookup = require('../utils/ouiLookup');
 
 const DISPLAY_TIMEZONE = process.env.DISPLAY_TIMEZONE || 'America/Sao_Paulo';
 
@@ -1710,6 +1711,18 @@ exports.saveManagedIp = async (req, res) => {
       return res.redirect('/admin/managed-ips?toast=' + encodeURIComponent('Endereço MAC inválido.') + '&toastType=error');
     }
 
+    // Auto-identificação por MAC (offline + fallback online) se MAC foi informado
+    // e o usuário não forçou um device_type manual
+    const deviceTypeBody = req.body.device_type || null;
+    let vendor      = req.body.vendor      ? req.body.vendor.trim().substring(0, 150) : null;
+    let device_type = deviceTypeBody && deviceTypeBody !== 'unknown' ? deviceTypeBody : null;
+
+    if (mac && !device_type) {
+      const identified = await ouiLookup.identify(mac);
+      if (identified.vendor)      vendor      = identified.vendor;
+      if (identified.device_type) device_type = identified.device_type;
+    }
+
     const data = {
       ip_address:  ip_address.trim(),
       mac_address: mac || null,
@@ -1718,6 +1731,8 @@ exports.saveManagedIp = async (req, res) => {
       department:  department  ? department.trim().substring(0, 100)  : null,
       responsible: responsible ? responsible.trim().substring(0, 100) : null,
       notes:       notes       ? notes.trim()                         : null,
+      vendor:      vendor      || null,
+      device_type: device_type || 'unknown',
       is_active:   is_active === 'true' || is_active === '1' || is_active === 'on'
     };
 
@@ -1864,6 +1879,14 @@ exports.syncManagedIp = async (req, res) => {
     if (arp['mac-address'])             updates.mac_address = arp['mac-address'];
     if (lease && lease['host-name'])    updates.hostname    = lease['host-name'];
 
+    // Identificação do dispositivo pelo MAC obtido do Mikrotik
+    const macForId = updates.mac_address || managed.mac_address;
+    if (macForId) {
+      const identified = await ouiLookup.identify(macForId);
+      if (identified.vendor)      updates.vendor      = identified.vendor;
+      if (identified.device_type) updates.device_type = identified.device_type;
+    }
+
     if (Object.keys(updates).length > 0) {
       await managed.update(updates);
       logger.info(`[Admin] IP gerenciado sincronizado com Mikrotik: ${managed.ip_address}`);
@@ -1872,6 +1895,36 @@ exports.syncManagedIp = async (req, res) => {
     res.json({ ok: true, updates });
   } catch (err) {
     logger.error(`[Admin] Erro ao sincronizar IP gerenciado: ${err.message}`);
+    res.status(500).json({ error: 'Erro interno.' });
+  }
+};
+
+// POST: identifica fabricante e tipo de dispositivo pelo MAC armazenado
+exports.identifyManagedIp = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const managed = await ManagedIp.findByPk(id);
+    if (!managed) return res.status(404).json({ error: 'IP não encontrado.' });
+
+    if (!managed.mac_address) {
+      return res.status(400).json({ error: 'Sem MAC cadastrado. Sincronize com o Mikrotik primeiro.' });
+    }
+
+    const { vendor, device_type } = await ouiLookup.identify(managed.mac_address);
+    const updates = { device_type: device_type || 'unknown' };
+    if (vendor) updates.vendor = vendor;
+
+    await managed.update(updates);
+    logger.info(`[Admin] Dispositivo identificado: ${managed.ip_address} → ${vendor || 'desconhecido'} (${device_type})`);
+
+    res.json({
+      ok:          true,
+      vendor:      updates.vendor      || null,
+      device_type: updates.device_type,
+      label:       ouiLookup.DEVICE_TYPE_LABELS[device_type] || 'Desconhecido'
+    });
+  } catch (err) {
+    logger.error(`[Admin] Erro ao identificar dispositivo: ${err.message}`);
     res.status(500).json({ error: 'Erro interno.' });
   }
 };
