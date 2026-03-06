@@ -2,7 +2,7 @@ const { Op } = require('sequelize');
 const { TrafficRanking, WanStat, ClientConnection, DnsEntry } = require('../../models');
 const logger = require('../../utils/logger');
 const { audit } = require('../../utils/auditLogger');
-const { PAGE_SIZE, DISPLAY_TIMEZONE, formatDate, formatBytes, escapeCSV } = require('./helpers');
+const { PAGE_SIZE, formatDate, formatBytes, escapeCSV } = require('./helpers');
 
 // ─── Helpers DNS ──────────────────────────────────────────────────────────────
 

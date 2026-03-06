@@ -5,8 +5,17 @@ const logger = require('../../utils/logger');
 const { audit } = require('../../utils/auditLogger');
 const settingsCache = require('../../utils/settingsCache');
 
-const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
-const URL_RE       = /^https?:\/\/.+/;
+const HEX_COLOR_RE  = /^#[0-9a-fA-F]{6}$/;
+const URL_RE        = /^https?:\/\/.+/;
+const IP_RE         = /^[\d.a-fA-F:]{1,45}$/;
+
+function parseWhitelist(raw, label) {
+  const lines   = (raw || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
+  const invalid = lines.filter(ip => !IP_RE.test(ip));
+  if (invalid.length > 0) throw new Error(`IP(s) inválido(s) na ${label}: ${invalid.slice(0, 3).join(', ')}`);
+  if (lines.length > 100) throw new Error(`${label} não pode ter mais de 100 IPs.`);
+  return lines;
+}
 
 function isPrivateUrl(urlStr) {
   try {
@@ -139,14 +148,6 @@ exports.saveSettings = async (req, res) => {
       security_register_threshold, security_dns_threshold, security_anomaly_stddev
     } = req.body;
 
-    const IP_RE = /^[\d.a-fA-F:]{1,45}$/;
-    function parseWhitelist(raw, label) {
-      const lines   = (raw || '').split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
-      const invalid = lines.filter(ip => !IP_RE.test(ip));
-      if (invalid.length > 0) throw new Error(`IP(s) inválido(s) na ${label}: ${invalid.slice(0, 3).join(', ')}`);
-      if (lines.length > 100) throw new Error(`${label} não pode ter mais de 100 IPs.`);
-      return lines;
-    }
     let whitelistLines, anomalyWhitelistLines;
     try {
       whitelistLines        = parseWhitelist(security_ip_whitelist,         'whitelist global');
