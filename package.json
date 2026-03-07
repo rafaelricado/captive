@@ -1,7 +1,7 @@
 {
-  "name": "captive-portal-bp",
+  "name": "captive-portal",
   "version": "1.0.0",
-  "description": "Captive Portal - Hospital Beneficiente Portuguesa",
+  "description": "Captive Portal",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
