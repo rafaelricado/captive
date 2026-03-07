@@ -10,7 +10,6 @@ const TasyConta = sequelize.define('TasyConta', {
   nr_atendimento: {
     type: DataTypes.STRING(50),
     allowNull: false,
-    unique: true,
     comment: 'Número do atendimento/conta no Tasy (chave natural)'
   },
   nm_paciente: {
@@ -64,6 +63,7 @@ const TasyConta = sequelize.define('TasyConta', {
   tableName: 'tasy_contas',
   underscored: true,
   indexes: [
+    { unique: true, fields: ['nr_atendimento'] },
     { fields: ['status_categoria'] },
     { fields: ['ds_convenio'] },
     { fields: ['ds_setor'] },
