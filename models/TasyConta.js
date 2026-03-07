@@ -32,10 +32,10 @@ const TasyConta = sequelize.define('TasyConta', {
     comment: 'Valor bruto do status vindo do Oracle'
   },
   status_categoria: {
-    type: DataTypes.ENUM('aberto', 'pendente', 'faturado', 'outro'),
+    type: DataTypes.STRING(20),
     allowNull: false,
     defaultValue: 'outro',
-    comment: 'Categoria calculada a partir de ds_status_origem'
+    comment: 'Categoria calculada a partir de ds_status_origem (aberto|pendente|faturado|outro)'
   },
   vl_conta: {
     type: DataTypes.DECIMAL(12, 2),
