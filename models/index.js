@@ -18,7 +18,7 @@ ApPingHistory.belongsTo(AccessPoint, { foreignKey: 'ap_id', as: 'AccessPoint' })
 AccessPoint.hasMany(ApPingHistory, { foreignKey: 'ap_id', as: 'PingHistory' });
 
 const initDatabase = async () => {
-  await sequelize.sync({ alter: true });
+  await sequelize.sync({ alter: { drop: false } });
 
   const [sessionSetting] = await Setting.findOrCreate({
     where: { key: 'session_duration_hours' },

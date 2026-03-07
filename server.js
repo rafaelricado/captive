@@ -30,6 +30,7 @@ const { pingAllAccessPoints } = require('./services/pingService');
 const { startNetflowCollector } = require('./services/netflowCollector');
 const { runAllDetectors } = require('./services/securityDetector');
 const { syncContas, discoverColumns } = require('./services/tasyService');
+const mikrotikService = require('./services/mikrotikService');
 
 const portalRoutes = require('./routes/portal');
 const apiRoutes = require('./routes/api');
@@ -222,10 +223,11 @@ async function start() {
       logger.info(`[Servidor] ${signal} recebido — encerrando...`);
       server.close(async () => {
         try {
+          await mikrotikService.disconnect();
           await sequelize.close();
-          logger.info('[Servidor] Conexão com banco encerrada. Saindo.');
+          logger.info('[Servidor] Conexões encerradas. Saindo.');
         } catch (err) {
-          logger.error(`[Servidor] Erro ao fechar banco: ${err.message}`);
+          logger.error(`[Servidor] Erro ao encerrar conexões: ${err.message}`);
         }
         process.exit(0);
       });

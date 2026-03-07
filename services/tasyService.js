@@ -149,6 +149,7 @@ async function syncContas() {
     for (let i = 0; i < rows.length; i += BATCH) {
       const batch = rows.slice(i, i + BATCH);
       await TasyConta.bulkCreate(batch, {
+        conflictAttributes: ['nr_atendimento'],
         updateOnDuplicate: [
           'nm_paciente', 'ds_convenio', 'ds_setor',
           'ds_status_origem', 'status_categoria',

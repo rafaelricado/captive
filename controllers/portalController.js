@@ -41,7 +41,7 @@ exports.showSuccess = async (req, res) => {
     // Calcula a expiração da sessão para exibição dinâmica no template
     const expiresAt = new Date(Date.now() + sessionDuration * 60 * 60 * 1000);
     const expiresAtISO = expiresAt.toISOString();
-    const expiresAtLabel = expiresAt.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const expiresAtLabel = expiresAt.toLocaleString('pt-BR', { timeZone: process.env.DISPLAY_TIMEZONE || 'America/Sao_Paulo' });
 
     res.render('success', {
       nome: nome || 'Usuário',

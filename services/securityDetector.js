@@ -117,7 +117,7 @@ async function isDuplicateSubtype(src_ip, subtype) {
     where: {
       src_ip,
       detected_at: { [Op.gte]: since },
-      [Op.and]: [sequelize.literal(`details->>'subtype' = '${subtype}'`)]
+      [Op.and]: [sequelize.where(sequelize.literal(`details->>'subtype'`), subtype)]
     }
   });
   return !!existing;
@@ -338,7 +338,7 @@ async function detectDnsTunneling({ whitelist, dnsThreshold }) {
 
     const severity = dns_count >= 200 ? 'high' : dns_count >= 100 ? 'medium' : 'low';
     const event = await SecurityEvent.create({
-      event_type: 'port_scan', severity, src_ip,
+      event_type: 'traffic_anomaly', severity, src_ip,
       details: { subtype: 'dns_tunneling', dns_count, window_minutes: DNS_TUNNEL_WINDOW_MS / 60000, threshold: dnsThreshold }
     });
     logger.warn(`[Security] DNS tunneling: ${src_ip} — ${dns_count} queries DNS`);
