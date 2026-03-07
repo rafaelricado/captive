@@ -21,6 +21,7 @@
     "node-cron": "^3.0.3",
     "node-netflowv9": "^0.2.16",
     "node-routeros": "^1.6.0",
+    "oracledb": "^6.10.0",
     "pg": "^8.13.0",
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.0",

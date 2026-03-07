@@ -29,6 +29,7 @@ const { expireSessions } = require('./services/sessionService');
 const { pingAllAccessPoints } = require('./services/pingService');
 const { startNetflowCollector } = require('./services/netflowCollector');
 const { runAllDetectors } = require('./services/securityDetector');
+const { syncContas, discoverColumns } = require('./services/tasyService');
 
 const portalRoutes = require('./routes/portal');
 const apiRoutes = require('./routes/api');
@@ -193,6 +194,20 @@ async function start() {
         logger.info(`[Cron] Limpeza noturna: ${tr} traffic_rankings, ${ws} wan_stats, ${se} security_events removidos`);
       } catch (err) {
         logger.error(`[Cron] Erro na limpeza noturna: ${err.message}`);
+      }
+    });
+
+    // Tasy: listar colunas da view Oracle no startup (ajuda no mapeamento inicial)
+    discoverColumns().catch(err => logger.warn(`[Tasy] discoverColumns: ${err.message}`));
+
+    // Cron: sincronizar contas Tasy a cada 6 horas
+    cron.schedule('0 */6 * * *', async () => {
+      try {
+        logger.info('[Cron] Sincronizando contas Tasy...');
+        const count = await syncContas();
+        logger.info(`[Cron] Tasy: ${count} contas sincronizadas.`);
+      } catch (err) {
+        logger.error(`[Cron] Erro ao sincronizar Tasy: ${err.message}`);
       }
     });
 

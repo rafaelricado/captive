@@ -15,6 +15,7 @@ const networkController      = require('../controllers/admin/networkController')
 const devicesController      = require('../controllers/admin/devicesController');
 const securityController     = require('../controllers/admin/securityController');
 const managedIpsController   = require('../controllers/admin/managedIpsController');
+const tasyController         = require('../controllers/admin/tasyController');
 const { Setting } = require('../models');
 const securityCountCache = require('../utils/securityCountCache');
 
@@ -140,6 +141,12 @@ router.get('/security/data', adminAuth, securityController.securityData);
 router.get('/security/export', adminAuth, securityController.securityExport);
 router.post('/security/acknowledge-all', adminAuth, verifyCsrf, securityController.acknowledgeAllSecurityEvents);
 router.post('/security/:id/acknowledge', adminAuth, verifyCsrf, securityController.acknowledgeSecurityEvent);
+
+// Tasy — Contas de paciente (protegido)
+router.get('/tasy',        adminAuth, tasyController.dashboard);
+router.get('/tasy/data',   adminAuth, tasyController.data);
+router.get('/tasy/export', adminAuth, tasyController.export);
+router.post('/tasy/sync',  adminAuth, verifyCsrf, tasyController.sync);
 
 // Configurações (protegido)
 router.get('/settings', adminAuth, settingsController.showSettings);
