@@ -158,15 +158,17 @@ router.post('/security/acknowledge-all', adminAuth, verifyCsrf, securityControll
 router.post('/security/:id/acknowledge', adminAuth, verifyCsrf, securityController.acknowledgeSecurityEvent);
 
 // Tasy — Contas de paciente (protegido)
-router.get('/tasy',        adminAuth, tasyController.dashboard);
-router.get('/tasy/data',   adminAuth, tasyController.data);
-router.get('/tasy/export', adminAuth, exportLimiter, tasyController.export);
-router.post('/tasy/sync',  adminAuth, verifyCsrf, tasyController.sync);
+router.get('/tasy',              adminAuth, tasyController.dashboard);
+router.get('/tasy/data',         adminAuth, tasyController.data);
+router.get('/tasy/export',       adminAuth, exportLimiter, tasyController.export);
+router.post('/tasy/sync',        adminAuth, verifyCsrf, tasyController.sync);
+router.get('/tasy/sync/stream',  adminAuth, tasyController.syncStream);
 
 // Protocolo convênio (sincronizado do Oracle)
-router.get ('/tasy/protocolos',        adminAuth, csrfMiddleware, tasyProtocoloController.list);
-router.post('/tasy/protocolos/sync',   adminAuth, verifyCsrf,    tasyProtocoloController.sync);
-router.get ('/tasy/protocolos/export', adminAuth, exportLimiter,  tasyProtocoloController.export);
+router.get ('/tasy/protocolos',               adminAuth, csrfMiddleware, tasyProtocoloController.list);
+router.post('/tasy/protocolos/sync',          adminAuth, verifyCsrf,     tasyProtocoloController.sync);
+router.get ('/tasy/protocolos/sync/stream',   adminAuth,                 tasyProtocoloController.syncStream);
+router.get ('/tasy/protocolos/export',        adminAuth, exportLimiter,  tasyProtocoloController.export);
 
 // Configurações (protegido)
 router.get('/settings', adminAuth, settingsController.showSettings);

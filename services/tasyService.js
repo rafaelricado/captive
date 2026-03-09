@@ -104,21 +104,34 @@ async function discoverColumns() {
  * Usa upsert por nr_atendimento para preservar dados se Oracle estiver indisponível.
  * @returns {number} quantidade de registros sincronizados
  */
-async function syncContas() {
+async function syncContas(onProgress) {
   if (!ORACLE_CONFIG.user) {
     logger.warn('[Tasy] TASY_USER não configurado — sync ignorado.');
     return 0;
   }
 
   const C = ORACLE_COL_MAP;
-  // Prefixar colunas da view com alias V para evitar ambiguidade no JOIN
   const viewCols = Object.values(C).map(col => `V.${col}`).join(', ');
 
   const BATCH = 500;
   let conn, resultSet;
   try {
     conn = await oracledb.getConnection(ORACLE_CONFIG);
-    conn.callTimeout = 120000; // 2min por fetch
+    conn.callTimeout = 120000;
+
+    // Total para cálculo de progresso
+    let totalOracle = 0;
+    if (onProgress) {
+      const countRes = await conn.execute(
+        `SELECT COUNT(*) FROM TASY.EIS_CONTA_PACIENTE_V2 V
+          LEFT JOIN TASY.CONTA_PACIENTE CP ON CP.NR_ATENDIMENTO = V.NR_ATENDIMENTO
+          LEFT JOIN TASY.ATENDIMENTO_PACIENTE AP ON AP.NR_ATENDIMENTO = V.NR_ATENDIMENTO
+         WHERE V.DT_ENTRADA >= ADD_MONTHS(SYSDATE, -6) OR V.DT_ENTRADA IS NULL`,
+        [], { outFormat: oracledb.OUT_FORMAT_ARRAY }
+      );
+      totalOracle = countRes.rows[0][0];
+      onProgress({ processed: 0, total: totalOracle, pct: 0 });
+    }
 
     const result = await conn.execute(
       `SELECT ${viewCols},
@@ -204,7 +217,10 @@ async function syncContas() {
         });
         total += deduped.length;
         logger.info(`[Tasy] Progresso: ${total} contas...`);
-        // Pausa entre lotes para reduzir impacto no Oracle
+        if (onProgress) {
+          const pct = totalOracle > 0 ? Math.min(99, Math.round(total / totalOracle * 100)) : null;
+          onProgress({ processed: total, total: totalOracle, pct });
+        }
         await new Promise(r => setTimeout(r, 200));
       }
     }
@@ -227,7 +243,7 @@ async function syncContas() {
  * Upsert por NR_SEQ_PROTOCOLO.
  * @returns {number} quantidade de registros sincronizados
  */
-async function syncProtocolos() {
+async function syncProtocolos(onProgress) {
   if (!ORACLE_CONFIG.user) {
     logger.warn('[Tasy] TASY_USER não configurado — syncProtocolos ignorado.');
     return 0;
@@ -238,6 +254,18 @@ async function syncProtocolos() {
   try {
     conn = await oracledb.getConnection(ORACLE_CONFIG);
     conn.callTimeout = 120000;
+
+    // Total para cálculo de progresso
+    let totalOracle = 0;
+    if (onProgress) {
+      const countRes = await conn.execute(
+        `SELECT COUNT(*) FROM TASY.PROTOCOLO_CONVENIO P
+         WHERE P.DT_PERIODO_INICIAL >= ADD_MONTHS(SYSDATE, -24) OR P.DT_PERIODO_INICIAL IS NULL`,
+        [], { outFormat: oracledb.OUT_FORMAT_ARRAY }
+      );
+      totalOracle = countRes.rows[0][0];
+      onProgress({ processed: 0, total: totalOracle, pct: 0 });
+    }
 
     const result = await conn.execute(
       `SELECT P.NR_SEQ_PROTOCOLO,
@@ -316,6 +344,10 @@ async function syncProtocolos() {
         });
         total += deduped.length;
         logger.info(`[Tasy] Protocolos: ${total} sincronizados...`);
+        if (onProgress) {
+          const pct = totalOracle > 0 ? Math.min(99, Math.round(total / totalOracle * 100)) : null;
+          onProgress({ processed: total, total: totalOracle, pct });
+        }
         await new Promise(r => setTimeout(r, 100));
       }
     }

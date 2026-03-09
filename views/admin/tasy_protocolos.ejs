@@ -219,6 +219,14 @@
       </div>
     </div>
 
+    <!-- Barra de progresso da sincronização -->
+    <div id="sync-progress" style="display:none;margin-bottom:12px;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.07);padding:12px 16px;">
+      <div style="font-size:.8rem;color:#374151;margin-bottom:6px;" id="sync-progress-text">Preparando...</div>
+      <div style="background:#e5e7eb;border-radius:4px;height:8px;overflow:hidden;">
+        <div id="sync-progress-fill" style="background:#0d4e8b;height:100%;width:0%;transition:width .3s ease;"></div>
+      </div>
+    </div>
+
     <!-- Tabela -->
     <%
       function sortUrl(col) {
@@ -453,25 +461,48 @@
   function closeModalOutside(e) { if (e.target === document.getElementById('modal-overlay')) closeModal(); }
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-  // Sincronização
-  const btnSync = document.getElementById('btn-sync');
-  const csrf    = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-  btnSync.addEventListener('click', () => {
+  // Sincronização com progresso (SSE)
+  const btnSync      = document.getElementById('btn-sync');
+  const syncProgress = document.getElementById('sync-progress');
+  const syncFill     = document.getElementById('sync-progress-fill');
+  const syncText     = document.getElementById('sync-progress-text');
+
+  btnSync.addEventListener('click', function () {
     if (!confirm('Sincronizar protocolos do Tasy agora?')) return;
     btnSync.disabled = true;
     btnSync.textContent = 'Sincronizando...';
-    fetch('/admin/tasy/protocolos/sync', {
-      method: 'POST',
-      headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    })
-      .then(r => r.json())
-      .then(d => {
-        if (d.ok) { alert(`Sincronização concluída: ${d.count.toLocaleString('pt-BR')} protocolos.`); location.reload(); }
-        else alert('Erro: ' + (d.error || 'desconhecido'));
-      })
-      .catch(() => alert('Falha na requisição.'))
-      .finally(() => { btnSync.disabled = false; btnSync.textContent = '↻ Sincronizar agora'; });
+    syncFill.style.width = '0%';
+    syncText.textContent = 'Conectando ao Oracle...';
+    syncProgress.style.display = 'block';
+
+    const es = new EventSource('/admin/tasy/protocolos/sync/stream');
+
+    es.onmessage = function (e) {
+      const data = JSON.parse(e.data);
+      if (data.done) {
+        es.close();
+        syncFill.style.width = '100%';
+        syncText.textContent = `Concluído: ${data.count.toLocaleString('pt-BR')} protocolos importados`;
+        setTimeout(() => location.reload(), 1200);
+      } else if (data.error) {
+        es.close();
+        syncProgress.style.display = 'none';
+        btnSync.disabled = false;
+        btnSync.textContent = '↻ Sincronizar agora';
+        alert('Erro na sincronização: ' + data.error);
+      } else if (data.pct != null) {
+        syncFill.style.width = data.pct + '%';
+        syncText.textContent = `${data.pct}% — ${data.processed.toLocaleString('pt-BR')} / ${data.total.toLocaleString('pt-BR')} protocolos`;
+      }
+    };
+
+    es.onerror = function () {
+      es.close();
+      syncProgress.style.display = 'none';
+      btnSync.disabled = false;
+      btnSync.textContent = '↻ Sincronizar agora';
+      alert('Falha na conexão com o servidor.');
+    };
   });
   </script>
 </body>

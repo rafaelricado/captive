@@ -244,6 +244,25 @@ exports.sync = async (req, res) => {
   }
 };
 
+// GET /admin/tasy/protocolos/sync/stream  (SSE)
+exports.syncStream = (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const send = data => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+  syncProtocolos(progress => send(progress))
+    .then(count => { send({ done: true, count }); res.end(); })
+    .catch(err => {
+      logger.error(`[TasyProtocolo] syncStream: ${err.message}`);
+      send({ error: err.message });
+      res.end();
+    });
+};
+
 // GET /admin/tasy/protocolos/export
 exports.export = async (req, res) => {
   try {
