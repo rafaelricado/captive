@@ -37,12 +37,41 @@
       background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07);
       padding:12px 16px; margin-bottom:16px;
     }
-    .filter-bar select, .filter-bar input[type="text"], .filter-bar input[type="date"] {
+    .filter-bar input[type="text"], .filter-bar input[type="date"] {
       padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:.82rem; color:#1f2937; background:#f9fafb;
     }
     .btn-filter { padding:6px 14px; background:#0d4e8b; color:#fff; border:none; border-radius:6px; font-size:.82rem; cursor:pointer; font-weight:600; }
     .btn-clear  { font-size:.82rem; color:#6b7280; text-decoration:none; }
     .btn-clear:hover { color:#0d4e8b; }
+
+    /* Multi-select dropdown */
+    .ms-wrap { position:relative; display:inline-block; }
+    .ms-btn {
+      padding:6px 28px 6px 10px; border:1px solid #d1d5db; border-radius:6px;
+      font-size:.82rem; color:#1f2937; background:#f9fafb; cursor:pointer;
+      white-space:nowrap; min-width:140px; max-width:200px;
+      overflow:hidden; text-overflow:ellipsis; user-select:none;
+      position:relative;
+    }
+    .ms-btn::after { content:'▾'; position:absolute; right:8px; top:50%; transform:translateY(-50%); color:#9ca3af; font-size:.7rem; }
+    .ms-btn.has-value { border-color:#0d4e8b; color:#0d4e8b; background:#eff6ff; }
+    .ms-panel {
+      display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:200;
+      background:#fff; border:1px solid #d1d5db; border-radius:8px;
+      box-shadow:0 4px 16px rgba(0,0,0,.12); min-width:200px; max-height:260px;
+      overflow-y:auto; padding:4px 0;
+    }
+    .ms-panel.open { display:block; }
+    .ms-panel label {
+      display:flex; align-items:center; gap:8px; padding:6px 12px;
+      font-size:.82rem; color:#1f2937; cursor:pointer; white-space:nowrap;
+    }
+    .ms-panel label:hover { background:#f3f4f6; }
+    .ms-panel input[type="checkbox"] { accent-color:#0d4e8b; width:14px; height:14px; flex-shrink:0; }
+    .ms-search {
+      margin:6px 8px 2px; padding:5px 8px; border:1px solid #d1d5db; border-radius:5px;
+      font-size:.8rem; width:calc(100% - 16px); box-sizing:border-box;
+    }
 
     .toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
     .toolbar-left  { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
@@ -121,44 +150,81 @@
     </div>
 
     <!-- Filtros -->
+    <%
+      // Normaliza filtros para arrays (multi-select)
+      function toArr(v) { if (!v) return []; return Array.isArray(v) ? v : [v]; }
+      const fStatus       = toArr(filters.status);
+      const fConvenio     = toArr(filters.convenio);
+      const fTipo         = toArr(filters.tipo);
+      const fEspecialidade= toArr(filters.especialidade);
+      const fSetor        = toArr(filters.setor);
+    %>
     <form method="GET" action="/admin/tasy" class="filter-bar" id="filter-form">
       <input type="text" name="q" placeholder="Paciente / Nº atend. / Médico"
              value="<%= filters.q || '' %>" style="min-width:190px;">
 
-      <select name="status">
-        <option value="">Todos os status</option>
-        <option value="aberto"   <%= filters.status === 'aberto'   ? 'selected' : '' %>>Em Aberto / Pend. Fat.</option>
-        <option value="faturado" <%= filters.status === 'faturado' ? 'selected' : '' %>>Faturado</option>
-        <option value="outro"    <%= filters.status === 'outro'    ? 'selected' : '' %>>Outro</option>
-      </select>
+      <!-- Status -->
+      <div class="ms-wrap">
+        <div class="ms-btn <%= fStatus.length ? 'has-value' : '' %>" onclick="msToggle(this)">
+          <%= fStatus.length ? fStatus.length + ' status' : 'Todos os status' %>
+        </div>
+        <div class="ms-panel">
+          <% [['aberto','Em Aberto / Pend. Fat.'],['faturado','Faturado'],['outro','Outro']].forEach(([v,l]) => { %>
+            <label><input type="checkbox" name="status" value="<%= v %>" <%= fStatus.includes(v) ? 'checked' : '' %>><%= l %></label>
+          <% }) %>
+        </div>
+      </div>
 
-      <select name="convenio">
-        <option value="">Todos os convênios</option>
-        <% convenios.forEach(c => { %>
-          <option value="<%= c %>" <%= filters.convenio === c ? 'selected' : '' %>><%= c %></option>
-        <% }) %>
-      </select>
+      <!-- Convênio -->
+      <div class="ms-wrap">
+        <div class="ms-btn <%= fConvenio.length ? 'has-value' : '' %>" onclick="msToggle(this)">
+          <%= fConvenio.length ? fConvenio.length + ' convênio(s)' : 'Todos os convênios' %>
+        </div>
+        <div class="ms-panel">
+          <input class="ms-search" type="text" placeholder="Buscar..." oninput="msSearch(this)">
+          <% convenios.forEach(c => { %>
+            <label><input type="checkbox" name="convenio" value="<%= c %>" <%= fConvenio.includes(c) ? 'checked' : '' %>><%= c %></label>
+          <% }) %>
+        </div>
+      </div>
 
-      <select name="tipo">
-        <option value="">Todos os tipos</option>
-        <% tipos.forEach(t => { %>
-          <option value="<%= t %>" <%= filters.tipo === t ? 'selected' : '' %>><%= t %></option>
-        <% }) %>
-      </select>
+      <!-- Tipo -->
+      <div class="ms-wrap">
+        <div class="ms-btn <%= fTipo.length ? 'has-value' : '' %>" onclick="msToggle(this)">
+          <%= fTipo.length ? fTipo.length + ' tipo(s)' : 'Todos os tipos' %>
+        </div>
+        <div class="ms-panel">
+          <% tipos.forEach(t => { %>
+            <label><input type="checkbox" name="tipo" value="<%= t %>" <%= fTipo.includes(t) ? 'checked' : '' %>><%= t %></label>
+          <% }) %>
+        </div>
+      </div>
 
-      <select name="especialidade">
-        <option value="">Todas as especialidades</option>
-        <% especialidades.forEach(e => { %>
-          <option value="<%= e %>" <%= filters.especialidade === e ? 'selected' : '' %>><%= e %></option>
-        <% }) %>
-      </select>
+      <!-- Especialidade -->
+      <div class="ms-wrap">
+        <div class="ms-btn <%= fEspecialidade.length ? 'has-value' : '' %>" onclick="msToggle(this)">
+          <%= fEspecialidade.length ? fEspecialidade.length + ' especialidade(s)' : 'Todas as especialidades' %>
+        </div>
+        <div class="ms-panel">
+          <input class="ms-search" type="text" placeholder="Buscar..." oninput="msSearch(this)">
+          <% especialidades.forEach(e => { %>
+            <label><input type="checkbox" name="especialidade" value="<%= e %>" <%= fEspecialidade.includes(e) ? 'checked' : '' %>><%= e %></label>
+          <% }) %>
+        </div>
+      </div>
 
-      <select name="setor">
-        <option value="">Todos os setores</option>
-        <% setores.forEach(s => { %>
-          <option value="<%= s %>" <%= filters.setor === s ? 'selected' : '' %>><%= s %></option>
-        <% }) %>
-      </select>
+      <!-- Setor -->
+      <div class="ms-wrap">
+        <div class="ms-btn <%= fSetor.length ? 'has-value' : '' %>" onclick="msToggle(this)">
+          <%= fSetor.length ? fSetor.length + ' setor(es)' : 'Todos os setores' %>
+        </div>
+        <div class="ms-panel">
+          <input class="ms-search" type="text" placeholder="Buscar..." oninput="msSearch(this)">
+          <% setores.forEach(s => { %>
+            <label><input type="checkbox" name="setor" value="<%= s %>" <%= fSetor.includes(s) ? 'checked' : '' %>><%= s %></label>
+          <% }) %>
+        </div>
+      </div>
 
       <input type="date" name="dtInicio" value="<%= filters.dtInicio || '' %>" title="Data entrada de">
       <input type="date" name="dtFim"    value="<%= filters.dtFim    || '' %>" title="Data entrada até">
@@ -346,6 +412,26 @@
         }
       });
     }
+
+    // Multi-select
+    function msToggle(btn) {
+      const panel = btn.nextElementSibling;
+      const isOpen = panel.classList.contains('open');
+      document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+      if (!isOpen) panel.classList.add('open');
+    }
+    function msSearch(input) {
+      const q = input.value.toLowerCase();
+      input.closest('.ms-panel').querySelectorAll('label').forEach(lb => {
+        lb.style.display = lb.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    }
+    // Fechar ao clicar fora
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.ms-wrap')) {
+        document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+      }
+    });
 
     // Sincronização manual
     const btnSync = document.getElementById('btn-sync');

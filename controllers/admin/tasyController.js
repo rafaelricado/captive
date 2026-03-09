@@ -28,17 +28,35 @@ function maskCpf(cpf) {
   return `***.${d.slice(3, 6)}.${d.slice(6, 9)}-**`;
 }
 
+// Normaliza query param para array, filtrando vazios
+function toArray(val) {
+  if (!val) return [];
+  return (Array.isArray(val) ? val : [val]).map(v => String(v).trim()).filter(Boolean);
+}
+
 function buildWhere(query) {
-  const { status, convenio, setor, tipo, especialidade, dtInicio, dtFim, q, zeradas, cancelados } = query;
+  const { dtInicio, dtFim, q, zeradas, cancelados } = query;
   const where = {};
 
-  if (status && ['aberto', 'pendente', 'faturado', 'outro'].includes(status)) {
-    where.status_categoria = status;
-  }
-  if (convenio)     where.ds_convenio         = { [Op.iLike]: `%${convenio}%` };
-  if (setor)        where.ds_setor             = { [Op.iLike]: `%${setor}%` };
-  if (tipo)         where.ds_tipo_atendimento  = { [Op.iLike]: `%${tipo}%` };
-  if (especialidade) where.ds_especialidade    = { [Op.iLike]: `%${especialidade}%` };
+  const statuses = toArray(query.status).filter(s => ['aberto', 'faturado', 'outro'].includes(s));
+  if (statuses.length === 1) where.status_categoria = statuses[0];
+  else if (statuses.length > 1) where.status_categoria = { [Op.in]: statuses };
+
+  const convenios = toArray(query.convenio);
+  if (convenios.length === 1) where.ds_convenio = convenios[0];
+  else if (convenios.length > 1) where.ds_convenio = { [Op.in]: convenios };
+
+  const setores = toArray(query.setor);
+  if (setores.length === 1) where.ds_setor = setores[0];
+  else if (setores.length > 1) where.ds_setor = { [Op.in]: setores };
+
+  const tipos = toArray(query.tipo);
+  if (tipos.length === 1) where.ds_tipo_atendimento = tipos[0];
+  else if (tipos.length > 1) where.ds_tipo_atendimento = { [Op.in]: tipos };
+
+  const especialidades = toArray(query.especialidade);
+  if (especialidades.length === 1) where.ds_especialidade = especialidades[0];
+  else if (especialidades.length > 1) where.ds_especialidade = { [Op.in]: especialidades };
 
   if (dtInicio || dtFim) {
     where.dt_entrada = {};
