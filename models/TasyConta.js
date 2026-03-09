@@ -67,6 +67,36 @@ const TasyConta = sequelize.define('TasyConta', {
     allowNull: true,
     comment: 'Indicador de cancelamento do Oracle'
   },
+  cd_autorizacao: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    comment: 'Número de autorização TISS (CONTA_PACIENTE)'
+  },
+  nr_guia_prestador: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    comment: 'Número da guia do prestador (CONTA_PACIENTE)'
+  },
+  nr_protocolo_conta: {
+    type: DataTypes.STRING(40),
+    allowNull: true,
+    comment: 'Número do protocolo texto (CONTA_PACIENTE.NR_PROTOCOLO)'
+  },
+  qt_dias_conta: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Quantidade de dias da conta (CONTA_PACIENTE)'
+  },
+  ds_inconsistencia: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    comment: 'Inconsistência detectada (CONTA_PACIENTE)'
+  },
+  ie_tipo_atend_tiss: {
+    type: DataTypes.STRING(2),
+    allowNull: true,
+    comment: 'Tipo de atendimento TISS: 01=Consulta, 02=Internação, 03=SPSADT, 04=Outros'
+  },
   ie_status_protocolo: {
     type: DataTypes.INTEGER,
     allowNull: true,

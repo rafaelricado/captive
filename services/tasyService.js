@@ -123,9 +123,16 @@ async function syncContas() {
     const result = await conn.execute(
       `SELECT ${viewCols},
               CP.DT_CONTA_DEFINITIVA,
-              CP.DT_CONTA_PROTOCOLO
+              CP.DT_CONTA_PROTOCOLO,
+              CP.CD_AUTORIZACAO,
+              CP.NR_GUIA_PRESTADOR,
+              CP.NR_PROTOCOLO       AS NR_PROTOCOLO_CONTA,
+              CP.QT_DIAS_CONTA,
+              CP.DS_INCONSISTENCIA,
+              AP.IE_TIPO_ATEND_TISS
          FROM TASY.EIS_CONTA_PACIENTE_V2 V
          LEFT JOIN TASY.CONTA_PACIENTE CP ON CP.NR_ATENDIMENTO = V.NR_ATENDIMENTO
+         LEFT JOIN TASY.ATENDIMENTO_PACIENTE AP ON AP.NR_ATENDIMENTO = V.NR_ATENDIMENTO
         WHERE V.DT_ENTRADA >= ADD_MONTHS(SYSDATE, -3)
            OR V.DT_ENTRADA IS NULL`,
       [],
@@ -153,6 +160,12 @@ async function syncContas() {
           ds_status_origem:    r[C.ds_status_origem]    ?? null,
           status_categoria:    categorizeStatus(r['DT_CONTA_DEFINITIVA'], r[C.ie_cancelamento]),
           ie_cancelamento:     r[C.ie_cancelamento]     ?? null,
+          cd_autorizacao:      r['CD_AUTORIZACAO']      ? String(r['CD_AUTORIZACAO']).trim() : null,
+          nr_guia_prestador:   r['NR_GUIA_PRESTADOR']   ? String(r['NR_GUIA_PRESTADOR']).trim() : null,
+          nr_protocolo_conta:  r['NR_PROTOCOLO_CONTA']  ? String(r['NR_PROTOCOLO_CONTA']).trim() : null,
+          qt_dias_conta:       r['QT_DIAS_CONTA']       != null ? Number(r['QT_DIAS_CONTA']) : null,
+          ds_inconsistencia:   r['DS_INCONSISTENCIA']   ?? null,
+          ie_tipo_atend_tiss:  r['IE_TIPO_ATEND_TISS']  ? String(r['IE_TIPO_ATEND_TISS']).trim() : null,
           dt_conta_definitiva: oracleToDate(r['DT_CONTA_DEFINITIVA']),
           dt_conta_protocolo:  oracleToDate(r['DT_CONTA_PROTOCOLO']),
           vl_conta:            r[C.vl_conta]            ?? 0,
@@ -183,6 +196,8 @@ async function syncContas() {
             'ds_status_origem', 'status_categoria', 'ie_cancelamento',
             'vl_conta', 'vl_glosa', 'pr_glosa', 'vl_liquido',
             'dt_entrada', 'dt_saida', 'dt_faturamento',
+            'cd_autorizacao', 'nr_guia_prestador', 'nr_protocolo_conta',
+            'qt_dias_conta', 'ds_inconsistencia', 'ie_tipo_atend_tiss',
             'ie_status_protocolo', 'nr_seq_protocolo',
             'dt_conta_definitiva', 'dt_conta_protocolo', 'synced_at'
           ]

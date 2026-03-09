@@ -530,10 +530,13 @@
 
       { section: 'Atendimento' },
       { label: 'Tipo',              value: c.ds_tipo_atendimento || '—' },
+      { label: 'Tipo TISS',         value: c.ds_tipo_atend_tiss ? (c.ie_tipo_atend_tiss + ' – ' + c.ds_tipo_atend_tiss) : '—' },
       { label: 'Especialidade',     value: c.ds_especialidade    || '—' },
       { label: 'Médico',            value: c.nm_medico           || '—' },
       { label: 'Setor',             value: c.ds_setor            || '—' },
+      { label: 'Dias internado',    value: c.qt_dias_conta != null ? c.qt_dias_conta + ' dias' : '—' },
       { label: 'Status Origem',     value: c.ds_status_origem    || '—' },
+      ...(c.ds_inconsistencia ? [{ label: '⚠ Inconsistência', value: c.ds_inconsistencia }] : []),
 
       { section: 'Valores' },
       { label: 'Faturado',          value: brl(c.vl_conta) },
@@ -547,9 +550,12 @@
       { label: 'Fechamento conta',  value: date(c.dt_conta_definitiva) },
       { label: 'Protocolo convênio',value: date(c.dt_conta_protocolo) },
 
-      { section: 'Protocolo' },
+      { section: 'Protocolo e Autorização' },
       { label: 'Status protocolo',  value: c.ds_status_protocolo || '—' },
-      { label: 'Nº protocolo',      value: c.nr_seq_protocolo ? String(c.nr_seq_protocolo) : '—' },
+      { label: 'Nº seq. protocolo', value: c.nr_seq_protocolo ? String(c.nr_seq_protocolo) : '—' },
+      { label: 'Nº protocolo',      value: c.nr_protocolo_conta  || '—' },
+      { label: 'Autorização TISS',  value: c.cd_autorizacao      || '—' },
+      { label: 'Guia prestador',    value: c.nr_guia_prestador   || '—' },
     ];
 
     let html = '';

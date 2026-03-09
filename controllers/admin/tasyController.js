@@ -21,6 +21,13 @@ const STATUS_PROTOCOLO = {
   5: 'Cancelado',
 };
 
+const TISS_TIPO = {
+  '01': 'Consulta',
+  '02': 'Internação',
+  '03': 'SPSADT',
+  '04': 'Outros',
+};
+
 function maskCpf(cpf) {
   if (!cpf) return null;
   const d = String(cpf).replace(/\D/g, '');
@@ -299,6 +306,13 @@ exports.dashboard = async (req, res) => {
       dt_faturamento:      r.dt_faturamento     || '—',
       dt_conta_definitiva: r.dt_conta_definitiva || null,
       dt_conta_protocolo:  r.dt_conta_protocolo  || null,
+      cd_autorizacao:      r.cd_autorizacao     || null,
+      nr_guia_prestador:   r.nr_guia_prestador  || null,
+      nr_protocolo_conta:  r.nr_protocolo_conta || null,
+      qt_dias_conta:       r.qt_dias_conta      ?? null,
+      ds_inconsistencia:   r.ds_inconsistencia  || null,
+      ie_tipo_atend_tiss:  r.ie_tipo_atend_tiss || null,
+      ds_tipo_atend_tiss:  r.ie_tipo_atend_tiss ? (TISS_TIPO[r.ie_tipo_atend_tiss] || r.ie_tipo_atend_tiss) : null,
       ie_status_protocolo: r.ie_status_protocolo ?? null,
       ds_status_protocolo: r.ie_status_protocolo ? (STATUS_PROTOCOLO[r.ie_status_protocolo] || `Status ${r.ie_status_protocolo}`) : null,
       nr_seq_protocolo:    r.nr_seq_protocolo ?? null,
