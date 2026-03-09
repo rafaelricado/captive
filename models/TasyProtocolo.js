@@ -23,6 +23,11 @@ const TasyProtocolo = sequelize.define('TasyProtocolo', {
     allowNull: true,
     comment:   'Código do convênio (CD_CONVENIO)',
   },
+  ds_nome_convenio: {
+    type:      DataTypes.STRING(255),
+    allowNull: true,
+    comment:   'Nome do convênio (TASY.CONVENIO.DS_CONVENIO)',
+  },
   ie_status_protocolo: {
     type:      DataTypes.INTEGER,
     allowNull: true,

@@ -83,12 +83,15 @@ async function getLastSync() {
 
 async function getConvenioList() {
   const rows = await TasyProtocolo.findAll({
-    attributes: [[fn('DISTINCT', col('cd_convenio')), 'cd_convenio']],
+    attributes: ['cd_convenio', 'ds_nome_convenio'],
     where: { cd_convenio: { [Op.ne]: null }, nr_seq_protocolo: { [Op.ne]: null } },
+    group: ['cd_convenio', 'ds_nome_convenio'],
     order: [['cd_convenio', 'ASC']],
     raw: true,
   });
-  return rows.map(r => r.cd_convenio).filter(v => v != null);
+  return rows
+    .filter(r => r.cd_convenio != null)
+    .map(r => ({ cd: r.cd_convenio, nome: r.ds_nome_convenio || `Conv. #${r.cd_convenio}` }));
 }
 
 // Retorna Map<nr_seq_protocolo, { qt_contas, vl_contas }> para os seqs fornecidos
@@ -144,6 +147,7 @@ exports.list = async (req, res) => {
       nr_seq_protocolo:    r.nr_seq_protocolo,
       nr_protocolo:        r.nr_protocolo        || '—',
       cd_convenio:         r.cd_convenio,
+      ds_nome_convenio:    r.ds_nome_convenio || null,
       ie_status_protocolo: r.ie_status_protocolo,
       ds_status_protocolo: r.ie_status_protocolo
         ? (STATUS_PROTOCOLO[r.ie_status_protocolo] || `Status ${r.ie_status_protocolo}`)

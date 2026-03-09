@@ -172,10 +172,10 @@
           <%= fConvenio.length ? fConvenio.length + ' convênio(s)' : 'Todos os convênios' %>
         </div>
         <div class="ms-panel">
-          <% convenios.forEach(cd => { %>
+          <% convenios.forEach(c => { %>
             <label>
-              <input type="checkbox" name="convenio" value="<%= cd %>" <%= fConvenio.includes(String(cd)) ? 'checked' : '' %>>
-              Conv. #<%= cd %>
+              <input type="checkbox" name="convenio" value="<%= c.cd %>" <%= fConvenio.includes(String(c.cd)) ? 'checked' : '' %>>
+              <%= c.nome %>
             </label>
           <% }) %>
         </div>
@@ -278,8 +278,13 @@
                     <div class="inconsistencia">⚠ <%= p.ds_inconsistencia %></div>
                   <% } %>
                 </td>
-                <td style="font-size:.82rem; color:#6b7280;">
-                  #<%= p.cd_convenio || '—' %>
+                <td style="font-size:.82rem;">
+                  <% if (p.ds_nome_convenio) { %>
+                    <%= p.ds_nome_convenio %>
+                    <div class="td-sub">#<%= p.cd_convenio %></div>
+                  <% } else { %>
+                    <span style="color:#6b7280;">#<%= p.cd_convenio || '—' %></span>
+                  <% } %>
                 </td>
                 <td class="center">
                   <% if (p.ie_status_protocolo) { %>
@@ -406,7 +411,7 @@
       { section: 'Identificação' },
       { label: 'Nº Seq.',       value: String(p.nr_seq_protocolo) },
       { label: 'Protocolo',     value: p.nr_protocolo },
-      { label: 'Cód. Convênio', value: p.cd_convenio ? '#' + p.cd_convenio : '—' },
+      { label: 'Convênio',      value: p.ds_nome_convenio ? `${p.ds_nome_convenio} (#${p.cd_convenio})` : (p.cd_convenio ? '#' + p.cd_convenio : '—') },
       { label: 'Status',        value: p.ds_status_protocolo },
       { label: 'Tipo',          value: p.ie_tipo_protocolo ? String(p.ie_tipo_protocolo) : '—' },
       { label: 'Usuário',       value: p.nm_usuario || '—' },

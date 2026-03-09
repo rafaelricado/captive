@@ -243,6 +243,7 @@ async function syncProtocolos() {
       `SELECT P.NR_SEQ_PROTOCOLO,
               P.NR_PROTOCOLO,
               P.CD_CONVENIO,
+              C.DS_CONVENIO AS DS_NOME_CONVENIO,
               P.IE_STATUS_PROTOCOLO,
               P.IE_TIPO_PROTOCOLO,
               P.DT_PERIODO_INICIAL,
@@ -258,6 +259,7 @@ async function syncProtocolos() {
               P.DS_OBSERVACAO,
               P.NM_USUARIO
          FROM TASY.PROTOCOLO_CONVENIO P
+         LEFT JOIN TASY.CONVENIO C ON C.CD_CONVENIO = P.CD_CONVENIO
         WHERE P.DT_PERIODO_INICIAL >= ADD_MONTHS(SYSDATE, -24)
            OR P.DT_PERIODO_INICIAL IS NULL
         ORDER BY P.NR_SEQ_PROTOCOLO`,
@@ -277,6 +279,7 @@ async function syncProtocolos() {
           nr_seq_protocolo:    Number(r.NR_SEQ_PROTOCOLO),
           nr_protocolo:        r.NR_PROTOCOLO        ? String(r.NR_PROTOCOLO).trim() : null,
           cd_convenio:         r.CD_CONVENIO         != null ? Number(r.CD_CONVENIO)         : null,
+          ds_nome_convenio:    r.DS_NOME_CONVENIO    ? String(r.DS_NOME_CONVENIO).trim() : null,
           ie_status_protocolo: r.IE_STATUS_PROTOCOLO != null ? Number(r.IE_STATUS_PROTOCOLO) : null,
           ie_tipo_protocolo:   r.IE_TIPO_PROTOCOLO   != null ? Number(r.IE_TIPO_PROTOCOLO)   : null,
           dt_periodo_inicial:  oracleToDate(r.DT_PERIODO_INICIAL),
@@ -303,7 +306,7 @@ async function syncProtocolos() {
         await TasyProtocolo.bulkCreate(deduped, {
           conflictAttributes: ['nr_seq_protocolo'],
           updateOnDuplicate: [
-            'nr_protocolo', 'cd_convenio', 'ie_status_protocolo', 'ie_tipo_protocolo',
+            'nr_protocolo', 'cd_convenio', 'ds_nome_convenio', 'ie_status_protocolo', 'ie_tipo_protocolo',
             'dt_periodo_inicial', 'dt_periodo_final',
             'dt_geracao', 'dt_envio', 'dt_retorno', 'dt_definitivo',
             'dt_vencimento', 'dt_entrega_convenio',
