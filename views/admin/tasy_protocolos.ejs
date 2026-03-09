@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Protocolo Convênio &mdash; Painel Admin</title>
+  <meta name="csrf-token" content="<%= csrfToken %>">
+  <%- include('_head') %>
+  <style>
+    /* Status badges */
+    .badge { display:inline-block; padding:2px 10px; border-radius:99px; font-size:.72rem; font-weight:700; white-space:nowrap; }
+    .badge-rascunho  { background:#f3f4f6; color:#6b7280; }
+    .badge-enviado   { background:#dbeafe; color:#1d4ed8; }
+    .badge-faturado  { background:#fef3c7; color:#d97706; }
+    .badge-pago      { background:#d1fae5; color:#16a34a; }
+    .badge-cancelado { background:#fee2e2; color:#dc2626; }
+
+    /* Cards */
+    .card-rascunho  { border-top:4px solid #9ca3af; }
+    .card-enviado   { border-top:4px solid #1d4ed8; }
+    .card-faturado  { border-top:4px solid #d97706; }
+    .card-pago      { border-top:4px solid #16a34a; }
+    .card-rascunho  .card-value { color:#6b7280; }
+    .card-enviado   .card-value { color:#1d4ed8; }
+    .card-faturado  .card-value { color:#d97706; }
+    .card-pago      .card-value { color:#16a34a; }
+    .card-sub { font-size:.78rem; color:#6b7280; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    /* Tabs */
+    .tasy-tabs { display:flex; gap:4px; margin-bottom:20px; border-bottom:2px solid #e5e7eb; }
+    .tasy-tab { padding:8px 18px; font-size:.85rem; font-weight:600; color:#6b7280; text-decoration:none; border-radius:6px 6px 0 0; border:2px solid transparent; border-bottom:none; margin-bottom:-2px; }
+    .tasy-tab:hover { color:#0d4e8b; }
+    .tasy-tab.active { color:#0d4e8b; background:#fff; border-color:#e5e7eb; border-bottom-color:#fff; }
+
+    /* Filtros */
+    .filter-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:12px 16px; margin-bottom:16px; }
+    .filter-bar select, .filter-bar input[type="text"] { padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:.82rem; color:#1f2937; background:#f9fafb; }
+    .btn-filter { padding:6px 14px; background:#0d4e8b; color:#fff; border:none; border-radius:6px; font-size:.82rem; cursor:pointer; font-weight:600; }
+    .btn-clear  { font-size:.82rem; color:#6b7280; text-decoration:none; }
+    .btn-clear:hover { color:#0d4e8b; }
+
+    /* Toolbar */
+    .toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .btn-novo { padding:7px 16px; background:#0d4e8b; color:#fff; border:none; border-radius:6px; font-size:.85rem; cursor:pointer; font-weight:600; }
+    .btn-novo:hover { background:#0b4278; }
+
+    /* Modal */
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000; align-items:center; justify-content:center; }
+    .modal-overlay.open { display:flex; }
+    .modal { background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,.18); width:100%; max-width:520px; padding:28px 32px; position:relative; }
+    .modal h3 { margin:0 0 20px; font-size:1.05rem; color:#1f2937; }
+    .modal-close { position:absolute; top:14px; right:16px; background:none; border:none; font-size:1.3rem; cursor:pointer; color:#9ca3af; }
+    .modal-close:hover { color:#374151; }
+    .form-row { margin-bottom:14px; }
+    .form-row label { display:block; font-size:.82rem; font-weight:600; color:#374151; margin-bottom:4px; }
+    .form-row input, .form-row select, .form-row textarea {
+      width:100%; padding:7px 10px; border:1px solid #d1d5db; border-radius:6px;
+      font-size:.85rem; color:#1f2937; background:#f9fafb; box-sizing:border-box;
+    }
+    .form-row textarea { height:68px; resize:vertical; }
+    .form-row-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .preview-box { background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:10px 14px; font-size:.83rem; color:#0369a1; margin-bottom:14px; }
+    .form-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+    .btn-salvar  { padding:8px 20px; background:#0d4e8b; color:#fff; border:none; border-radius:6px; font-size:.85rem; cursor:pointer; font-weight:600; }
+    .btn-cancel2 { padding:8px 16px; background:#f3f4f6; color:#374151; border:1px solid #d1d5db; border-radius:6px; font-size:.85rem; cursor:pointer; }
+
+    /* Ações inline */
+    .btn-action { padding:3px 10px; border-radius:5px; font-size:.75rem; font-weight:600; cursor:pointer; border:1px solid; }
+    .btn-editar { background:#f0f9ff; color:#1d4ed8; border-color:#bfdbfe; }
+    .btn-excluir { background:#fff1f2; color:#dc2626; border-color:#fecdd3; }
+    .btn-editar:hover  { background:#dbeafe; }
+    .btn-excluir:hover { background:#fee2e2; }
+
+    td.valor { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    td.center { text-align:center; }
+  </style>
+</head>
+<body>
+  <%- include('_nav', { page: page }) %>
+
+  <main class="container">
+    <h2 class="page-title">Tasy &mdash; Protocolo Convênio</h2>
+
+    <!-- Tabs -->
+    <div class="tasy-tabs">
+      <a href="/admin/tasy"            class="tasy-tab">Contas de Paciente</a>
+      <a href="/admin/tasy/protocolos" class="tasy-tab active">Protocolo Convênio</a>
+    </div>
+
+    <!-- Cards de resumo -->
+    <div class="cards" style="grid-template-columns:repeat(4,1fr);">
+      <div class="card card-rascunho">
+        <div class="card-value"><%= cards.rascunho.qt.toLocaleString('pt-BR') %></div>
+        <div class="card-label">Rascunho</div>
+        <div class="card-sub"><%= cards.rascunho.vl %></div>
+      </div>
+      <div class="card card-enviado">
+        <div class="card-value"><%= cards.enviado.qt.toLocaleString('pt-BR') %></div>
+        <div class="card-label">Enviado ao Convênio</div>
+        <div class="card-sub"><%= cards.enviado.vl %></div>
+      </div>
+      <div class="card card-faturado">
+        <div class="card-value"><%= cards.faturado.qt.toLocaleString('pt-BR') %></div>
+        <div class="card-label">Faturado (NF emitida)</div>
+        <div class="card-sub"><%= cards.faturado.vl %></div>
+      </div>
+      <div class="card card-pago">
+        <div class="card-value"><%= cards.pago.qt.toLocaleString('pt-BR') %></div>
+        <div class="card-label">Pago</div>
+        <div class="card-sub"><%= cards.pago.vl %></div>
+      </div>
+    </div>
+
+    <!-- Filtros -->
+    <form method="GET" action="/admin/tasy/protocolos" class="filter-bar">
+      <input type="text" name="convenio" placeholder="Filtrar convênio"
+             value="<%= filters.convenio || '' %>" style="min-width:200px;">
+      <select name="status">
+        <option value="">Todos os status</option>
+        <% ['rascunho','enviado','faturado','pago','cancelado'].forEach(s => { %>
+          <option value="<%= s %>" <%= filters.status === s ? 'selected' : '' %>>
+            <%= {rascunho:'Rascunho', enviado:'Enviado', faturado:'Faturado', pago:'Pago', cancelado:'Cancelado'}[s] %>
+          </option>
+        <% }) %>
+      </select>
+      <button type="submit" class="btn-filter">Filtrar</button>
+      <a href="/admin/tasy/protocolos" class="btn-clear">Limpar</a>
+    </form>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <span style="font-size:.85rem;color:#374151;">
+        <strong><%= total.toLocaleString('pt-BR') %></strong> protocolo<%= total !== 1 ? 's' : '' %>
+      </span>
+      <button class="btn-novo" id="btn-novo">+ Novo Protocolo</button>
+    </div>
+
+    <!-- Tabela -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Nº Protocolo</th>
+            <th>Convênio</th>
+            <th>Período (contas)</th>
+            <th class="center">Contas</th>
+            <th style="text-align:right;">Valor Total</th>
+            <th class="center">Status</th>
+            <th>Nº NF</th>
+            <th>Emissão</th>
+            <th>Envio</th>
+            <th>Faturamento</th>
+            <th>Pagamento</th>
+            <th class="center">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (protocolos.length === 0) { %>
+            <tr><td colspan="12" style="text-align:center;color:#9ca3af;padding:32px;">
+              Nenhum protocolo encontrado. Clique em <strong>+ Novo Protocolo</strong> para criar.
+            </td></tr>
+          <% } else { %>
+            <% protocolos.forEach(p => { %>
+              <tr data-id="<%= p.id %>">
+                <td><code style="font-size:.8rem;"><%= p.nr_protocolo %></code></td>
+                <td style="font-size:.82rem;"><%= p.ds_convenio %></td>
+                <td style="font-size:.78rem;color:#6b7280;">
+                  <%= p.dt_inicio || '—' %> → <%= p.dt_fim || '—' %>
+                </td>
+                <td class="center"><%= (p.qt_contas || 0).toLocaleString('pt-BR') %></td>
+                <td class="valor"><%= p.vl_total_fmt %></td>
+                <td class="center">
+                  <span class="badge badge-<%= p.status %>">
+                    <%= {rascunho:'Rascunho',enviado:'Enviado',faturado:'Faturado',pago:'Pago',cancelado:'Cancelado'}[p.status] || p.status %>
+                  </span>
+                </td>
+                <td style="font-size:.82rem;"><%= p.nr_nota_fiscal || '—' %></td>
+                <td style="font-size:.82rem;"><%= p.dt_emissao_fmt %></td>
+                <td style="font-size:.82rem;"><%= p.dt_envio_fmt %></td>
+                <td style="font-size:.82rem;"><%= p.dt_faturamento_fmt %></td>
+                <td style="font-size:.82rem;"><%= p.dt_pagamento_fmt %></td>
+                <td class="center" style="white-space:nowrap;">
+                  <button class="btn-action btn-editar" onclick="abrirEditar(<%- JSON.stringify(p) %>)">Editar</button>
+                  <% if (p.status === 'rascunho' || p.status === 'cancelado') { %>
+                    <button class="btn-action btn-excluir" onclick="excluir('<%= p.id %>', '<%= p.nr_protocolo %>')">Excluir</button>
+                  <% } %>
+                </td>
+              </tr>
+            <% }) %>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Paginação -->
+    <% if (totalPages > 1) { %>
+      <div class="pagination">
+        <% if (pageNum > 0) { %>
+          <a href="/admin/tasy/protocolos?<%= new URLSearchParams({...filters, page: pageNum - 1}).toString() %>">&laquo; Anterior</a>
+        <% } %>
+        <span>Página <%= pageNum + 1 %> de <%= totalPages %></span>
+        <% if (pageNum < totalPages - 1) { %>
+          <a href="/admin/tasy/protocolos?<%= new URLSearchParams({...filters, page: pageNum + 1}).toString() %>">Próxima &raquo;</a>
+        <% } %>
+      </div>
+    <% } %>
+  </main>
+
+  <!-- Modal: Novo Protocolo -->
+  <div class="modal-overlay" id="modal-novo">
+    <div class="modal">
+      <button class="modal-close" id="fechar-novo">&times;</button>
+      <h3>Novo Protocolo de Cobrança</h3>
+      <form method="POST" action="/admin/tasy/protocolos" id="form-novo">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <div class="form-row">
+          <label>Convênio <span style="color:#dc2626">*</span></label>
+          <select name="ds_convenio" id="novo-convenio" required>
+            <option value="">Selecione o convênio...</option>
+            <% convenios.forEach(c => { %>
+              <option value="<%= c %>"><%= c %></option>
+            <% }) %>
+          </select>
+        </div>
+
+        <div class="form-row form-row-2">
+          <div>
+            <label>Data entrada (de)</label>
+            <input type="date" name="dtInicio" id="novo-dtInicio">
+          </div>
+          <div>
+            <label>Data entrada (até)</label>
+            <input type="date" name="dtFim" id="novo-dtFim">
+          </div>
+        </div>
+
+        <div class="preview-box" id="preview-box" style="display:none;">
+          Carregando...
+        </div>
+
+        <div class="form-row">
+          <label>Nº Protocolo <span style="font-weight:400;color:#9ca3af;">(deixe em branco para gerar automaticamente)</span></label>
+          <input type="text" name="nr_protocolo" placeholder="Ex: PROT-202503-001">
+        </div>
+
+        <div class="form-row">
+          <label>Observações</label>
+          <textarea name="obs" placeholder="Informações adicionais sobre este protocolo..."></textarea>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn-cancel2" id="cancelar-novo">Cancelar</button>
+          <button type="submit" class="btn-salvar">Criar Protocolo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Editar Status -->
+  <div class="modal-overlay" id="modal-editar">
+    <div class="modal">
+      <button class="modal-close" id="fechar-editar">&times;</button>
+      <h3 id="editar-titulo">Editar Protocolo</h3>
+      <div class="form-row">
+        <label>Status</label>
+        <select id="editar-status">
+          <option value="rascunho">Rascunho</option>
+          <option value="enviado">Enviado ao Convênio</option>
+          <option value="faturado">Faturado (NF emitida)</option>
+          <option value="pago">Pago</option>
+          <option value="cancelado">Cancelado</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Nº Nota Fiscal</label>
+        <input type="text" id="editar-nf" placeholder="Ex: NF-12345">
+      </div>
+      <div class="form-row form-row-2">
+        <div>
+          <label>Data envio ao convênio</label>
+          <input type="date" id="editar-dt-envio">
+        </div>
+        <div>
+          <label>Data faturamento (NF)</label>
+          <input type="date" id="editar-dt-faturamento">
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Data pagamento</label>
+        <input type="date" id="editar-dt-pagamento">
+      </div>
+      <div class="form-row">
+        <label>Observações</label>
+        <textarea id="editar-obs"></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-cancel2" id="cancelar-editar">Cancelar</button>
+        <button type="button" class="btn-salvar" id="salvar-editar">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <%- include('_footer') %>
+
+  <script>
+  (function () {
+    const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    // ---- Modal Novo ----
+    const modalNovo  = document.getElementById('modal-novo');
+    document.getElementById('btn-novo').addEventListener('click', () => modalNovo.classList.add('open'));
+    document.getElementById('fechar-novo').addEventListener('click', () => modalNovo.classList.remove('open'));
+    document.getElementById('cancelar-novo').addEventListener('click', () => modalNovo.classList.remove('open'));
+    modalNovo.addEventListener('click', e => { if (e.target === modalNovo) modalNovo.classList.remove('open'); });
+
+    // Preview ao selecionar convênio ou datas
+    let previewTimer;
+    function atualizarPreview() {
+      const convenio = document.getElementById('novo-convenio').value;
+      const dtInicio = document.getElementById('novo-dtInicio').value;
+      const dtFim    = document.getElementById('novo-dtFim').value;
+      const box = document.getElementById('preview-box');
+      if (!convenio) { box.style.display = 'none'; return; }
+      box.style.display = 'block';
+      box.textContent = 'Calculando...';
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(() => {
+        const p = new URLSearchParams({ convenio, dtInicio, dtFim });
+        fetch('/admin/tasy/protocolos/preview?' + p)
+          .then(r => r.json())
+          .then(d => {
+            box.textContent = `${d.qt.toLocaleString('pt-BR')} contas · Total: ${d.vlFmt}`;
+          })
+          .catch(() => { box.textContent = 'Erro ao calcular.'; });
+      }, 400);
+    }
+    document.getElementById('novo-convenio').addEventListener('change', atualizarPreview);
+    document.getElementById('novo-dtInicio').addEventListener('change', atualizarPreview);
+    document.getElementById('novo-dtFim').addEventListener('change', atualizarPreview);
+
+    // ---- Modal Editar ----
+    const modalEditar = document.getElementById('modal-editar');
+    let editarId = null;
+
+    window.abrirEditar = function (p) {
+      editarId = p.id;
+      document.getElementById('editar-titulo').textContent = 'Editar — ' + p.nr_protocolo;
+      document.getElementById('editar-status').value         = p.status         || 'rascunho';
+      document.getElementById('editar-nf').value             = p.nr_nota_fiscal || '';
+      document.getElementById('editar-dt-envio').value       = p.dt_envio       || '';
+      document.getElementById('editar-dt-faturamento').value = p.dt_faturamento || '';
+      document.getElementById('editar-dt-pagamento').value   = p.dt_pagamento   || '';
+      document.getElementById('editar-obs').value            = p.obs            || '';
+      modalEditar.classList.add('open');
+    };
+
+    document.getElementById('fechar-editar').addEventListener('click',  () => modalEditar.classList.remove('open'));
+    document.getElementById('cancelar-editar').addEventListener('click', () => modalEditar.classList.remove('open'));
+    modalEditar.addEventListener('click', e => { if (e.target === modalEditar) modalEditar.classList.remove('open'); });
+
+    document.getElementById('salvar-editar').addEventListener('click', async () => {
+      if (!editarId) return;
+      const body = {
+        status:          document.getElementById('editar-status').value,
+        nr_nota_fiscal:  document.getElementById('editar-nf').value,
+        dt_envio:        document.getElementById('editar-dt-envio').value,
+        dt_faturamento:  document.getElementById('editar-dt-faturamento').value,
+        dt_pagamento:    document.getElementById('editar-dt-pagamento').value,
+        obs:             document.getElementById('editar-obs').value,
+      };
+      try {
+        const r = await fetch('/admin/tasy/protocolos/' + editarId + '/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+          body: JSON.stringify(body),
+        });
+        const d = await r.json();
+        if (d.ok) { location.reload(); }
+        else alert('Erro: ' + (d.error || 'desconhecido'));
+      } catch { alert('Falha na requisição.'); }
+    });
+
+    // ---- Excluir ----
+    window.excluir = async function (id, nr) {
+      if (!confirm('Excluir protocolo ' + nr + '?')) return;
+      try {
+        const r = await fetch('/admin/tasy/protocolos/' + id, {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': csrf },
+        });
+        const d = await r.json();
+        if (d.ok) location.reload();
+        else alert('Erro: ' + (d.error || 'desconhecido'));
+      } catch { alert('Falha na requisição.'); }
+    };
+  })();
+  </script>
+</body>
+</html>

@@ -16,15 +16,40 @@ const TasyConta = sequelize.define('TasyConta', {
     type: DataTypes.STRING(255),
     allowNull: true
   },
+  cd_pessoa_fisica: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    comment: 'CPF do paciente'
+  },
   ds_convenio: {
     type: DataTypes.STRING(255),
     allowNull: true,
     comment: 'Convênio / plano de saúde'
   },
+  ds_plano: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Plano específico dentro do convênio'
+  },
   ds_setor: {
     type: DataTypes.STRING(255),
     allowNull: true,
-    comment: 'Setor / ala / departamento'
+    comment: 'Setor / ala / departamento de atendimento'
+  },
+  ds_tipo_atendimento: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Tipo de atendimento (internação, ambulatorial, etc.)'
+  },
+  nm_medico: {
+    type: DataTypes.STRING(150),
+    allowNull: true,
+    comment: 'Médico responsável'
+  },
+  ds_especialidade: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+    comment: 'Especialidade médica'
   },
   ds_status_origem: {
     type: DataTypes.STRING(100),
@@ -35,12 +60,36 @@ const TasyConta = sequelize.define('TasyConta', {
     type: DataTypes.STRING(20),
     allowNull: false,
     defaultValue: 'outro',
-    comment: 'Categoria calculada a partir de ds_status_origem (aberto|pendente|faturado|outro)'
+    comment: 'Categoria calculada (aberto|pendente|faturado|outro)'
+  },
+  ie_cancelamento: {
+    type: DataTypes.STRING(5),
+    allowNull: true,
+    comment: 'Indicador de cancelamento do Oracle'
   },
   vl_conta: {
     type: DataTypes.DECIMAL(12, 2),
     allowNull: true,
-    defaultValue: 0
+    defaultValue: 0,
+    comment: 'Valor faturado (VL_FATURADO)'
+  },
+  vl_glosa: {
+    type: DataTypes.DECIMAL(12, 2),
+    allowNull: true,
+    defaultValue: 0,
+    comment: 'Valor glosado pelo convênio'
+  },
+  pr_glosa: {
+    type: DataTypes.DECIMAL(6, 2),
+    allowNull: true,
+    defaultValue: 0,
+    comment: 'Percentual de glosa'
+  },
+  vl_liquido: {
+    type: DataTypes.DECIMAL(12, 2),
+    allowNull: true,
+    defaultValue: 0,
+    comment: 'Valor líquido após glosa (VL_LIQUIDO)'
   },
   dt_entrada: {
     type: DataTypes.DATEONLY,
@@ -67,6 +116,8 @@ const TasyConta = sequelize.define('TasyConta', {
     { fields: ['status_categoria'] },
     { fields: ['ds_convenio'] },
     { fields: ['ds_setor'] },
+    { fields: ['ds_tipo_atendimento'] },
+    { fields: ['nm_medico'] },
     { fields: ['dt_entrada'] },
     { fields: ['synced_at'] }
   ]

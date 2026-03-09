@@ -13,15 +13,24 @@ function formatBRL(val) {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+function maskCpf(cpf) {
+  if (!cpf) return null;
+  const d = String(cpf).replace(/\D/g, '');
+  if (d.length !== 11) return cpf;
+  return `***.${d.slice(3, 6)}.${d.slice(6, 9)}-**`;
+}
+
 function buildWhere(query) {
-  const { status, convenio, setor, dtInicio, dtFim, q } = query;
+  const { status, convenio, setor, tipo, especialidade, dtInicio, dtFim, q, zeradas, cancelados } = query;
   const where = {};
 
   if (status && ['aberto', 'pendente', 'faturado', 'outro'].includes(status)) {
     where.status_categoria = status;
   }
-  if (convenio) where.ds_convenio = { [Op.iLike]: `%${convenio}%` };
-  if (setor)    where.ds_setor    = { [Op.iLike]: `%${setor}%` };
+  if (convenio)     where.ds_convenio         = { [Op.iLike]: `%${convenio}%` };
+  if (setor)        where.ds_setor             = { [Op.iLike]: `%${setor}%` };
+  if (tipo)         where.ds_tipo_atendimento  = { [Op.iLike]: `%${tipo}%` };
+  if (especialidade) where.ds_especialidade    = { [Op.iLike]: `%${especialidade}%` };
 
   if (dtInicio || dtFim) {
     where.dt_entrada = {};
@@ -29,43 +38,67 @@ function buildWhere(query) {
     if (dtFim)    where.dt_entrada[Op.lte] = dtFim;
   }
 
+  if (zeradas   === '1') where.vl_conta      = { [Op.or]: [0, null] };
+  if (cancelados === '1') where.ie_cancelamento = { [Op.ne]: null };
+
   if (q) {
     const like = { [Op.iLike]: `%${q}%` };
     where[Op.or] = [
       { nm_paciente:    like },
       { nr_atendimento: like },
       { ds_convenio:    like },
+      { nm_medico:      like },
     ];
   }
 
   return where;
 }
 
-async function getCards() {
+// Cards respeitam os filtros ativos
+async function getCards(where = {}) {
   const categorias = ['aberto', 'pendente', 'faturado'];
-  const results = await TasyConta.findAll({
-    attributes: [
-      'status_categoria',
-      [fn('COUNT', col('id')), 'total'],
-      [fn('SUM', col('vl_conta')), 'valor'],
-    ],
-    group: ['status_categoria'],
-    raw: true,
-  });
+  const [byStatus, glosa] = await Promise.all([
+    TasyConta.findAll({
+      attributes: [
+        'status_categoria',
+        [fn('COUNT', col('id')), 'total'],
+        [fn('SUM', col('vl_conta')), 'valor'],
+        [fn('SUM', col('vl_liquido')), 'liquido'],
+      ],
+      where,
+      group: ['status_categoria'],
+      raw: true,
+    }),
+    TasyConta.findAll({
+      attributes: [
+        [fn('SUM', col('vl_glosa')), 'total_glosa'],
+        [fn('AVG', col('pr_glosa')), 'media_glosa'],
+      ],
+      where,
+      raw: true,
+    }),
+  ]);
 
   const cards = {};
   for (const cat of categorias) {
-    const row = results.find(r => r.status_categoria === cat) || {};
+    const row = byStatus.find(r => r.status_categoria === cat) || {};
     cards[cat] = {
-      total: Number(row.total || 0),
-      valor: formatBRL(row.valor || 0),
-      valorRaw: Number(row.valor || 0),
+      total:   Number(row.total   || 0),
+      valor:   formatBRL(row.valor   || 0),
+      liquido: formatBRL(row.liquido || 0),
+      valorRaw:  Number(row.valor   || 0),
+      liquidoRaw: Number(row.liquido || 0),
     };
   }
-  // total geral
   cards.geral = {
-    total: results.reduce((s, r) => s + Number(r.total || 0), 0),
-    valor: formatBRL(results.reduce((s, r) => s + Number(r.valor || 0), 0)),
+    total:   byStatus.reduce((s, r) => s + Number(r.total || 0), 0),
+    valor:   formatBRL(byStatus.reduce((s, r) => s + Number(r.valor   || 0), 0)),
+    liquido: formatBRL(byStatus.reduce((s, r) => s + Number(r.liquido || 0), 0)),
+  };
+  cards.glosa = {
+    valor:      formatBRL(glosa[0]?.total_glosa || 0),
+    mediaPerc:  Number(glosa[0]?.media_glosa || 0).toFixed(1),
+    valorRaw:   Number(glosa[0]?.total_glosa || 0),
   };
   return cards;
 }
@@ -75,20 +108,28 @@ async function getLastSync() {
   return last ? formatDate(last) : null;
 }
 
-async function getChartData() {
-  // Agrupa por mês + status_categoria dos últimos 12 meses
+// Gráfico mensal respeita os filtros ativos.
+// Se não houver filtro de data, usa os últimos 12 meses.
+async function getChartData(where = {}) {
+  const chartWhere = { ...where };
+  if (!chartWhere.dt_entrada) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 12);
+    chartWhere.dt_entrada = { [Op.gte]: d.toISOString().slice(0, 10) };
+  }
+
   const rows = await TasyConta.findAll({
     attributes: [
       [fn('TO_CHAR', col('dt_entrada'), 'YYYY-MM'), 'mes'],
       'status_categoria',
       [fn('COUNT', col('id')), 'total'],
-      [fn('SUM', col('vl_conta')), 'valor'],
+      [fn('SUM', col('vl_conta')),   'valor'],
+      [fn('SUM', col('vl_liquido')), 'liquido'],
+      [fn('SUM', col('vl_glosa')),   'glosa'],
     ],
-    where: {
-      dt_entrada: { [Op.gte]: literal("CURRENT_DATE - INTERVAL '12 months'") },
-    },
+    where: chartWhere,
     group: [literal("TO_CHAR(dt_entrada, 'YYYY-MM')"), 'status_categoria'],
-    order:  [[literal("TO_CHAR(dt_entrada, 'YYYY-MM')"), 'ASC']],
+    order: [[literal("TO_CHAR(dt_entrada, 'YYYY-MM')"), 'ASC']],
     raw: true,
   });
   return rows;
@@ -114,21 +155,44 @@ async function getSetorList() {
   return rows.map(r => r.ds_setor).filter(Boolean);
 }
 
+async function getTipoList() {
+  const rows = await TasyConta.findAll({
+    attributes: [[fn('DISTINCT', col('ds_tipo_atendimento')), 'ds_tipo_atendimento']],
+    where: { ds_tipo_atendimento: { [Op.ne]: null } },
+    order: [['ds_tipo_atendimento', 'ASC']],
+    raw: true,
+  });
+  return rows.map(r => r.ds_tipo_atendimento).filter(Boolean);
+}
+
+async function getEspecialidadeList() {
+  const rows = await TasyConta.findAll({
+    attributes: [[fn('DISTINCT', col('ds_especialidade')), 'ds_especialidade']],
+    where: { ds_especialidade: { [Op.ne]: null } },
+    order: [['ds_especialidade', 'ASC']],
+    raw: true,
+  });
+  return rows.map(r => r.ds_especialidade).filter(Boolean);
+}
+
 // -------------------------------------------------
 // Handlers
 // -------------------------------------------------
 
 exports.dashboard = async (req, res) => {
   try {
-    const page   = Math.max(0, parseInt(req.query.page || '0', 10) || 0);
+    const page   = Math.min(10000, Math.max(0, parseInt(req.query.page || '0', 10) || 0));
     const offset = page * PAGE_SIZE;
     const where  = buildWhere(req.query);
 
-    const [cards, lastSync, convenios, setores, { count, rows }] = await Promise.all([
-      getCards(),
+    const [cards, lastSync, convenios, setores, tipos, especialidades, chartData, { count, rows }] = await Promise.all([
+      getCards(where),
       getLastSync(),
       getConvenioList(),
       getSetorList(),
+      getTipoList(),
+      getEspecialidadeList(),
+      getChartData(where),
       TasyConta.findAndCountAll({
         where,
         order: [['dt_entrada', 'DESC']],
@@ -138,16 +202,25 @@ exports.dashboard = async (req, res) => {
     ]);
 
     const contas = rows.map(r => ({
-      nr_atendimento:   r.nr_atendimento,
-      nm_paciente:      r.nm_paciente      || '—',
-      ds_convenio:      r.ds_convenio      || '—',
-      ds_setor:         r.ds_setor         || '—',
-      ds_status_origem: r.ds_status_origem || '—',
-      status_categoria: r.status_categoria,
-      vl_conta:         formatBRL(r.vl_conta),
-      dt_entrada:       r.dt_entrada || '—',
-      dt_saida:         r.dt_saida   || '—',
-      dt_faturamento:   r.dt_faturamento || '—',
+      nr_atendimento:      r.nr_atendimento,
+      nm_paciente:         r.nm_paciente         || '—',
+      cd_pessoa_fisica:    maskCpf(r.cd_pessoa_fisica),
+      ds_convenio:         r.ds_convenio         || '—',
+      ds_plano:            r.ds_plano            || null,
+      ds_setor:            r.ds_setor            || '—',
+      ds_tipo_atendimento: r.ds_tipo_atendimento || '—',
+      nm_medico:           r.nm_medico           || '—',
+      ds_especialidade:    r.ds_especialidade    || null,
+      ds_status_origem:    r.ds_status_origem    || '—',
+      status_categoria:    r.status_categoria,
+      ie_cancelamento:     r.ie_cancelamento,
+      vl_conta:            formatBRL(r.vl_conta),
+      vl_glosa:            formatBRL(r.vl_glosa),
+      pr_glosa:            Number(r.pr_glosa || 0).toFixed(1),
+      vl_liquido:          formatBRL(r.vl_liquido),
+      dt_entrada:          r.dt_entrada    || '—',
+      dt_saida:            r.dt_saida      || '—',
+      dt_faturamento:      r.dt_faturamento || '—',
     }));
 
     res.render('admin/tasy', {
@@ -157,7 +230,10 @@ exports.dashboard = async (req, res) => {
       lastSync,
       convenios,
       setores,
+      tipos,
+      especialidades,
       filters: req.query,
+      chartData: JSON.stringify(chartData),
       pageNum: page,
       totalPages: Math.ceil(count / PAGE_SIZE),
       total: count,
@@ -171,10 +247,11 @@ exports.dashboard = async (req, res) => {
 
 exports.data = async (req, res) => {
   try {
+    const where = buildWhere(req.query);
     const [cards, lastSync, chartData] = await Promise.all([
-      getCards(),
+      getCards(where),
       getLastSync(),
-      getChartData(),
+      getChartData(where),
     ]);
     res.json({ cards, lastSync, chartData });
   } catch (err) {
@@ -188,14 +265,22 @@ exports.export = async (req, res) => {
     const where = buildWhere(req.query);
     const rows  = await TasyConta.findAll({ where, order: [['dt_entrada', 'DESC']] });
 
-    const header = 'Nº Atendimento,Paciente,Convênio,Setor,Status,Valor (R$),Entrada,Saída,Faturamento';
+    const header = 'Nº Atendimento,Paciente,CPF,Convênio,Plano,Tipo Atend.,Médico,Especialidade,Setor,Status,Faturado,Glosa (R$),Glosa (%),Líquido,Entrada,Saída,Faturamento';
     const lines  = rows.map(r => [
       r.nr_atendimento,
-      r.nm_paciente      || '',
-      r.ds_convenio      || '',
-      r.ds_setor         || '',
-      r.ds_status_origem || '',
-      Number(r.vl_conta  || 0).toFixed(2).replace('.', ','),
+      r.nm_paciente              || '',
+      maskCpf(r.cd_pessoa_fisica) || '',
+      r.ds_convenio              || '',
+      r.ds_plano                 || '',
+      r.ds_tipo_atendimento      || '',
+      r.nm_medico                || '',
+      r.ds_especialidade         || '',
+      r.ds_setor                 || '',
+      r.ds_status_origem         || '',
+      Number(r.vl_conta   || 0).toFixed(2).replace('.', ','),
+      Number(r.vl_glosa   || 0).toFixed(2).replace('.', ','),
+      Number(r.pr_glosa   || 0).toFixed(1).replace('.', ','),
+      Number(r.vl_liquido || 0).toFixed(2).replace('.', ','),
       r.dt_entrada       || '',
       r.dt_saida         || '',
       r.dt_faturamento   || '',

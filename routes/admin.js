@@ -16,6 +16,7 @@ const devicesController      = require('../controllers/admin/devicesController')
 const securityController     = require('../controllers/admin/securityController');
 const managedIpsController   = require('../controllers/admin/managedIpsController');
 const tasyController         = require('../controllers/admin/tasyController');
+const tasyProtocoloController = require('../controllers/admin/tasyProtocoloController');
 const { Setting } = require('../models');
 const securityCountCache = require('../utils/securityCountCache');
 
@@ -65,6 +66,20 @@ const adminLoginLimiter = rateLimit({
   }
 });
 
+// Rate limit: exportações e endpoints de dados pesados — máximo 20 req/minuto por IP
+const exportLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    if (req.accepts('json')) {
+      return res.status(429).json({ error: 'Muitas requisições. Aguarde um momento.' });
+    }
+    res.status(429).send('Muitas requisições. Aguarde um momento.');
+  }
+});
+
 // Middleware: injeta configurações de marca em res.locals para todas as rotas admin
 router.use(async (req, res, next) => {
   try {
@@ -90,10 +105,10 @@ router.use(adminAuth, csrfMiddleware);
 // Painel (protegido)
 router.get('/', adminAuth, dashboardController.dashboard);
 router.get('/users', adminAuth, usersController.users);
-router.get('/users/export', adminAuth, usersController.exportUsers);
+router.get('/users/export', adminAuth, exportLimiter, usersController.exportUsers);
 router.post('/users/:id/delete', adminAuth, verifyCsrf, usersController.deleteUser);
 router.get('/sessions', adminAuth, sessionsController.sessions);
-router.get('/sessions/export', adminAuth, sessionsController.exportSessions);
+router.get('/sessions/export', adminAuth, exportLimiter, sessionsController.exportSessions);
 router.post('/sessions/:id/terminate', adminAuth, verifyCsrf, sessionsController.terminateSession);
 
 // Pontos de acesso (protegido)
@@ -106,7 +121,7 @@ router.post('/access-points/:id/delete', adminAuth, verifyCsrf, accessPointsCont
 
 // Rede / Tráfego Mikrotik (protegido)
 router.get('/traffic', adminAuth, networkController.traffic);
-router.get('/traffic/export', adminAuth, networkController.exportTraffic);
+router.get('/traffic/export', adminAuth, exportLimiter, networkController.exportTraffic);
 router.get('/wan', adminAuth, networkController.wan);
 router.get('/connections', adminAuth, networkController.connections);
 router.get('/dns', adminAuth, networkController.dns);
@@ -114,7 +129,7 @@ router.get('/dns', adminAuth, networkController.dns);
 // Histórico de dispositivos (protegido)
 // IMPORTANTE: rota estática '/devices' deve vir antes de '/devices/:mac'
 router.get('/devices',        adminAuth, devicesController.devices);
-router.get('/devices/export', adminAuth, devicesController.exportDevices);
+router.get('/devices/export', adminAuth, exportLimiter, devicesController.exportDevices);
 router.get('/devices/:mac',   adminAuth, devicesController.deviceDetail);
 
 // IPs Gerenciados (protegido)
@@ -138,19 +153,26 @@ router.get('/connections/data', adminAuth, networkController.connectionsData);
 // IMPORTANTE: rotas estáticas devem vir antes de /:id/*
 router.get('/security', adminAuth, securityController.security);
 router.get('/security/data', adminAuth, securityController.securityData);
-router.get('/security/export', adminAuth, securityController.securityExport);
+router.get('/security/export', adminAuth, exportLimiter, securityController.securityExport);
 router.post('/security/acknowledge-all', adminAuth, verifyCsrf, securityController.acknowledgeAllSecurityEvents);
 router.post('/security/:id/acknowledge', adminAuth, verifyCsrf, securityController.acknowledgeSecurityEvent);
 
 // Tasy — Contas de paciente (protegido)
 router.get('/tasy',        adminAuth, tasyController.dashboard);
 router.get('/tasy/data',   adminAuth, tasyController.data);
-router.get('/tasy/export', adminAuth, tasyController.export);
+router.get('/tasy/export', adminAuth, exportLimiter, tasyController.export);
 router.post('/tasy/sync',  adminAuth, verifyCsrf, tasyController.sync);
+
+// Protocolo convênio
+router.get ('/tasy/protocolos',              adminAuth, csrfMiddleware, tasyProtocoloController.list);
+router.get ('/tasy/protocolos/preview',      adminAuth, tasyProtocoloController.preview);
+router.post('/tasy/protocolos',              adminAuth, verifyCsrf,    tasyProtocoloController.criar);
+router.post('/tasy/protocolos/:id/status',   adminAuth, verifyCsrf,    tasyProtocoloController.atualizarStatus);
+router.delete('/tasy/protocolos/:id',        adminAuth, verifyCsrf,    tasyProtocoloController.excluir);
 
 // Configurações (protegido)
 router.get('/settings', adminAuth, settingsController.showSettings);
-router.get('/settings/traffic-script', adminAuth, settingsController.downloadTrafficScript);
+router.get('/settings/traffic-script', adminAuth, exportLimiter, settingsController.downloadTrafficScript);
 router.post('/settings/test-webhook', adminAuth, settingsController.testWebhook);
 router.post('/settings', adminAuth, verifyCsrf, (req, res, next) => {
   upload.single('organization_logo')(req, res, err => {

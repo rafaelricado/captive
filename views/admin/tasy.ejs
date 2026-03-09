@@ -7,87 +7,59 @@
   <meta name="csrf-token" content="<%= csrfToken %>">
   <%- include('_head') %>
   <style>
-    /* Cards de status */
     .card-aberto   { border-top: 4px solid #dc2626; }
     .card-pendente { border-top: 4px solid #d97706; }
     .card-faturado { border-top: 4px solid #16a34a; }
     .card-geral    { border-top: 4px solid #0d4e8b; }
+    .card-glosa    { border-top: 4px solid #7c3aed; }
     .card-aberto   .card-value { color: #dc2626; }
     .card-pendente .card-value { color: #d97706; }
     .card-faturado .card-value { color: #16a34a; }
     .card-geral    .card-value { color: #0d4e8b; }
-    .card-sub {
-      font-size: .78rem; color: #6b7280; margin-top: 2px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
+    .card-glosa    .card-value { color: #7c3aed; }
+    .card-sub { font-size:.78rem; color:#6b7280; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .card-sub2 { font-size:.72rem; color:#9ca3af; margin-top:1px; }
 
-    /* Badges de status */
-    .badge-aberto   { background: #fee2e2; color: #dc2626; }
-    .badge-pendente { background: #fef3c7; color: #d97706; }
-    .badge-faturado { background: #d1fae5; color: #16a34a; }
-    .badge-outro    { background: #f3f4f6; color: #6b7280; }
-    .badge {
-      display: inline-block; padding: 2px 10px; border-radius: 99px;
-      font-size: .72rem; font-weight: 700; white-space: nowrap;
-    }
+    .badge-aberto   { background:#fee2e2; color:#dc2626; }
+    .badge-pendente { background:#fef3c7; color:#d97706; }
+    .badge-faturado { background:#d1fae5; color:#16a34a; }
+    .badge-outro    { background:#f3f4f6; color:#6b7280; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:99px; font-size:.72rem; font-weight:700; white-space:nowrap; }
+    .badge-cancelado { background:#fce7f3; color:#be185d; }
 
-    /* Filtros */
     .filter-bar {
-      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-      background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.07);
-      padding: 12px 16px; margin-bottom: 16px;
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07);
+      padding:12px 16px; margin-bottom:16px;
     }
-    .filter-bar select, .filter-bar input[type="text"],
-    .filter-bar input[type="date"] {
-      padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px;
-      font-size: .82rem; color: #1f2937; background: #f9fafb;
+    .filter-bar select, .filter-bar input[type="text"], .filter-bar input[type="date"] {
+      padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:.82rem; color:#1f2937; background:#f9fafb;
     }
-    .btn-filter {
-      padding: 6px 14px; background: #0d4e8b; color: #fff;
-      border: none; border-radius: 6px; font-size: .82rem;
-      cursor: pointer; font-weight: 600;
-    }
-    .btn-clear { font-size: .82rem; color: #6b7280; text-decoration: none; }
-    .btn-clear:hover { color: #0d4e8b; }
+    .btn-filter { padding:6px 14px; background:#0d4e8b; color:#fff; border:none; border-radius:6px; font-size:.82rem; cursor:pointer; font-weight:600; }
+    .btn-clear  { font-size:.82rem; color:#6b7280; text-decoration:none; }
+    .btn-clear:hover { color:#0d4e8b; }
 
-    /* Toolbar */
-    .toolbar {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 8px; flex-wrap: wrap; margin-bottom: 12px;
-    }
-    .toolbar-left  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .toolbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .sync-info {
-      font-size: .78rem; color: #9ca3af;
-    }
-    .btn-sync {
-      padding: 6px 14px; background: #fff; color: #0d4e8b;
-      border: 1px solid #0d4e8b; border-radius: 6px; font-size: .82rem;
-      cursor: pointer; font-weight: 600; transition: all .15s;
-    }
-    .btn-sync:hover  { background: #0d4e8b; color: #fff; }
-    .btn-sync:disabled { opacity: .5; cursor: not-allowed; }
-    .btn-export {
-      padding: 6px 14px; background: #fff; color: #374151;
-      border: 1px solid #d1d5db; border-radius: 6px; font-size: .82rem;
-      cursor: pointer; font-weight: 600; text-decoration: none; display: inline-block;
-    }
-    .btn-export:hover { border-color: #0d4e8b; color: #0d4e8b; }
+    .toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .toolbar-left  { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .toolbar-right { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .sync-info { font-size:.78rem; color:#9ca3af; }
+    .btn-sync   { padding:6px 14px; background:#fff; color:#0d4e8b; border:1px solid #0d4e8b; border-radius:6px; font-size:.82rem; cursor:pointer; font-weight:600; transition:all .15s; }
+    .btn-sync:hover    { background:#0d4e8b; color:#fff; }
+    .btn-sync:disabled { opacity:.5; cursor:not-allowed; }
+    .btn-export { padding:6px 14px; background:#fff; color:#374151; border:1px solid #d1d5db; border-radius:6px; font-size:.82rem; cursor:pointer; font-weight:600; text-decoration:none; display:inline-block; }
+    .btn-export:hover { border-color:#0d4e8b; color:#0d4e8b; }
 
-    /* Gráfico */
-    .chart-wrap {
-      background: #fff; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.08);
-      padding: 16px 24px; margin-bottom: 24px;
-    }
-    .chart-title { font-size: .85rem; font-weight: 600; color: #374151; margin-bottom: 10px; }
+    .chart-wrap { background:#fff; border-radius:12px; box-shadow:0 1px 6px rgba(0,0,0,.08); padding:16px 24px; margin-bottom:24px; }
+    .chart-title { font-size:.85rem; font-weight:600; color:#374151; margin-bottom:10px; }
 
-    /* Tabela */
-    td.valor { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    td.center { text-align: center; }
+    td.valor  { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    td.center { text-align:center; }
+    .td-sub   { font-size:.73rem; color:#9ca3af; }
+    .glosa-pct { font-size:.72rem; color:#7c3aed; font-weight:600; }
 
-    @media (max-width: 768px) {
-      .filter-bar { flex-direction: column; align-items: flex-start; }
-      .toolbar { flex-direction: column; align-items: flex-start; }
+    @media (max-width:768px) {
+      .filter-bar { flex-direction:column; align-items:flex-start; }
+      .toolbar    { flex-direction:column; align-items:flex-start; }
     }
   </style>
 </head>
@@ -95,42 +67,64 @@
   <%- include('_nav', { page: page }) %>
 
   <main class="container">
-    <h2 class="page-title">Contas de Paciente &mdash; Tasy</h2>
+    <h2 class="page-title">Tasy &mdash; Contas de Paciente</h2>
 
-    <!-- Cards de resumo -->
-    <div class="cards" style="grid-template-columns: repeat(4, 1fr);">
+    <!-- Tabs -->
+    <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid #e5e7eb;">
+      <a href="/admin/tasy" style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#0d4e8b;background:#fff;border:2px solid #e5e7eb;border-bottom-color:#fff;border-radius:6px 6px 0 0;text-decoration:none;margin-bottom:-2px;">Contas de Paciente</a>
+      <a href="/admin/tasy/protocolos" style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#6b7280;text-decoration:none;border-radius:6px 6px 0 0;border:2px solid transparent;border-bottom:none;margin-bottom:-2px;">Protocolo Convênio</a>
+    </div>
+
+    <!-- Cards de resumo (5 cards) -->
+    <div class="cards" style="grid-template-columns:repeat(5,1fr);">
       <div class="card card-aberto">
         <div class="card-value"><%= cards.aberto.total.toLocaleString('pt-BR') %></div>
         <div class="card-label">Em Aberto</div>
         <div class="card-sub"><%= cards.aberto.valor %></div>
+        <div class="card-sub2">Líq: <%= cards.aberto.liquido %></div>
       </div>
       <div class="card card-pendente">
         <div class="card-value"><%= cards.pendente.total.toLocaleString('pt-BR') %></div>
         <div class="card-label">Pend. Faturamento</div>
         <div class="card-sub"><%= cards.pendente.valor %></div>
+        <div class="card-sub2">Líq: <%= cards.pendente.liquido %></div>
       </div>
       <div class="card card-faturado">
         <div class="card-value"><%= cards.faturado.total.toLocaleString('pt-BR') %></div>
         <div class="card-label">Faturadas</div>
         <div class="card-sub"><%= cards.faturado.valor %></div>
+        <div class="card-sub2">Líq: <%= cards.faturado.liquido %></div>
       </div>
       <div class="card card-geral">
         <div class="card-value"><%= cards.geral.total.toLocaleString('pt-BR') %></div>
         <div class="card-label">Total Geral</div>
         <div class="card-sub"><%= cards.geral.valor %></div>
+        <div class="card-sub2">Líq: <%= cards.geral.liquido %></div>
+      </div>
+      <div class="card card-glosa">
+        <div class="card-value"><%= cards.glosa.mediaPerc %>%</div>
+        <div class="card-label">Glosa Média</div>
+        <div class="card-sub"><%= cards.glosa.valor %></div>
+        <div class="card-sub2">total glosado</div>
       </div>
     </div>
 
     <!-- Gráfico de evolução mensal -->
     <div class="chart-wrap">
-      <p class="chart-title">Evolução mensal de contas (últimos 12 meses)</p>
+      <p class="chart-title">
+        Contas por mês —
+        <% if (filters.dtInicio || filters.dtFim) { %>período selecionado<% } else { %>últimos 12 meses<% } %>
+        <% if (filters.status || filters.convenio || filters.setor || filters.tipo || filters.especialidade || filters.q) { %>
+          <span style="font-weight:400;color:#9ca3af;">(filtros ativos)</span>
+        <% } %>
+      </p>
       <canvas id="tasy-chart" height="90"></canvas>
     </div>
 
     <!-- Filtros -->
     <form method="GET" action="/admin/tasy" class="filter-bar" id="filter-form">
-      <input type="text" name="q" placeholder="Paciente / Nº atendimento"
-             value="<%= filters.q || '' %>" style="min-width:200px;">
+      <input type="text" name="q" placeholder="Paciente / Nº atend. / Médico"
+             value="<%= filters.q || '' %>" style="min-width:190px;">
 
       <select name="status">
         <option value="">Todos os status</option>
@@ -148,6 +142,20 @@
         <% }) %>
       </select>
 
+      <select name="tipo">
+        <option value="">Todos os tipos</option>
+        <% tipos.forEach(t => { %>
+          <option value="<%= t %>" <%= filters.tipo === t ? 'selected' : '' %>><%= t %></option>
+        <% }) %>
+      </select>
+
+      <select name="especialidade">
+        <option value="">Todas as especialidades</option>
+        <% especialidades.forEach(e => { %>
+          <option value="<%= e %>" <%= filters.especialidade === e ? 'selected' : '' %>><%= e %></option>
+        <% }) %>
+      </select>
+
       <select name="setor">
         <option value="">Todos os setores</option>
         <% setores.forEach(s => { %>
@@ -158,6 +166,15 @@
       <input type="date" name="dtInicio" value="<%= filters.dtInicio || '' %>" title="Data entrada de">
       <input type="date" name="dtFim"    value="<%= filters.dtFim    || '' %>" title="Data entrada até">
 
+      <label style="display:flex;align-items:center;gap:5px;font-size:.82rem;color:#374151;white-space:nowrap;cursor:pointer;">
+        <input type="checkbox" name="zeradas" value="1" <%= filters.zeradas === '1' ? 'checked' : '' %>>
+        Somente zeradas
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:.82rem;color:#374151;white-space:nowrap;cursor:pointer;">
+        <input type="checkbox" name="cancelados" value="1" <%= filters.cancelados === '1' ? 'checked' : '' %>>
+        Canceladas
+      </label>
+
       <button type="submit" class="btn-filter">Filtrar</button>
       <a href="/admin/tasy" class="btn-clear">Limpar</a>
     </form>
@@ -165,7 +182,7 @@
     <!-- Toolbar -->
     <div class="toolbar">
       <div class="toolbar-left">
-        <span style="font-size:.85rem; color:#374151;">
+        <span style="font-size:.85rem;color:#374151;">
           <strong><%= total.toLocaleString('pt-BR') %></strong> conta<%= total !== 1 ? 's' : '' %>
         </span>
         <% if (lastSync) { %>
@@ -187,19 +204,21 @@
         <thead>
           <tr>
             <th>Nº Atendimento</th>
-            <th>Paciente</th>
-            <th>Convênio</th>
-            <th>Setor</th>
+            <th>Paciente / CPF</th>
+            <th>Convênio / Plano</th>
+            <th>Tipo / Especialidade</th>
+            <th>Médico</th>
             <th>Status</th>
-            <th style="text-align:right;">Valor</th>
+            <th style="text-align:right;">Faturado</th>
+            <th style="text-align:right;">Glosa</th>
+            <th style="text-align:right;">Líquido</th>
             <th>Entrada</th>
-            <th>Saída</th>
             <th>Faturamento</th>
           </tr>
         </thead>
         <tbody>
           <% if (contas.length === 0) { %>
-            <tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:32px;">
+            <tr><td colspan="11" style="text-align:center;color:#9ca3af;padding:32px;">
               Nenhuma conta encontrada.
               <% if (!lastSync) { %>Realize a sincronização com o Tasy para importar os dados.<% } %>
             </td></tr>
@@ -207,19 +226,45 @@
             <% contas.forEach(c => { %>
               <tr>
                 <td><code style="font-size:.8rem;"><%= c.nr_atendimento %></code></td>
-                <td><%= c.nm_paciente %></td>
-                <td style="font-size:.82rem;"><%= c.ds_convenio %></td>
-                <td style="font-size:.82rem;"><%= c.ds_setor %></td>
+                <td>
+                  <%= c.nm_paciente %>
+                  <% if (c.cd_pessoa_fisica) { %>
+                    <div class="td-sub"><%= c.cd_pessoa_fisica %></div>
+                  <% } %>
+                </td>
+                <td style="font-size:.82rem;">
+                  <%= c.ds_convenio %>
+                  <% if (c.ds_plano && c.ds_plano !== c.ds_convenio) { %>
+                    <div class="td-sub"><%= c.ds_plano %></div>
+                  <% } %>
+                </td>
+                <td style="font-size:.82rem;">
+                  <%= c.ds_tipo_atendimento %>
+                  <% if (c.ds_especialidade) { %>
+                    <div class="td-sub"><%= c.ds_especialidade %></div>
+                  <% } %>
+                </td>
+                <td style="font-size:.82rem;"><%= c.nm_medico %></td>
                 <td class="center">
-                  <span class="badge badge-<%= c.status_categoria %>">
-                    <%= c.status_categoria === 'aberto'   ? 'Em Aberto'   :
-                        c.status_categoria === 'pendente' ? 'Pendente'    :
-                        c.status_categoria === 'faturado' ? 'Faturado'    : 'Outro' %>
-                  </span>
+                  <% if (c.ie_cancelamento) { %>
+                    <span class="badge badge-cancelado">Cancelada</span>
+                  <% } else { %>
+                    <span class="badge badge-<%= c.status_categoria %>">
+                      <%= c.status_categoria === 'aberto'   ? 'Em Aberto' :
+                          c.status_categoria === 'pendente' ? 'Pendente'  :
+                          c.status_categoria === 'faturado' ? 'Faturado'  : 'Outro' %>
+                    </span>
+                  <% } %>
                 </td>
                 <td class="valor"><%= c.vl_conta %></td>
+                <td class="valor">
+                  <%= c.vl_glosa %>
+                  <% if (Number(c.pr_glosa) > 0) { %>
+                    <div class="glosa-pct"><%= c.pr_glosa %>%</div>
+                  <% } %>
+                </td>
+                <td class="valor"><%= c.vl_liquido %></td>
                 <td style="font-size:.82rem;"><%= c.dt_entrada %></td>
-                <td style="font-size:.82rem;"><%= c.dt_saida %></td>
                 <td style="font-size:.82rem;"><%= c.dt_faturamento %></td>
               </tr>
             <% }) %>
@@ -244,74 +289,68 @@
 
   <%- include('_footer') %>
 
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <script>
   (function () {
-    // ---- Gráfico de evolução mensal ----
-    fetch('/admin/tasy/data')
-      .then(r => r.json())
-      .then(({ chartData }) => {
-        if (!chartData || chartData.length === 0) return;
+    const chartData = <%- chartData %>;
 
-        const meses = [...new Set(chartData.map(r => r.mes))].sort();
-        const categorias = { aberto: [], pendente: [], faturado: [] };
+    if (chartData && chartData.length > 0) {
+      const meses = [...new Set(chartData.map(r => r.mes))].sort();
+      const cats = { aberto: [], pendente: [], faturado: [] };
 
-        meses.forEach(mes => {
-          ['aberto', 'pendente', 'faturado'].forEach(cat => {
-            const row = chartData.find(r => r.mes === mes && r.status_categoria === cat);
-            categorias[cat].push(row ? Number(row.total) : 0);
-          });
+      meses.forEach(mes => {
+        ['aberto', 'pendente', 'faturado'].forEach(cat => {
+          const row = chartData.find(r => r.mes === mes && r.status_categoria === cat);
+          cats[cat].push(row ? Number(row.total) : 0);
         });
+      });
 
-        const ctx = document.getElementById('tasy-chart').getContext('2d');
-        new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: meses,
-            datasets: [
-              { label: 'Em Aberto',   data: categorias.aberto,   borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,.08)',  tension: .3, fill: true },
-              { label: 'Pendente',    data: categorias.pendente, borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,.08)',   tension: .3, fill: true },
-              { label: 'Faturado',    data: categorias.faturado, borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.08)',   tension: .3, fill: true },
-            ]
+      const labels = meses.map(m => {
+        const [y, mo] = m.split('-');
+        return new Date(Number(y), Number(mo) - 1).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      });
+
+      new Chart(document.getElementById('tasy-chart').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Em Aberto', data: cats.aberto,   backgroundColor: 'rgba(220,38,38,.75)' },
+            { label: 'Pendente',  data: cats.pendente, backgroundColor: 'rgba(217,119,6,.75)'  },
+            { label: 'Faturado',  data: cats.faturado, backgroundColor: 'rgba(22,163,74,.75)'  },
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'top' },
+            tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${Number(c.raw).toLocaleString('pt-BR')} contas` } }
           },
-          options: {
-            responsive: true,
-            plugins: { legend: { position: 'top' } },
-            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
-          }
-        });
-      })
-      .catch(() => {});
+          scales: { x: { stacked: false }, y: { beginAtZero: true, ticks: { precision: 0 } } }
+        }
+      });
+    }
 
-    // ---- Sincronização manual ----
+    // Sincronização manual
     const btnSync = document.getElementById('btn-sync');
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    const csrf    = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
     btnSync.addEventListener('click', function () {
       if (!confirm('Sincronizar contas do Tasy agora?')) return;
       btnSync.disabled = true;
       btnSync.textContent = 'Sincronizando...';
-
       fetch('/admin/tasy/sync', {
         method: 'POST',
-        headers: { 'X-CSRF-Token': csrfToken, 'Content-Type': 'application/json' },
+        headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' },
         body: JSON.stringify({})
       })
         .then(r => r.json())
-        .then(data => {
-          if (data.ok) {
-            alert(`Sincronização concluída: ${data.count.toLocaleString('pt-BR')} contas importadas.`);
-            location.reload();
-          } else {
-            alert('Erro na sincronização: ' + (data.error || 'desconhecido'));
-          }
+        .then(d => {
+          if (d.ok) { alert(`Sincronização concluída: ${d.count.toLocaleString('pt-BR')} contas.`); location.reload(); }
+          else alert('Erro: ' + (d.error || 'desconhecido'));
         })
-        .catch(() => alert('Falha na requisição de sincronização.'))
-        .finally(() => {
-          btnSync.disabled = false;
-          btnSync.textContent = '↻ Sincronizar agora';
-        });
+        .catch(() => alert('Falha na requisição.'))
+        .finally(() => { btnSync.disabled = false; btnSync.textContent = '↻ Sincronizar agora'; });
     });
   })();
   </script>
