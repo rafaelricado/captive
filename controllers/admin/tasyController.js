@@ -13,6 +13,14 @@ function formatBRL(val) {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+const STATUS_PROTOCOLO = {
+  1: 'Provisório',
+  2: 'Definitivo',
+  3: 'Auditoria',
+  4: 'Perda',
+  5: 'Cancelado',
+};
+
 function maskCpf(cpf) {
   if (!cpf) return null;
   const d = String(cpf).replace(/\D/g, '');
@@ -221,6 +229,9 @@ exports.dashboard = async (req, res) => {
       dt_entrada:          r.dt_entrada    || '—',
       dt_saida:            r.dt_saida      || '—',
       dt_faturamento:      r.dt_faturamento || '—',
+      ie_status_protocolo: r.ie_status_protocolo ?? null,
+      ds_status_protocolo: r.ie_status_protocolo ? (STATUS_PROTOCOLO[r.ie_status_protocolo] || `Status ${r.ie_status_protocolo}`) : null,
+      nr_seq_protocolo:    r.nr_seq_protocolo ?? null,
     }));
 
     res.render('admin/tasy', {
@@ -265,7 +276,7 @@ exports.export = async (req, res) => {
     const where = buildWhere(req.query);
     const rows  = await TasyConta.findAll({ where, order: [['dt_entrada', 'DESC']] });
 
-    const header = 'Nº Atendimento,Paciente,CPF,Convênio,Plano,Tipo Atend.,Médico,Especialidade,Setor,Status,Faturado,Glosa (R$),Glosa (%),Líquido,Entrada,Saída,Faturamento';
+    const header = 'Nº Atendimento,Paciente,CPF,Convênio,Plano,Tipo Atend.,Médico,Especialidade,Setor,Status,Faturado,Glosa (R$),Glosa (%),Líquido,Entrada,Saída,Faturamento,Status Protocolo,Nº Protocolo';
     const lines  = rows.map(r => [
       r.nr_atendimento,
       r.nm_paciente              || '',
@@ -284,6 +295,8 @@ exports.export = async (req, res) => {
       r.dt_entrada       || '',
       r.dt_saida         || '',
       r.dt_faturamento   || '',
+      r.ie_status_protocolo ? (STATUS_PROTOCOLO[r.ie_status_protocolo] || String(r.ie_status_protocolo)) : '',
+      r.nr_seq_protocolo || '',
     ].map(escapeCSV).join(','));
 
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');

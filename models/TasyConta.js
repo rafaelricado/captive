@@ -67,6 +67,16 @@ const TasyConta = sequelize.define('TasyConta', {
     allowNull: true,
     comment: 'Indicador de cancelamento do Oracle'
   },
+  ie_status_protocolo: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Status do protocolo (1=Provisório,2=Definitivo,3=Auditoria,4=Perda,5=Cancelado)'
+  },
+  nr_seq_protocolo: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Número sequencial do protocolo convênio'
+  },
   vl_conta: {
     type: DataTypes.DECIMAL(12, 2),
     allowNull: true,

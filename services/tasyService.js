@@ -45,6 +45,8 @@ const ORACLE_COL_MAP = {
   dt_entrada:          'DT_ENTRADA',             // data de internação/entrada
   dt_saida:            'DT_ALTA',                // data de alta/saída
   dt_faturamento:      'DT_RECEITA',             // data de receita (faturamento)
+  ie_status_protocolo: 'IE_STATUS_PROTOCOLO',   // status do protocolo (1-5)
+  nr_seq_protocolo:    'NR_SEQ_PROTOCOLO',       // nº sequencial do protocolo
 };
 
 // -------------------------------------------------
@@ -164,6 +166,8 @@ async function syncContas() {
           dt_entrada:          oracleToDate(r[C.dt_entrada]),
           dt_saida:            oracleToDate(r[C.dt_saida]),
           dt_faturamento:      oracleToDate(r[C.dt_faturamento]),
+          ie_status_protocolo: r[C.ie_status_protocolo] != null ? Number(r[C.ie_status_protocolo]) : null,
+          nr_seq_protocolo:    r[C.nr_seq_protocolo]    != null ? Number(r[C.nr_seq_protocolo])    : null,
           synced_at:           now,
         }))
         .filter(r => r.nr_atendimento);
@@ -182,7 +186,8 @@ async function syncContas() {
             'ds_tipo_atendimento', 'nm_medico', 'ds_especialidade',
             'ds_status_origem', 'status_categoria', 'ie_cancelamento',
             'vl_conta', 'vl_glosa', 'pr_glosa', 'vl_liquido',
-            'dt_entrada', 'dt_saida', 'dt_faturamento', 'synced_at'
+            'dt_entrada', 'dt_saida', 'dt_faturamento',
+            'ie_status_protocolo', 'nr_seq_protocolo', 'synced_at'
           ]
         });
         total += deduped.length;

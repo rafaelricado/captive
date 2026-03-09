@@ -26,6 +26,11 @@
     .badge-outro    { background:#f3f4f6; color:#6b7280; }
     .badge { display:inline-block; padding:2px 10px; border-radius:99px; font-size:.72rem; font-weight:700; white-space:nowrap; }
     .badge-cancelado { background:#fce7f3; color:#be185d; }
+    .badge-prot-1 { background:#eff6ff; color:#1d4ed8; }
+    .badge-prot-2 { background:#f0fdf4; color:#15803d; }
+    .badge-prot-3 { background:#fff7ed; color:#c2410c; }
+    .badge-prot-4 { background:#fef2f2; color:#b91c1c; }
+    .badge-prot-5 { background:#f3f4f6; color:#6b7280; }
 
     .filter-bar {
       display:flex; align-items:center; gap:8px; flex-wrap:wrap;
@@ -214,11 +219,12 @@
             <th style="text-align:right;">Líquido</th>
             <th>Entrada</th>
             <th>Faturamento</th>
+            <th>Status Protocolo</th>
           </tr>
         </thead>
         <tbody>
           <% if (contas.length === 0) { %>
-            <tr><td colspan="11" style="text-align:center;color:#9ca3af;padding:32px;">
+            <tr><td colspan="12" style="text-align:center;color:#9ca3af;padding:32px;">
               Nenhuma conta encontrada.
               <% if (!lastSync) { %>Realize a sincronização com o Tasy para importar os dados.<% } %>
             </td></tr>
@@ -266,6 +272,16 @@
                 <td class="valor"><%= c.vl_liquido %></td>
                 <td style="font-size:.82rem;"><%= c.dt_entrada %></td>
                 <td style="font-size:.82rem;"><%= c.dt_faturamento %></td>
+                <td class="center">
+                  <% if (c.ie_status_protocolo) { %>
+                    <span class="badge badge-prot-<%= c.ie_status_protocolo %>"><%= c.ds_status_protocolo %></span>
+                    <% if (c.nr_seq_protocolo) { %>
+                      <div class="td-sub">#<%= c.nr_seq_protocolo %></div>
+                    <% } %>
+                  <% } else { %>
+                    <span style="color:#d1d5db;">—</span>
+                  <% } %>
+                </td>
               </tr>
             <% }) %>
           <% } %>
