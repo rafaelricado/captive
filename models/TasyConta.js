@@ -113,6 +113,16 @@ const TasyConta = sequelize.define('TasyConta', {
     type: DataTypes.DATEONLY,
     allowNull: true
   },
+  dt_conta_definitiva: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+    comment: 'Data de fechamento definitivo da conta (CONTA_PACIENTE)'
+  },
+  dt_conta_protocolo: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+    comment: 'Data de entrada em protocolo convênio (CONTA_PACIENTE)'
+  },
   synced_at: {
     type: DataTypes.DATE,
     allowNull: false,

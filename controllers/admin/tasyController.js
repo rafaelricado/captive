@@ -64,7 +64,7 @@ function buildWhere(query) {
 
 // Cards respeitam os filtros ativos
 async function getCards(where = {}) {
-  const categorias = ['aberto', 'pendente', 'faturado'];
+  const categorias = ['aberto', 'faturado'];
   const [byStatus, glosa] = await Promise.all([
     TasyConta.findAll({
       attributes: [
@@ -226,9 +226,11 @@ exports.dashboard = async (req, res) => {
       vl_glosa:            formatBRL(r.vl_glosa),
       pr_glosa:            Number(r.pr_glosa || 0).toFixed(1),
       vl_liquido:          formatBRL(r.vl_liquido),
-      dt_entrada:          r.dt_entrada    || '—',
-      dt_saida:            r.dt_saida      || '—',
-      dt_faturamento:      r.dt_faturamento || '—',
+      dt_entrada:          r.dt_entrada         || '—',
+      dt_saida:            r.dt_saida           || '—',
+      dt_faturamento:      r.dt_faturamento     || '—',
+      dt_conta_definitiva: r.dt_conta_definitiva || null,
+      dt_conta_protocolo:  r.dt_conta_protocolo  || null,
       ie_status_protocolo: r.ie_status_protocolo ?? null,
       ds_status_protocolo: r.ie_status_protocolo ? (STATUS_PROTOCOLO[r.ie_status_protocolo] || `Status ${r.ie_status_protocolo}`) : null,
       nr_seq_protocolo:    r.nr_seq_protocolo ?? null,

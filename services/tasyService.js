@@ -49,25 +49,14 @@ const ORACLE_COL_MAP = {
   nr_seq_protocolo:    'NR_SEQ_PROTOCOLO',       // nº sequencial do protocolo
 };
 
-// -------------------------------------------------
-// STATUS_MAP: quais valores brutos do Oracle
-// correspondem a cada categoria.
-// Valores em MAIÚSCULAS (a comparação é case-insensitive).
-// Ajuste após ver os valores reais com discoverColumns().
-// -------------------------------------------------
-const STATUS_MAP = {
-  aberto:   ['A', '1', 'ABERTO', 'EM ABERTO', 'ABERTA'],
-  pendente: ['P', '2', 'PENDENTE', 'PEND', 'PEND FATURAMENTO', 'AGUARDANDO FATURAMENTO'],
-  faturado: ['F', '3', 'FATURADO', 'FATURADA', 'FATURAMENTO CONCLUIDO', 'CONCLUIDO'],
-};
-
-function categorizeStatus(rawStatus) {
-  if (!rawStatus) return 'outro';
-  const upper = String(rawStatus).trim().toUpperCase();
-  for (const [cat, values] of Object.entries(STATUS_MAP)) {
-    if (values.includes(upper)) return cat;
-  }
-  return 'outro';
+// Categorização baseada em DT_CONTA_DEFINITIVA (CONTA_PACIENTE):
+//   - NULL  → aberto (conta ainda não fechada/faturada)
+//   - preenchida → faturado (conta definitivamente fechada)
+// ie_cancelamento preenchido → cancelado (tratado separadamente na view)
+function categorizeStatus(dtContaDefinitiva, ieCancelamento) {
+  if (ieCancelamento) return 'outro';
+  if (dtContaDefinitiva) return 'faturado';
+  return 'aberto';
 }
 
 function oracleToDate(val) {
@@ -122,7 +111,8 @@ async function syncContas() {
   }
 
   const C = ORACLE_COL_MAP;
-  const cols = Object.values(C).join(', ');
+  // Prefixar colunas da view com alias V para evitar ambiguidade no JOIN
+  const viewCols = Object.values(C).map(col => `V.${col}`).join(', ');
 
   const BATCH = 500;
   let conn, resultSet;
@@ -131,9 +121,13 @@ async function syncContas() {
     conn.callTimeout = 120000; // 2min por fetch
 
     const result = await conn.execute(
-      `SELECT ${cols} FROM TASY.EIS_CONTA_PACIENTE_V2
-        WHERE DT_ENTRADA >= ADD_MONTHS(SYSDATE, -3)
-           OR DT_ENTRADA IS NULL`,
+      `SELECT ${viewCols},
+              CP.DT_CONTA_DEFINITIVA,
+              CP.DT_CONTA_PROTOCOLO
+         FROM TASY.EIS_CONTA_PACIENTE_V2 V
+         LEFT JOIN TASY.CONTA_PACIENTE CP ON CP.NR_ATENDIMENTO = V.NR_ATENDIMENTO
+        WHERE V.DT_ENTRADA >= ADD_MONTHS(SYSDATE, -3)
+           OR V.DT_ENTRADA IS NULL`,
       [],
       { outFormat: oracledb.OUT_FORMAT_OBJECT, resultSet: true, fetchArraySize: BATCH }
     );
@@ -157,8 +151,10 @@ async function syncContas() {
           nm_medico:           r[C.nm_medico]           ?? null,
           ds_especialidade:    r[C.ds_especialidade]    ?? null,
           ds_status_origem:    r[C.ds_status_origem]    ?? null,
-          status_categoria:    categorizeStatus(r[C.ds_status_origem]),
+          status_categoria:    categorizeStatus(r['DT_CONTA_DEFINITIVA'], r[C.ie_cancelamento]),
           ie_cancelamento:     r[C.ie_cancelamento]     ?? null,
+          dt_conta_definitiva: oracleToDate(r['DT_CONTA_DEFINITIVA']),
+          dt_conta_protocolo:  oracleToDate(r['DT_CONTA_PROTOCOLO']),
           vl_conta:            r[C.vl_conta]            ?? 0,
           vl_glosa:            r[C.vl_glosa]            ?? 0,
           pr_glosa:            r[C.pr_glosa]            ?? 0,
@@ -187,7 +183,8 @@ async function syncContas() {
             'ds_status_origem', 'status_categoria', 'ie_cancelamento',
             'vl_conta', 'vl_glosa', 'pr_glosa', 'vl_liquido',
             'dt_entrada', 'dt_saida', 'dt_faturamento',
-            'ie_status_protocolo', 'nr_seq_protocolo', 'synced_at'
+            'ie_status_protocolo', 'nr_seq_protocolo',
+            'dt_conta_definitiva', 'dt_conta_protocolo', 'synced_at'
           ]
         });
         total += deduped.length;

@@ -80,19 +80,13 @@
       <a href="/admin/tasy/protocolos" style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#6b7280;text-decoration:none;border-radius:6px 6px 0 0;border:2px solid transparent;border-bottom:none;margin-bottom:-2px;">Protocolo Convênio</a>
     </div>
 
-    <!-- Cards de resumo (5 cards) -->
-    <div class="cards" style="grid-template-columns:repeat(5,1fr);">
+    <!-- Cards de resumo (4 cards) -->
+    <div class="cards" style="grid-template-columns:repeat(4,1fr);">
       <div class="card card-aberto">
         <div class="card-value"><%= cards.aberto.total.toLocaleString('pt-BR') %></div>
-        <div class="card-label">Em Aberto</div>
+        <div class="card-label">Em Aberto / Pend. Fat.</div>
         <div class="card-sub"><%= cards.aberto.valor %></div>
         <div class="card-sub2">Líq: <%= cards.aberto.liquido %></div>
-      </div>
-      <div class="card card-pendente">
-        <div class="card-value"><%= cards.pendente.total.toLocaleString('pt-BR') %></div>
-        <div class="card-label">Pend. Faturamento</div>
-        <div class="card-sub"><%= cards.pendente.valor %></div>
-        <div class="card-sub2">Líq: <%= cards.pendente.liquido %></div>
       </div>
       <div class="card card-faturado">
         <div class="card-value"><%= cards.faturado.total.toLocaleString('pt-BR') %></div>
@@ -133,11 +127,9 @@
 
       <select name="status">
         <option value="">Todos os status</option>
-        <% ['aberto','pendente','faturado','outro'].forEach(s => { %>
-          <option value="<%= s %>" <%= filters.status === s ? 'selected' : '' %>>
-            <%= s.charAt(0).toUpperCase() + s.slice(1) %>
-          </option>
-        <% }) %>
+        <option value="aberto"   <%= filters.status === 'aberto'   ? 'selected' : '' %>>Em Aberto / Pend. Fat.</option>
+        <option value="faturado" <%= filters.status === 'faturado' ? 'selected' : '' %>>Faturado</option>
+        <option value="outro"    <%= filters.status === 'outro'    ? 'selected' : '' %>>Outro</option>
       </select>
 
       <select name="convenio">
@@ -218,7 +210,7 @@
             <th style="text-align:right;">Glosa</th>
             <th style="text-align:right;">Líquido</th>
             <th>Entrada</th>
-            <th>Faturamento</th>
+            <th>Fechamento</th>
             <th>Status Protocolo</th>
           </tr>
         </thead>
@@ -257,7 +249,6 @@
                   <% } else { %>
                     <span class="badge badge-<%= c.status_categoria %>">
                       <%= c.status_categoria === 'aberto'   ? 'Em Aberto' :
-                          c.status_categoria === 'pendente' ? 'Pendente'  :
                           c.status_categoria === 'faturado' ? 'Faturado'  : 'Outro' %>
                     </span>
                   <% } %>
@@ -271,7 +262,16 @@
                 </td>
                 <td class="valor"><%= c.vl_liquido %></td>
                 <td style="font-size:.82rem;"><%= c.dt_entrada %></td>
-                <td style="font-size:.82rem;"><%= c.dt_faturamento %></td>
+                <td style="font-size:.82rem;">
+                  <% if (c.dt_conta_definitiva) { %>
+                    <%= c.dt_conta_definitiva %>
+                    <% if (c.dt_conta_protocolo) { %>
+                      <div class="td-sub" title="Data protocolo">Prot: <%= c.dt_conta_protocolo %></div>
+                    <% } %>
+                  <% } else { %>
+                    <span style="color:#d1d5db;">—</span>
+                  <% } %>
+                </td>
                 <td class="center">
                   <% if (c.ie_status_protocolo) { %>
                     <span class="badge badge-prot-<%= c.ie_status_protocolo %>"><%= c.ds_status_protocolo %></span>
