@@ -215,13 +215,26 @@ async function getChartData(where = {}) {
 }
 
 async function getConvenioList() {
+  const threshold = new Date();
+  threshold.setFullYear(threshold.getFullYear() - 2); // 2 anos sem atividade = inativo
+  const threshStr = threshold.toISOString().slice(0, 10);
+
   const rows = await TasyConta.findAll({
-    attributes: [[fn('DISTINCT', col('ds_convenio')), 'ds_convenio']],
+    attributes: [
+      'ds_convenio',
+      [fn('MAX', col('dt_entrada')), 'ultima_entrada'],
+    ],
     where: { ds_convenio: { [Op.ne]: null } },
+    group: ['ds_convenio'],
     order: [['ds_convenio', 'ASC']],
     raw: true,
   });
-  return rows.map(r => r.ds_convenio).filter(Boolean);
+  return rows
+    .filter(r => r.ds_convenio)
+    .map(r => ({
+      nome:  r.ds_convenio,
+      ativo: !r.ultima_entrada || r.ultima_entrada >= threshStr,
+    }));
 }
 
 async function getSetorList() {

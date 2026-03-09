@@ -72,6 +72,8 @@
       margin:6px 8px 2px; padding:5px 8px; border:1px solid #d1d5db; border-radius:5px;
       font-size:.8rem; width:calc(100% - 16px); box-sizing:border-box;
     }
+    .conv-inativo { display:none; }
+    .conv-panel.show-inativos .conv-inativo { display:flex; }
 
     .toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
     .toolbar-left  { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
@@ -239,14 +241,32 @@
       </div>
 
       <!-- Convênio -->
+      <%
+        const hasInativo = convenios.some(c => !c.ativo);
+        const selectedHasInativo = fConvenio.some(nome => {
+          const c = convenios.find(x => x.nome === nome);
+          return c && !c.ativo;
+        });
+      %>
       <div class="ms-wrap">
         <div class="ms-btn <%= fConvenio.length ? 'has-value' : '' %>" onclick="msToggle(this)">
-          <%= fConvenio.length ? fConvenio.length + ' convênio(s)' : 'Todos os convênios' %>
+          <%= fConvenio.length ? fConvenio.length + ' convênio(s)' : 'Ativos' %>
         </div>
-        <div class="ms-panel">
+        <div class="ms-panel conv-panel" id="conv-panel">
           <input class="ms-search" type="text" placeholder="Buscar..." oninput="msSearch(this)">
+          <% if (hasInativo) { %>
+          <div style="padding:5px 12px 4px;border-bottom:1px solid #f3f4f6;">
+            <label style="font-size:.75rem;color:#6b7280;cursor:pointer;display:flex;align-items:center;gap:6px;font-weight:normal;">
+              <input type="checkbox" id="conv-show-inativos" style="accent-color:#0d4e8b;width:13px;height:13px;" <%= selectedHasInativo ? 'checked' : '' %> onchange="convToggleInativos(this)">
+              Incluir inativos
+            </label>
+          </div>
+          <% } %>
           <% convenios.forEach(c => { %>
-            <label><input type="checkbox" name="convenio" value="<%= c %>" <%= fConvenio.includes(c) ? 'checked' : '' %>><%= c %></label>
+            <label class="<%= !c.ativo ? 'conv-inativo' : '' %>">
+              <input type="checkbox" name="convenio" value="<%= c.nome %>" <%= fConvenio.includes(c.nome) ? 'checked' : '' %>>
+              <%= c.nome %><% if (!c.ativo) { %> <span style="color:#9ca3af;font-size:.7rem;">(inativo)</span><% } %>
+            </label>
           <% }) %>
         </div>
       </div>
@@ -486,10 +506,24 @@
   }
   function msSearch(input) {
     const q = input.value.toLowerCase();
-    input.closest('.ms-panel').querySelectorAll('label').forEach(lb => {
-      lb.style.display = lb.textContent.toLowerCase().includes(q) ? '' : 'none';
+    input.closest('.ms-panel').querySelectorAll('label.conv-inativo, label:not(.conv-inativo)').forEach(lb => {
+      if (lb.querySelector('input[type="checkbox"][name]')) {
+        const match = lb.textContent.toLowerCase().includes(q);
+        lb.style.setProperty('--ms-search-hide', match ? '' : 'none');
+        if (match) lb.style.removeProperty('display');
+        else lb.style.display = 'none';
+      }
     });
   }
+  function convToggleInativos(cb) {
+    const panel = cb.closest('.ms-panel');
+    panel.classList.toggle('show-inativos', cb.checked);
+  }
+  // Inicializa: se algum convênio inativo estiver selecionado, exibe inativos
+  (function () {
+    const cb = document.getElementById('conv-show-inativos');
+    if (cb && cb.checked) cb.closest('.ms-panel').classList.add('show-inativos');
+  })();
   document.addEventListener('click', e => {
     if (!e.target.closest('.ms-wrap'))
       document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
