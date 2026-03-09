@@ -21,12 +21,14 @@ AccessPoint.hasMany(ApPingHistory, { foreignKey: 'ap_id', as: 'PingHistory' });
 const initDatabase = async () => {
   await sequelize.sync({ alter: { drop: false } });
 
-  // Migração pontual: ds_convenio herdado do modelo manual antigo era NOT NULL;
-  // o novo modelo Oracle-sync não usa essa coluna — remove a constraint para evitar
-  // violação ao fazer bulkCreate sem o campo.
-  await sequelize.query(
-    "ALTER TABLE tasy_protocolos ALTER COLUMN ds_convenio DROP NOT NULL"
-  ).catch(() => {});
+  // Migração pontual: colunas herdadas do modelo manual antigo com NOT NULL que o novo
+  // modelo Oracle-sync não preenche — remove as constraints para evitar violação no bulkCreate.
+  await sequelize.query(`
+    ALTER TABLE tasy_protocolos
+      ALTER COLUMN ds_convenio  DROP NOT NULL,
+      ALTER COLUMN nr_protocolo DROP NOT NULL,
+      ALTER COLUMN dt_emissao   DROP NOT NULL
+  `).catch(() => {});
 
   const [sessionSetting] = await Setting.findOrCreate({
     where: { key: 'session_duration_hours' },
