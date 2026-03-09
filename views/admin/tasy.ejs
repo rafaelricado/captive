@@ -373,6 +373,25 @@
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <script>
+  // Multi-select — escopo global (chamado por onclick="...")
+  function msToggle(btn) {
+    const panel = btn.nextElementSibling;
+    const isOpen = panel.classList.contains('open');
+    document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+    if (!isOpen) panel.classList.add('open');
+  }
+  function msSearch(input) {
+    const q = input.value.toLowerCase();
+    input.closest('.ms-panel').querySelectorAll('label').forEach(lb => {
+      lb.style.display = lb.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  }
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.ms-wrap')) {
+      document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+    }
+  });
+
   (function () {
     const chartData = <%- chartData %>;
 
@@ -412,26 +431,6 @@
         }
       });
     }
-
-    // Multi-select
-    function msToggle(btn) {
-      const panel = btn.nextElementSibling;
-      const isOpen = panel.classList.contains('open');
-      document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
-      if (!isOpen) panel.classList.add('open');
-    }
-    function msSearch(input) {
-      const q = input.value.toLowerCase();
-      input.closest('.ms-panel').querySelectorAll('label').forEach(lb => {
-        lb.style.display = lb.textContent.toLowerCase().includes(q) ? '' : 'none';
-      });
-    }
-    // Fechar ao clicar fora
-    document.addEventListener('click', e => {
-      if (!e.target.closest('.ms-wrap')) {
-        document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
-      }
-    });
 
     // Sincronização manual
     const btnSync = document.getElementById('btn-sync');
