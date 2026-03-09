@@ -97,7 +97,6 @@ const TasyProtocolo = sequelize.define('TasyProtocolo', {
   },
 }, {
   tableName: 'tasy_protocolos',
-  underscored: true,
   indexes: [
     // PostgreSQL permite múltiplos NULLs em índice único — registros legados sem nr_seq_protocolo não conflitam
     { unique: true, fields: ['nr_seq_protocolo'] },
