@@ -41,7 +41,7 @@ function toArray(val) {
   return (Array.isArray(val) ? val : [val]).map(v => String(v).trim()).filter(Boolean);
 }
 
-function buildWhere(query) {
+function buildWhere(query, activeConvenios = null) {
   const { dtInicio, dtFim, q, zeradas, cancelados, sem_protocolo } = query;
   const where = {};
 
@@ -50,8 +50,15 @@ function buildWhere(query) {
   else if (statuses.length > 1) where.status_categoria = { [Op.in]: statuses };
 
   const convenios = toArray(query.convenio);
-  if (convenios.length === 1) where.ds_convenio = convenios[0];
-  else if (convenios.length > 1) where.ds_convenio = { [Op.in]: convenios };
+  if (convenios.length === 1) {
+    where.ds_convenio = convenios[0];
+  } else if (convenios.length > 1) {
+    where.ds_convenio = { [Op.in]: convenios };
+  } else if (activeConvenios && query.conv_inativos !== '1') {
+    // Por padrão oculta contas de convênios sem atividade nos últimos 2 anos
+    const ativos = activeConvenios.filter(c => c.ativo).map(c => c.nome);
+    if (ativos.length > 0) where.ds_convenio = { [Op.in]: ativos };
+  }
 
   const setores = toArray(query.setor);
   if (setores.length === 1) where.ds_setor = setores[0];
@@ -277,15 +284,16 @@ exports.dashboard = async (req, res) => {
   try {
     const page    = Math.min(10000, Math.max(0, parseInt(req.query.page || '0', 10) || 0));
     const offset  = page * PAGE_SIZE;
-    const where   = buildWhere(req.query);
     const sortCol = VALID_SORTS.includes(req.query.sort) ? req.query.sort : 'dt_entrada';
     const sortDir = req.query.order === 'asc' ? 'ASC' : 'DESC';
 
-    const [cards, aging, lastSync, convenios, setores, tipos, especialidades, chartData, { count, rows }] = await Promise.all([
+    const convenios = await getConvenioList();
+    const where     = buildWhere(req.query, convenios);
+
+    const [cards, aging, lastSync, setores, tipos, especialidades, chartData, { count, rows }] = await Promise.all([
       getCards(where),
       getAging(where),
       getLastSync(),
-      getConvenioList(),
       getSetorList(),
       getTipoList(),
       getEspecialidadeList(),
@@ -374,7 +382,8 @@ exports.data = async (req, res) => {
 
 exports.export = async (req, res) => {
   try {
-    const where = buildWhere(req.query);
+    const activeConvenios = await getConvenioList();
+    const where = buildWhere(req.query, activeConvenios);
     const rows  = await TasyConta.findAll({ where, order: [['dt_entrada', 'DESC']] });
 
     const header = 'Nº Atendimento,Paciente,CPF,Convênio,Plano,Tipo Atend.,Médico,Especialidade,Setor,Status,Faturado,Glosa (R$),Glosa (%),Líquido,Entrada,Saída,Faturamento,Status Protocolo,Nº Protocolo';
