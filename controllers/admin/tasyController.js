@@ -129,6 +129,51 @@ async function getCards(where = {}) {
   return cards;
 }
 
+async function getAging(where = {}) {
+  // Filtra apenas contas abertas; ignora outras condições de status do where original
+  const agingWhere = { ...where, status_categoria: 'aberto', ie_cancelamento: null };
+
+  const rows = await TasyConta.findAll({
+    attributes: [
+      [literal(`CASE
+        WHEN dt_entrada IS NULL                          THEN 'sem_data'
+        WHEN CURRENT_DATE - dt_entrada::date <= 30       THEN '0_30'
+        WHEN CURRENT_DATE - dt_entrada::date <= 60       THEN '31_60'
+        WHEN CURRENT_DATE - dt_entrada::date <= 90       THEN '61_90'
+        ELSE '90_mais'
+      END`), 'faixa'],
+      [fn('COUNT', col('id')), 'total'],
+      [fn('SUM', col('vl_conta')), 'valor'],
+    ],
+    where: agingWhere,
+    group: [literal(`CASE
+      WHEN dt_entrada IS NULL                          THEN 'sem_data'
+      WHEN CURRENT_DATE - dt_entrada::date <= 30       THEN '0_30'
+      WHEN CURRENT_DATE - dt_entrada::date <= 60       THEN '31_60'
+      WHEN CURRENT_DATE - dt_entrada::date <= 90       THEN '61_90'
+      ELSE '90_mais'
+    END`)],
+    raw: true,
+  });
+
+  const BUCKETS = [
+    { key: '0_30',    label: '0–30 dias' },
+    { key: '31_60',   label: '31–60 dias' },
+    { key: '61_90',   label: '61–90 dias' },
+    { key: '90_mais', label: '90+ dias' },
+    { key: 'sem_data',label: 'Sem data' },
+  ];
+  const map = {};
+  rows.forEach(r => { map[r.faixa] = { total: Number(r.total || 0), valorRaw: Number(r.valor || 0) }; });
+
+  return BUCKETS.map(b => ({
+    ...b,
+    total:    map[b.key]?.total    || 0,
+    valorRaw: map[b.key]?.valorRaw || 0,
+    valor:    formatBRL(map[b.key]?.valorRaw || 0),
+  }));
+}
+
 async function getLastSync() {
   const last = await TasyConta.max('synced_at');
   return last ? formatDate(last) : null;
@@ -205,14 +250,19 @@ async function getEspecialidadeList() {
 // Handlers
 // -------------------------------------------------
 
+const VALID_SORTS = ['dt_entrada', 'vl_conta', 'vl_liquido', 'nm_paciente', 'ds_convenio', 'dt_conta_definitiva', 'nr_atendimento'];
+
 exports.dashboard = async (req, res) => {
   try {
-    const page   = Math.min(10000, Math.max(0, parseInt(req.query.page || '0', 10) || 0));
-    const offset = page * PAGE_SIZE;
-    const where  = buildWhere(req.query);
+    const page    = Math.min(10000, Math.max(0, parseInt(req.query.page || '0', 10) || 0));
+    const offset  = page * PAGE_SIZE;
+    const where   = buildWhere(req.query);
+    const sortCol = VALID_SORTS.includes(req.query.sort) ? req.query.sort : 'dt_entrada';
+    const sortDir = req.query.order === 'asc' ? 'ASC' : 'DESC';
 
-    const [cards, lastSync, convenios, setores, tipos, especialidades, chartData, { count, rows }] = await Promise.all([
+    const [cards, aging, lastSync, convenios, setores, tipos, especialidades, chartData, { count, rows }] = await Promise.all([
       getCards(where),
+      getAging(where),
       getLastSync(),
       getConvenioList(),
       getSetorList(),
@@ -221,7 +271,7 @@ exports.dashboard = async (req, res) => {
       getChartData(where),
       TasyConta.findAndCountAll({
         where,
-        order: [['dt_entrada', 'DESC']],
+        order: [[sortCol, sortDir]],
         limit: PAGE_SIZE,
         offset,
       }),
@@ -257,6 +307,7 @@ exports.dashboard = async (req, res) => {
     res.render('admin/tasy', {
       page: 'tasy',
       cards,
+      aging,
       contas,
       lastSync,
       convenios,
@@ -268,6 +319,8 @@ exports.dashboard = async (req, res) => {
       pageNum: page,
       totalPages: Math.ceil(count / PAGE_SIZE),
       total: count,
+      sort: sortCol,
+      order: sortDir,
       csrfToken: req.session.csrfToken,
     });
   } catch (err) {
