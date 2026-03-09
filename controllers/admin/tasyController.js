@@ -42,7 +42,7 @@ function toArray(val) {
 }
 
 function buildWhere(query) {
-  const { dtInicio, dtFim, q, zeradas, cancelados } = query;
+  const { dtInicio, dtFim, q, zeradas, cancelados, sem_protocolo } = query;
   const where = {};
 
   const statuses = toArray(query.status).filter(s => ['aberto', 'faturado', 'outro'].includes(s));
@@ -71,8 +71,9 @@ function buildWhere(query) {
     if (dtFim)    where.dt_entrada[Op.lte] = dtFim;
   }
 
-  if (zeradas   === '1') where.vl_conta      = { [Op.or]: [0, null] };
-  if (cancelados === '1') where.ie_cancelamento = { [Op.ne]: null };
+  if (zeradas       === '1') where.vl_conta         = { [Op.or]: [0, null] };
+  if (cancelados    === '1') where.ie_cancelamento  = { [Op.ne]: null };
+  if (sem_protocolo === '1') where.nr_seq_protocolo = { [Op.is]: null };
 
   if (q) {
     const like = { [Op.iLike]: `%${q}%` };

@@ -205,7 +205,7 @@
       <p class="chart-title">
         Contas por mês —
         <% if (filters.dtInicio || filters.dtFim) { %>período selecionado<% } else { %>últimos 12 meses<% } %>
-        <% if (filters.status || filters.convenio || filters.setor || filters.tipo || filters.especialidade || filters.q) { %>
+        <% if (filters.status || filters.convenio || filters.setor || filters.tipo || filters.especialidade || filters.q || filters.sem_protocolo === '1') { %>
           <span style="font-weight:400;color:#9ca3af;">(filtros ativos)</span>
         <% } %>
       </p>
@@ -308,6 +308,10 @@
       <label style="display:flex;align-items:center;gap:5px;font-size:.82rem;color:#374151;white-space:nowrap;cursor:pointer;">
         <input type="checkbox" name="cancelados" value="1" <%= filters.cancelados === '1' ? 'checked' : '' %>>
         Canceladas
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:.82rem;color:#374151;white-space:nowrap;cursor:pointer;">
+        <input type="checkbox" name="sem_protocolo" value="1" <%= filters.sem_protocolo === '1' ? 'checked' : '' %>>
+        Sem protocolo
       </label>
 
       <button type="submit" class="btn-filter">Filtrar</button>
