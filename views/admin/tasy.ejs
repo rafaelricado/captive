@@ -593,45 +593,49 @@
 
   // ── Gráfico ────────────────────────────────────────────────────────────────
   (function () {
-    const chartData = <%- chartData %>;
+    try {
+      const chartData = <%- chartData %>;
 
-    if (chartData && chartData.length > 0) {
-      const meses = [...new Set(chartData.map(r => r.mes))].sort();
-      const cats = { aberto: [], faturado: [] };
+      if (chartData && chartData.length > 0) {
+        const meses = [...new Set(chartData.map(r => r.mes))].sort();
+        const cats = { aberto: [], faturado: [] };
 
-      meses.forEach(mes => {
-        ['aberto', 'faturado'].forEach(cat => {
-          const row = chartData.find(r => r.mes === mes && r.status_categoria === cat);
-          cats[cat].push(row ? Number(row.total) : 0);
+        meses.forEach(mes => {
+          ['aberto', 'faturado'].forEach(cat => {
+            const row = chartData.find(r => r.mes === mes && r.status_categoria === cat);
+            cats[cat].push(row ? Number(row.total) : 0);
+          });
         });
-      });
 
-      const labels = meses.map(m => {
-        const [y, mo] = m.split('-');
-        return new Date(Number(y), Number(mo) - 1).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-      });
+        const labels = meses.map(m => {
+          const [y, mo] = m.split('-');
+          return new Date(Number(y), Number(mo) - 1).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        });
 
-      new Chart(document.getElementById('tasy-chart').getContext('2d'), {
-        type: 'bar',
-        data: {
-          labels,
-          datasets: [
-            { label: 'Em Aberto', data: cats.aberto,   backgroundColor: 'rgba(220,38,38,.75)' },
-            { label: 'Faturado',  data: cats.faturado, backgroundColor: 'rgba(22,163,74,.75)'  },
-          ]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { position: 'top' },
-            tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${Number(c.raw).toLocaleString('pt-BR')} contas` } }
+        new Chart(document.getElementById('tasy-chart').getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [
+              { label: 'Em Aberto', data: cats.aberto,   backgroundColor: 'rgba(220,38,38,.75)' },
+              { label: 'Faturado',  data: cats.faturado, backgroundColor: 'rgba(22,163,74,.75)'  },
+            ]
           },
-          scales: { x: { stacked: false }, y: { beginAtZero: true, ticks: { precision: 0 } } }
-        }
-      });
-    }
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { position: 'top' },
+              tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${Number(c.raw).toLocaleString('pt-BR')} contas` } }
+            },
+            scales: { x: { stacked: false }, y: { beginAtZero: true, ticks: { precision: 0 } } }
+          }
+        });
+      }
+    } catch (e) { /* gráfico indisponível */ }
+  })();
 
-    // ── Sincronização com progresso (SSE) ──────────────────────────────────
+  // ── Sincronização com progresso (SSE) ──────────────────────────────────────
+  (function () {
     const btnSync      = document.getElementById('btn-sync');
     const syncProgress = document.getElementById('sync-progress');
     const syncFill     = document.getElementById('sync-progress-fill');
