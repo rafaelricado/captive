@@ -21,6 +21,13 @@ AccessPoint.hasMany(ApPingHistory, { foreignKey: 'ap_id', as: 'PingHistory' });
 const initDatabase = async () => {
   await sequelize.sync({ alter: { drop: false } });
 
+  // Migração pontual: ds_convenio herdado do modelo manual antigo era NOT NULL;
+  // o novo modelo Oracle-sync não usa essa coluna — remove a constraint para evitar
+  // violação ao fazer bulkCreate sem o campo.
+  await sequelize.query(
+    "ALTER TABLE tasy_protocolos ALTER COLUMN ds_convenio DROP NOT NULL"
+  ).catch(() => {});
+
   const [sessionSetting] = await Setting.findOrCreate({
     where: { key: 'session_duration_hours' },
     defaults: { value: process.env.SESSION_DURATION_HOURS || '48' }
