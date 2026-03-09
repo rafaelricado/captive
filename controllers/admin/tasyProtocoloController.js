@@ -1,79 +1,159 @@
 const { Op, fn, col } = require('sequelize');
-const { TasyProtocolo, TasyConta } = require('../../models');
+const { TasyProtocolo } = require('../../models');
+const { syncProtocolos } = require('../../services/tasyService');
 const logger = require('../../utils/logger');
-const { PAGE_SIZE, escapeCSV } = require('./helpers');
-
-const STATUS_VALID = ['rascunho', 'enviado', 'faturado', 'pago', 'cancelado'];
+const { PAGE_SIZE, formatDate, escapeCSV } = require('./helpers');
 
 function formatBRL(val) {
   return (Number(val) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+const STATUS_PROTOCOLO = {
+  1: 'Provisório',
+  2: 'Definitivo',
+  3: 'Auditoria',
+  4: 'Perda',
+  5: 'Cancelado',
+};
+
+function toArray(val) {
+  if (!val) return [];
+  return (Array.isArray(val) ? val : [val]).map(v => String(v).trim()).filter(Boolean);
+}
+
 function buildWhere(query) {
-  const where = {};
-  if (query.status && STATUS_VALID.includes(query.status)) where.status = query.status;
-  if (query.convenio) where.ds_convenio = { [Op.iLike]: `%${query.convenio}%` };
+  const where = { nr_seq_protocolo: { [Op.ne]: null } };
+
+  const statuses = toArray(query.status).map(Number).filter(n => [1, 2, 3, 4, 5].includes(n));
+  if (statuses.length === 1) where.ie_status_protocolo = statuses[0];
+  else if (statuses.length > 1) where.ie_status_protocolo = { [Op.in]: statuses };
+
+  const convenios = toArray(query.convenio).map(Number).filter(Boolean);
+  if (convenios.length === 1) where.cd_convenio = convenios[0];
+  else if (convenios.length > 1) where.cd_convenio = { [Op.in]: convenios };
+
+  if (query.dtInicio || query.dtFim) {
+    where.dt_periodo_inicial = {};
+    if (query.dtInicio) where.dt_periodo_inicial[Op.gte] = query.dtInicio;
+    if (query.dtFim)    where.dt_periodo_inicial[Op.lte] = query.dtFim;
+  }
+
+  if (query.q) {
+    where[Op.or] = [
+      { nr_protocolo: { [Op.iLike]: `%${query.q}%` } },
+      { ds_observacao: { [Op.iLike]: `%${query.q}%` } },
+    ];
+  }
+
   return where;
 }
 
-function toJSON(p) {
-  const o = p.toJSON ? p.toJSON() : { ...p };
-  return {
-    ...o,
-    vl_total_fmt:       formatBRL(o.vl_total),
-    dt_emissao_fmt:     o.dt_emissao     || '—',
-    dt_envio_fmt:       o.dt_envio       || '—',
-    dt_faturamento_fmt: o.dt_faturamento || '—',
-    dt_pagamento_fmt:   o.dt_pagamento   || '—',
+async function getCards(where) {
+  const rows = await TasyProtocolo.findAll({
+    attributes: [
+      'ie_status_protocolo',
+      [fn('COUNT', col('id')), 'qt'],
+      [fn('SUM', col('vl_recebimento')), 'vl'],
+    ],
+    where,
+    group: ['ie_status_protocolo'],
+    raw: true,
+  });
+
+  const cards = {};
+  for (const k of Object.keys(STATUS_PROTOCOLO)) {
+    const n = Number(k);
+    const r = rows.find(x => Number(x.ie_status_protocolo) === n) || {};
+    cards[n] = { qt: Number(r.qt || 0), vl: formatBRL(r.vl || 0), vlRaw: Number(r.vl || 0) };
+  }
+  cards.geral = {
+    qt:    rows.reduce((s, r) => s + Number(r.qt || 0), 0),
+    vl:    formatBRL(rows.reduce((s, r) => s + Number(r.vl || 0), 0)),
+    vlRaw: rows.reduce((s, r) => s + Number(r.vl || 0), 0),
   };
+  return cards;
 }
+
+async function getLastSync() {
+  const last = await TasyProtocolo.max('synced_at', {
+    where: { nr_seq_protocolo: { [Op.ne]: null } },
+  });
+  return last ? formatDate(last) : null;
+}
+
+async function getConvenioList() {
+  const rows = await TasyProtocolo.findAll({
+    attributes: [[fn('DISTINCT', col('cd_convenio')), 'cd_convenio']],
+    where: { cd_convenio: { [Op.ne]: null }, nr_seq_protocolo: { [Op.ne]: null } },
+    order: [['cd_convenio', 'ASC']],
+    raw: true,
+  });
+  return rows.map(r => r.cd_convenio).filter(v => v != null);
+}
+
+const VALID_SORTS = [
+  'dt_periodo_inicial', 'vl_recebimento', 'nr_protocolo',
+  'ie_status_protocolo', 'dt_definitivo', 'nr_seq_protocolo',
+];
 
 // GET /admin/tasy/protocolos
 exports.list = async (req, res) => {
   try {
-    const page = Math.min(10000, Math.max(0, parseInt(req.query.page || '0', 10) || 0));
-    const where = buildWhere(req.query);
+    const page    = Math.min(10000, Math.max(0, parseInt(req.query.page || '0', 10) || 0));
+    const where   = buildWhere(req.query);
+    const sortCol = VALID_SORTS.includes(req.query.sort) ? req.query.sort : 'dt_periodo_inicial';
+    const sortDir = req.query.order === 'asc' ? 'ASC' : 'DESC';
 
-    const [{ count, rows }, resumo, convenios] = await Promise.all([
+    const [cards, lastSync, convenios, { count, rows }] = await Promise.all([
+      getCards(where),
+      getLastSync(),
+      getConvenioList(),
       TasyProtocolo.findAndCountAll({
         where,
-        order: [['dt_emissao', 'DESC'], ['createdAt', 'DESC']],
+        order: [[sortCol, sortDir]],
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
       }),
-      TasyProtocolo.findAll({
-        attributes: [
-          'status',
-          [fn('COUNT', col('id')), 'qt'],
-          [fn('SUM', col('vl_total')), 'vl'],
-        ],
-        group: ['status'],
-        raw: true,
-      }),
-      TasyConta.findAll({
-        attributes: [[fn('DISTINCT', col('ds_convenio')), 'ds_convenio']],
-        where: { ds_convenio: { [Op.ne]: null } },
-        order: [['ds_convenio', 'ASC']],
-        raw: true,
-      }),
     ]);
 
-    const cards = {};
-    for (const s of STATUS_VALID) {
-      const r = resumo.find(x => x.status === s) || {};
-      cards[s] = { qt: Number(r.qt || 0), vl: formatBRL(r.vl || 0) };
-    }
+    const protocolos = rows.map(r => ({
+      id:                  r.id,
+      nr_seq_protocolo:    r.nr_seq_protocolo,
+      nr_protocolo:        r.nr_protocolo        || '—',
+      cd_convenio:         r.cd_convenio,
+      ie_status_protocolo: r.ie_status_protocolo,
+      ds_status_protocolo: r.ie_status_protocolo
+        ? (STATUS_PROTOCOLO[r.ie_status_protocolo] || `Status ${r.ie_status_protocolo}`)
+        : '—',
+      dt_periodo_inicial:  r.dt_periodo_inicial  || null,
+      dt_periodo_final:    r.dt_periodo_final    || null,
+      dt_geracao:          r.dt_geracao          ? formatDate(r.dt_geracao)    : null,
+      dt_envio:            r.dt_envio            ? formatDate(r.dt_envio)      : null,
+      dt_retorno:          r.dt_retorno          ? formatDate(r.dt_retorno)    : null,
+      dt_definitivo:       r.dt_definitivo       ? formatDate(r.dt_definitivo) : null,
+      dt_vencimento:       r.dt_vencimento       || null,
+      dt_entrega_convenio: r.dt_entrega_convenio || null,
+      vl_recebimento:      formatBRL(r.vl_recebimento),
+      vl_recebimento_raw:  Number(r.vl_recebimento || 0),
+      ds_inconsistencia:   r.ds_inconsistencia   || null,
+      ds_observacao:       r.ds_observacao       || null,
+      nm_usuario:          r.nm_usuario          || null,
+    }));
 
     res.render('admin/tasy_protocolos', {
-      page: 'tasy',
-      protocolos: rows.map(toJSON),
+      page:       'tasy',
+      protocolos,
       cards,
-      convenios: convenios.map(r => r.ds_convenio).filter(Boolean),
-      filters: req.query,
-      pageNum: page,
+      lastSync,
+      convenios,
+      statusMap:  STATUS_PROTOCOLO,
+      filters:    req.query,
+      pageNum:    page,
       totalPages: Math.ceil(count / PAGE_SIZE),
-      total: count,
-      csrfToken: req.session.csrfToken,
+      total:      count,
+      sort:       sortCol,
+      order:      sortDir,
+      csrfToken:  req.session.csrfToken,
     });
   } catch (err) {
     logger.error(`[TasyProtocolo] list: ${err.message}`);
@@ -81,122 +161,48 @@ exports.list = async (req, res) => {
   }
 };
 
-// GET /admin/tasy/protocolos/preview  (AJAX: retorna qt e vl para preview de criação)
-exports.preview = async (req, res) => {
+// POST /admin/tasy/protocolos/sync
+exports.sync = async (req, res) => {
   try {
-    const { convenio, dtInicio, dtFim } = req.query;
-    if (!convenio) return res.json({ qt: 0, vl: 0, vlFmt: formatBRL(0) });
-
-    const where = { ds_convenio: convenio };
-    if (dtInicio || dtFim) {
-      where.dt_entrada = {};
-      if (dtInicio) where.dt_entrada[Op.gte] = dtInicio;
-      if (dtFim)    where.dt_entrada[Op.lte] = dtFim;
-    }
-
-    const result = await TasyConta.findAll({
-      attributes: [
-        [fn('COUNT', col('id')), 'qt'],
-        [fn('SUM', col('vl_conta')), 'vl'],
-      ],
-      where,
-      raw: true,
-    });
-
-    const qt = Number(result[0]?.qt || 0);
-    const vl = Number(result[0]?.vl || 0);
-    res.json({ qt, vl, vlFmt: formatBRL(vl) });
+    const count = await syncProtocolos();
+    res.json({ ok: true, count });
   } catch (err) {
-    logger.error(`[TasyProtocolo] preview: ${err.message}`);
-    res.status(500).json({ error: 'Erro interno.' });
+    logger.error(`[TasyProtocolo] sync: ${err.message}`);
+    res.status(500).json({ ok: false, error: err.message });
   }
 };
 
-// POST /admin/tasy/protocolos  (criar)
-exports.criar = async (req, res) => {
+// GET /admin/tasy/protocolos/export
+exports.export = async (req, res) => {
   try {
-    const { ds_convenio, dtInicio, dtFim, nr_protocolo, obs } = req.body;
-    if (!ds_convenio) return res.redirect('/admin/tasy/protocolos?erro=convenio_obrigatorio');
+    const where = buildWhere(req.query);
+    const rows  = await TasyProtocolo.findAll({ where, order: [['dt_periodo_inicial', 'DESC']] });
 
-    const where = { ds_convenio };
-    if (dtInicio || dtFim) {
-      where.dt_entrada = {};
-      if (dtInicio) where.dt_entrada[Op.gte] = dtInicio;
-      if (dtFim)    where.dt_entrada[Op.lte] = dtFim;
-    }
+    const header = 'Seq,Protocolo,Cod.Convenio,Status,Periodo Inicial,Periodo Final,Gerado em,Enviado em,Retorno,Definitivo,Vencimento,Entrega Conv.,Vl.Recebimento,Inconsistencia,Observacao';
+    const lines = rows.map(r => [
+      r.nr_seq_protocolo || '',
+      r.nr_protocolo     || '',
+      r.cd_convenio      || '',
+      r.ie_status_protocolo ? (STATUS_PROTOCOLO[r.ie_status_protocolo] || String(r.ie_status_protocolo)) : '',
+      r.dt_periodo_inicial   || '',
+      r.dt_periodo_final     || '',
+      r.dt_geracao           ? formatDate(r.dt_geracao)    : '',
+      r.dt_envio             ? formatDate(r.dt_envio)      : '',
+      r.dt_retorno           ? formatDate(r.dt_retorno)    : '',
+      r.dt_definitivo        ? formatDate(r.dt_definitivo) : '',
+      r.dt_vencimento        || '',
+      r.dt_entrega_convenio  || '',
+      Number(r.vl_recebimento || 0).toFixed(2).replace('.', ','),
+      r.ds_inconsistencia || '',
+      r.ds_observacao     || '',
+    ].map(escapeCSV).join(','));
 
-    const result = await TasyConta.findAll({
-      attributes: [
-        [fn('COUNT', col('id')), 'qt'],
-        [fn('SUM', col('vl_conta')), 'vl'],
-      ],
-      where,
-      raw: true,
-    });
-
-    const qt = Number(result[0]?.qt || 0);
-    const vl = Number(result[0]?.vl || 0);
-    const nr = (nr_protocolo || '').trim() ||
-      `PROT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now().toString().slice(-4)}`;
-
-    await TasyProtocolo.create({
-      nr_protocolo:  nr,
-      ds_convenio,
-      dt_inicio:     dtInicio  || null,
-      dt_fim:        dtFim     || null,
-      qt_contas:     qt,
-      vl_total:      vl,
-      status:        'rascunho',
-      dt_emissao:    new Date().toISOString().slice(0, 10),
-      obs:           obs || null,
-    });
-
-    res.redirect('/admin/tasy/protocolos');
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="protocolos_tasy_${date}.csv"`);
+    res.send('\uFEFF' + header + '\n' + lines.join('\n'));
   } catch (err) {
-    logger.error(`[TasyProtocolo] criar: ${err.message}`);
+    logger.error(`[TasyProtocolo] export: ${err.message}`);
     res.status(500).send('Erro interno.');
-  }
-};
-
-// POST /admin/tasy/protocolos/:id/status  (atualizar status/NF via AJAX)
-exports.atualizarStatus = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status, nr_nota_fiscal, dt_envio, dt_faturamento, dt_pagamento, obs } = req.body;
-
-    if (status && !STATUS_VALID.includes(status))
-      return res.status(400).json({ ok: false, error: 'Status inválido.' });
-
-    const protocolo = await TasyProtocolo.findByPk(id);
-    if (!protocolo) return res.status(404).json({ ok: false, error: 'Protocolo não encontrado.' });
-
-    const updates = {};
-    if (status)          updates.status         = status;
-    if (nr_nota_fiscal !== undefined) updates.nr_nota_fiscal = nr_nota_fiscal || null;
-    if (dt_envio       !== undefined) updates.dt_envio       = dt_envio       || null;
-    if (dt_faturamento !== undefined) updates.dt_faturamento = dt_faturamento || null;
-    if (dt_pagamento   !== undefined) updates.dt_pagamento   = dt_pagamento   || null;
-    if (obs            !== undefined) updates.obs            = obs            || null;
-
-    await protocolo.update(updates);
-    res.json({ ok: true, protocolo: toJSON(protocolo) });
-  } catch (err) {
-    logger.error(`[TasyProtocolo] atualizarStatus: ${err.message}`);
-    res.status(500).json({ ok: false, error: 'Erro interno.' });
-  }
-};
-
-// DELETE /admin/tasy/protocolos/:id
-exports.excluir = async (req, res) => {
-  try {
-    const protocolo = await TasyProtocolo.findByPk(req.params.id);
-    if (!protocolo) return res.status(404).json({ ok: false, error: 'Não encontrado.' });
-    if (protocolo.status !== 'rascunho' && protocolo.status !== 'cancelado')
-      return res.status(409).json({ ok: false, error: 'Apenas protocolos em rascunho ou cancelados podem ser excluídos.' });
-    await protocolo.destroy();
-    res.json({ ok: true });
-  } catch (err) {
-    logger.error(`[TasyProtocolo] excluir: ${err.message}`);
-    res.status(500).json({ ok: false, error: 'Erro interno.' });
   }
 };

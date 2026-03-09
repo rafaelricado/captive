@@ -7,66 +7,104 @@ const TasyProtocolo = sequelize.define('TasyProtocolo', {
     defaultValue: DataTypes.UUIDV4,
     primaryKey:   true,
   },
+  // Chave natural Oracle — unique nullable (NULLs não conflitam)
+  nr_seq_protocolo: {
+    type:      DataTypes.INTEGER,
+    allowNull: true,
+    comment:   'NR_SEQ_PROTOCOLO do Oracle (chave natural)',
+  },
   nr_protocolo: {
-    type:      DataTypes.STRING(50),
-    allowNull: false,
+    type:      DataTypes.STRING(40),
+    allowNull: true,
+    comment:   'Nome/número do protocolo (NR_PROTOCOLO)',
   },
-  ds_convenio: {
-    type:      DataTypes.STRING(255),
-    allowNull: false,
+  cd_convenio: {
+    type:      DataTypes.INTEGER,
+    allowNull: true,
+    comment:   'Código do convênio (CD_CONVENIO)',
   },
-  dt_inicio: {
+  ie_status_protocolo: {
+    type:      DataTypes.INTEGER,
+    allowNull: true,
+    comment:   '1=Provisório 2=Definitivo 3=Auditoria 4=Perda 5=Cancelado',
+  },
+  ie_tipo_protocolo: {
+    type:      DataTypes.INTEGER,
+    allowNull: true,
+    comment:   'Tipo do protocolo (IE_TIPO_PROTOCOLO)',
+  },
+  dt_periodo_inicial: {
     type:      DataTypes.DATEONLY,
     allowNull: true,
   },
-  dt_fim: {
+  dt_periodo_final: {
     type:      DataTypes.DATEONLY,
     allowNull: true,
   },
-  qt_contas: {
-    type:         DataTypes.INTEGER,
-    defaultValue: 0,
-  },
-  vl_total: {
-    type:         DataTypes.DECIMAL(14, 2),
-    defaultValue: 0,
-  },
-  // rascunho → enviado → faturado → pago (ou cancelado)
-  status: {
-    type:         DataTypes.STRING(20),
-    allowNull:    false,
-    defaultValue: 'rascunho',
-  },
-  nr_nota_fiscal: {
-    type:      DataTypes.STRING(50),
+  dt_geracao: {
+    type:      DataTypes.DATE,
     allowNull: true,
-  },
-  dt_emissao: {
-    type:      DataTypes.DATEONLY,
-    allowNull: false,
+    comment:   'Data de geração do protocolo',
   },
   dt_envio: {
+    type:      DataTypes.DATE,
+    allowNull: true,
+    comment:   'Data de envio ao convênio',
+  },
+  dt_retorno: {
+    type:      DataTypes.DATE,
+    allowNull: true,
+    comment:   'Data de retorno do convênio',
+  },
+  dt_definitivo: {
+    type:      DataTypes.DATE,
+    allowNull: true,
+    comment:   'Data de fechamento definitivo',
+  },
+  dt_vencimento: {
     type:      DataTypes.DATEONLY,
     allowNull: true,
+    comment:   'Data de vencimento do protocolo',
   },
-  dt_faturamento: {
+  dt_entrega_convenio: {
     type:      DataTypes.DATEONLY,
     allowNull: true,
+    comment:   'Data de entrega física ao convênio',
   },
-  dt_pagamento: {
-    type:      DataTypes.DATEONLY,
+  vl_recebimento: {
+    type:         DataTypes.DECIMAL(14, 2),
+    allowNull:    true,
+    defaultValue: 0,
+    comment:      'Valor recebido do convênio',
+  },
+  ds_inconsistencia: {
+    type:      DataTypes.STRING(80),
     allowNull: true,
   },
-  obs: {
-    type:      DataTypes.TEXT,
+  ds_observacao: {
+    type:      DataTypes.STRING(800),
     allowNull: true,
+  },
+  nm_usuario: {
+    type:      DataTypes.STRING(15),
+    allowNull: true,
+    comment:   'Usuário responsável no Oracle',
+  },
+  synced_at: {
+    type:         DataTypes.DATE,
+    allowNull:    false,
+    defaultValue: DataTypes.NOW,
   },
 }, {
   tableName: 'tasy_protocolos',
+  underscored: true,
   indexes: [
-    { fields: ['ds_convenio'] },
-    { fields: ['status'] },
-    { fields: ['dt_emissao'] },
+    // PostgreSQL permite múltiplos NULLs em índice único — registros legados sem nr_seq_protocolo não conflitam
+    { unique: true, fields: ['nr_seq_protocolo'] },
+    { fields: ['ie_status_protocolo'] },
+    { fields: ['cd_convenio'] },
+    { fields: ['dt_periodo_inicial'] },
+    { fields: ['synced_at'] },
   ],
 });
 

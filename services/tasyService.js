@@ -8,7 +8,7 @@
  */
 
 const oracledb = require('oracledb');
-const { TasyConta } = require('../models');
+const { TasyConta, TasyProtocolo } = require('../models');
 const logger = require('../utils/logger');
 
 // Modo thick: necessário para autenticação Oracle 10g (verifier SHA-1/0x939)
@@ -222,4 +222,107 @@ async function syncContas() {
   }
 }
 
-module.exports = { discoverColumns, syncContas };
+/**
+ * Sincroniza TASY.PROTOCOLO_CONVENIO → tasy_protocolos (PostgreSQL).
+ * Upsert por NR_SEQ_PROTOCOLO.
+ * @returns {number} quantidade de registros sincronizados
+ */
+async function syncProtocolos() {
+  if (!ORACLE_CONFIG.user) {
+    logger.warn('[Tasy] TASY_USER não configurado — syncProtocolos ignorado.');
+    return 0;
+  }
+
+  const BATCH = 500;
+  let conn, resultSet;
+  try {
+    conn = await oracledb.getConnection(ORACLE_CONFIG);
+    conn.callTimeout = 120000;
+
+    const result = await conn.execute(
+      `SELECT P.NR_SEQ_PROTOCOLO,
+              P.NR_PROTOCOLO,
+              P.CD_CONVENIO,
+              P.IE_STATUS_PROTOCOLO,
+              P.IE_TIPO_PROTOCOLO,
+              P.DT_PERIODO_INICIAL,
+              P.DT_PERIODO_FINAL,
+              P.DT_GERACAO,
+              P.DT_ENVIO,
+              P.DT_RETORNO,
+              P.DT_DEFINITIVO,
+              P.DT_VENCIMENTO,
+              P.DT_ENTREGA_CONVENIO,
+              P.VL_RECEBIMENTO,
+              P.DS_INCONSISTENCIA,
+              P.DS_OBSERVACAO,
+              P.NM_USUARIO
+         FROM TASY.PROTOCOLO_CONVENIO P
+        WHERE P.DT_PERIODO_INICIAL >= ADD_MONTHS(SYSDATE, -24)
+           OR P.DT_PERIODO_INICIAL IS NULL
+        ORDER BY P.NR_SEQ_PROTOCOLO`,
+      [],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT, resultSet: true, fetchArraySize: BATCH }
+    );
+    resultSet = result.resultSet;
+
+    const now = new Date();
+    let total = 0;
+    let rawRows;
+
+    while ((rawRows = await resultSet.getRows(BATCH)).length > 0) {
+      const batch = rawRows
+        .filter(r => r.NR_SEQ_PROTOCOLO != null)
+        .map(r => ({
+          nr_seq_protocolo:    Number(r.NR_SEQ_PROTOCOLO),
+          nr_protocolo:        r.NR_PROTOCOLO        ? String(r.NR_PROTOCOLO).trim() : null,
+          cd_convenio:         r.CD_CONVENIO         != null ? Number(r.CD_CONVENIO)         : null,
+          ie_status_protocolo: r.IE_STATUS_PROTOCOLO != null ? Number(r.IE_STATUS_PROTOCOLO) : null,
+          ie_tipo_protocolo:   r.IE_TIPO_PROTOCOLO   != null ? Number(r.IE_TIPO_PROTOCOLO)   : null,
+          dt_periodo_inicial:  oracleToDate(r.DT_PERIODO_INICIAL),
+          dt_periodo_final:    oracleToDate(r.DT_PERIODO_FINAL),
+          dt_geracao:          r.DT_GERACAO          instanceof Date ? r.DT_GERACAO          : null,
+          dt_envio:            r.DT_ENVIO            instanceof Date ? r.DT_ENVIO            : null,
+          dt_retorno:          r.DT_RETORNO          instanceof Date ? r.DT_RETORNO          : null,
+          dt_definitivo:       r.DT_DEFINITIVO       instanceof Date ? r.DT_DEFINITIVO       : null,
+          dt_vencimento:       oracleToDate(r.DT_VENCIMENTO),
+          dt_entrega_convenio: oracleToDate(r.DT_ENTREGA_CONVENIO),
+          vl_recebimento:      r.VL_RECEBIMENTO      ?? 0,
+          ds_inconsistencia:   r.DS_INCONSISTENCIA   ?? null,
+          ds_observacao:       r.DS_OBSERVACAO        ?? null,
+          nm_usuario:          r.NM_USUARIO          ? String(r.NM_USUARIO).trim() : null,
+          synced_at:           now,
+        }));
+
+      // Deduplicar por nr_seq_protocolo
+      const dedupMap = new Map();
+      for (const row of batch) dedupMap.set(row.nr_seq_protocolo, row);
+      const deduped = Array.from(dedupMap.values());
+
+      if (deduped.length > 0) {
+        await TasyProtocolo.bulkCreate(deduped, {
+          conflictAttributes: ['nr_seq_protocolo'],
+          updateOnDuplicate: [
+            'nr_protocolo', 'cd_convenio', 'ie_status_protocolo', 'ie_tipo_protocolo',
+            'dt_periodo_inicial', 'dt_periodo_final',
+            'dt_geracao', 'dt_envio', 'dt_retorno', 'dt_definitivo',
+            'dt_vencimento', 'dt_entrega_convenio',
+            'vl_recebimento', 'ds_inconsistencia', 'ds_observacao',
+            'nm_usuario', 'synced_at',
+          ],
+        });
+        total += deduped.length;
+        logger.info(`[Tasy] Protocolos: ${total} sincronizados...`);
+        await new Promise(r => setTimeout(r, 100));
+      }
+    }
+
+    logger.info(`[Tasy] syncProtocolos concluído: ${total} protocolos.`);
+    return total;
+  } finally {
+    if (resultSet) await resultSet.close().catch(() => {});
+    if (conn)      await conn.close().catch(() => {});
+  }
+}
+
+module.exports = { discoverColumns, syncContas, syncProtocolos };

@@ -163,12 +163,10 @@ router.get('/tasy/data',   adminAuth, tasyController.data);
 router.get('/tasy/export', adminAuth, exportLimiter, tasyController.export);
 router.post('/tasy/sync',  adminAuth, verifyCsrf, tasyController.sync);
 
-// Protocolo convênio
-router.get ('/tasy/protocolos',              adminAuth, csrfMiddleware, tasyProtocoloController.list);
-router.get ('/tasy/protocolos/preview',      adminAuth, tasyProtocoloController.preview);
-router.post('/tasy/protocolos',              adminAuth, verifyCsrf,    tasyProtocoloController.criar);
-router.post('/tasy/protocolos/:id/status',   adminAuth, verifyCsrf,    tasyProtocoloController.atualizarStatus);
-router.delete('/tasy/protocolos/:id',        adminAuth, verifyCsrf,    tasyProtocoloController.excluir);
+// Protocolo convênio (sincronizado do Oracle)
+router.get ('/tasy/protocolos',        adminAuth, csrfMiddleware, tasyProtocoloController.list);
+router.post('/tasy/protocolos/sync',   adminAuth, verifyCsrf,    tasyProtocoloController.sync);
+router.get ('/tasy/protocolos/export', adminAuth, exportLimiter,  tasyProtocoloController.export);
 
 // Configurações (protegido)
 router.get('/settings', adminAuth, settingsController.showSettings);

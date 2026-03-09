@@ -9,70 +9,110 @@
   <style>
     /* Status badges */
     .badge { display:inline-block; padding:2px 10px; border-radius:99px; font-size:.72rem; font-weight:700; white-space:nowrap; }
-    .badge-rascunho  { background:#f3f4f6; color:#6b7280; }
-    .badge-enviado   { background:#dbeafe; color:#1d4ed8; }
-    .badge-faturado  { background:#fef3c7; color:#d97706; }
-    .badge-pago      { background:#d1fae5; color:#16a34a; }
-    .badge-cancelado { background:#fee2e2; color:#dc2626; }
+    .badge-prot-1 { background:#eff6ff; color:#1d4ed8; }
+    .badge-prot-2 { background:#f0fdf4; color:#15803d; }
+    .badge-prot-3 { background:#fff7ed; color:#c2410c; }
+    .badge-prot-4 { background:#fef2f2; color:#b91c1c; }
+    .badge-prot-5 { background:#f3f4f6; color:#6b7280; }
 
     /* Cards */
-    .card-rascunho  { border-top:4px solid #9ca3af; }
-    .card-enviado   { border-top:4px solid #1d4ed8; }
-    .card-faturado  { border-top:4px solid #d97706; }
-    .card-pago      { border-top:4px solid #16a34a; }
-    .card-rascunho  .card-value { color:#6b7280; }
-    .card-enviado   .card-value { color:#1d4ed8; }
-    .card-faturado  .card-value { color:#d97706; }
-    .card-pago      .card-value { color:#16a34a; }
-    .card-sub { font-size:.78rem; color:#6b7280; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .card-prot-1 { border-top:4px solid #1d4ed8; }
+    .card-prot-2 { border-top:4px solid #15803d; }
+    .card-prot-3 { border-top:4px solid #c2410c; }
+    .card-prot-4 { border-top:4px solid #b91c1c; }
+    .card-prot-5 { border-top:4px solid #9ca3af; }
+    .card-prot-g { border-top:4px solid #0d4e8b; }
+    .card-prot-1 .card-value { color:#1d4ed8; }
+    .card-prot-2 .card-value { color:#15803d; }
+    .card-prot-3 .card-value { color:#c2410c; }
+    .card-prot-4 .card-value { color:#b91c1c; }
+    .card-prot-5 .card-value { color:#9ca3af; }
+    .card-prot-g .card-value { color:#0d4e8b; }
+    .card-sub  { font-size:.78rem; color:#6b7280; margin-top:2px; }
+    .card-sub2 { font-size:.72rem; color:#9ca3af; margin-top:1px; }
 
-    /* Tabs */
-    .tasy-tabs { display:flex; gap:4px; margin-bottom:20px; border-bottom:2px solid #e5e7eb; }
-    .tasy-tab { padding:8px 18px; font-size:.85rem; font-weight:600; color:#6b7280; text-decoration:none; border-radius:6px 6px 0 0; border:2px solid transparent; border-bottom:none; margin-bottom:-2px; }
-    .tasy-tab:hover { color:#0d4e8b; }
-    .tasy-tab.active { color:#0d4e8b; background:#fff; border-color:#e5e7eb; border-bottom-color:#fff; }
-
-    /* Filtros */
-    .filter-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:12px 16px; margin-bottom:16px; }
-    .filter-bar select, .filter-bar input[type="text"] { padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:.82rem; color:#1f2937; background:#f9fafb; }
+    /* Filter bar */
+    .filter-bar {
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07);
+      padding:12px 16px; margin-bottom:16px;
+    }
+    .filter-bar input[type="text"],
+    .filter-bar input[type="date"] {
+      padding:6px 10px; border:1px solid #d1d5db; border-radius:6px;
+      font-size:.82rem; color:#1f2937; background:#f9fafb;
+    }
     .btn-filter { padding:6px 14px; background:#0d4e8b; color:#fff; border:none; border-radius:6px; font-size:.82rem; cursor:pointer; font-weight:600; }
     .btn-clear  { font-size:.82rem; color:#6b7280; text-decoration:none; }
     .btn-clear:hover { color:#0d4e8b; }
 
+    /* Multi-select */
+    .ms-wrap { position:relative; display:inline-block; }
+    .ms-btn {
+      padding:6px 28px 6px 10px; border:1px solid #d1d5db; border-radius:6px;
+      font-size:.82rem; color:#1f2937; background:#f9fafb; cursor:pointer;
+      white-space:nowrap; min-width:130px; position:relative; user-select:none;
+    }
+    .ms-btn::after { content:'▾'; position:absolute; right:8px; top:50%; transform:translateY(-50%); color:#9ca3af; font-size:.7rem; }
+    .ms-btn.has-value { border-color:#0d4e8b; color:#0d4e8b; background:#eff6ff; }
+    .ms-panel {
+      display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:200;
+      background:#fff; border:1px solid #d1d5db; border-radius:8px;
+      box-shadow:0 4px 16px rgba(0,0,0,.12); min-width:180px; max-height:240px;
+      overflow-y:auto; padding:4px 0;
+    }
+    .ms-panel.open { display:block; }
+    .ms-panel label { display:flex; align-items:center; gap:8px; padding:6px 12px; font-size:.82rem; cursor:pointer; }
+    .ms-panel label:hover { background:#f3f4f6; }
+    .ms-panel input[type="checkbox"] { accent-color:#0d4e8b; }
+
     /* Toolbar */
     .toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-    .btn-novo { padding:7px 16px; background:#0d4e8b; color:#fff; border:none; border-radius:6px; font-size:.85rem; cursor:pointer; font-weight:600; }
-    .btn-novo:hover { background:#0b4278; }
+    .toolbar-left  { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .toolbar-right { display:flex; align-items:center; gap:8px; }
+    .sync-info { font-size:.78rem; color:#9ca3af; }
+    .btn-sync   { padding:6px 14px; background:#fff; color:#0d4e8b; border:1px solid #0d4e8b; border-radius:6px; font-size:.82rem; cursor:pointer; font-weight:600; transition:all .15s; }
+    .btn-sync:hover    { background:#0d4e8b; color:#fff; }
+    .btn-sync:disabled { opacity:.5; cursor:not-allowed; }
+    .btn-export { padding:6px 14px; background:#fff; color:#374151; border:1px solid #d1d5db; border-radius:6px; font-size:.82rem; cursor:pointer; font-weight:600; text-decoration:none; display:inline-block; }
+    .btn-export:hover { border-color:#0d4e8b; color:#0d4e8b; }
+
+    /* Table helpers */
+    td.valor  { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    td.center { text-align:center; }
+    .td-sub   { font-size:.73rem; color:#9ca3af; }
+    th.sortable { cursor:pointer; user-select:none; white-space:nowrap; }
+    th.sortable:hover { background:#f0f4f8; }
+    .sort-icon { font-size:.65rem; margin-left:4px; color:#9ca3af; }
+    th.sortable.active .sort-icon { color:#0d4e8b; }
+
+    /* Alert */
+    .inconsistencia { font-size:.72rem; color:#b91c1c; font-weight:600; margin-top:2px; }
+
+    /* Date shortcuts */
+    .date-shortcuts { display:flex; gap:4px; flex-wrap:wrap; align-items:center; }
+    .btn-shortcut { padding:4px 10px; font-size:.75rem; border:1px solid #d1d5db; border-radius:5px; background:#f9fafb; color:#374151; cursor:pointer; white-space:nowrap; }
+    .btn-shortcut:hover { border-color:#0d4e8b; color:#0d4e8b; background:#eff6ff; }
 
     /* Modal */
     .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000; align-items:center; justify-content:center; }
     .modal-overlay.open { display:flex; }
-    .modal { background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,.18); width:100%; max-width:520px; padding:28px 32px; position:relative; }
-    .modal h3 { margin:0 0 20px; font-size:1.05rem; color:#1f2937; }
-    .modal-close { position:absolute; top:14px; right:16px; background:none; border:none; font-size:1.3rem; cursor:pointer; color:#9ca3af; }
-    .modal-close:hover { color:#374151; }
-    .form-row { margin-bottom:14px; }
-    .form-row label { display:block; font-size:.82rem; font-weight:600; color:#374151; margin-bottom:4px; }
-    .form-row input, .form-row select, .form-row textarea {
-      width:100%; padding:7px 10px; border:1px solid #d1d5db; border-radius:6px;
-      font-size:.85rem; color:#1f2937; background:#f9fafb; box-sizing:border-box;
+    .modal-box { background:#fff; border-radius:14px; box-shadow:0 8px 40px rgba(0,0,0,.18); max-width:600px; width:94%; max-height:88vh; overflow-y:auto; padding:28px 32px; position:relative; }
+    .modal-close { position:absolute; top:14px; right:18px; font-size:1.3rem; cursor:pointer; color:#9ca3af; border:none; background:none; }
+    .modal-close:hover { color:#111827; }
+    .modal-title { font-size:1rem; font-weight:700; color:#111827; margin-bottom:18px; padding-right:24px; }
+    .modal-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 20px; }
+    .modal-field label { font-size:.72rem; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:.04em; }
+    .modal-field p { font-size:.85rem; color:#111827; margin-top:2px; word-break:break-word; }
+    .modal-section { grid-column:1/-1; border-top:1px solid #f3f4f6; margin-top:6px; padding-top:10px; font-size:.75rem; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.06em; }
+    .modal-row-click { cursor:pointer; }
+    .modal-row-click:hover td { background:#f8fafc !important; }
+
+    @media (max-width:768px) {
+      .filter-bar { flex-direction:column; align-items:flex-start; }
+      .toolbar    { flex-direction:column; align-items:flex-start; }
+      .modal-grid { grid-template-columns:1fr; }
     }
-    .form-row textarea { height:68px; resize:vertical; }
-    .form-row-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    .preview-box { background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:10px 14px; font-size:.83rem; color:#0369a1; margin-bottom:14px; }
-    .form-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
-    .btn-salvar  { padding:8px 20px; background:#0d4e8b; color:#fff; border:none; border-radius:6px; font-size:.85rem; cursor:pointer; font-weight:600; }
-    .btn-cancel2 { padding:8px 16px; background:#f3f4f6; color:#374151; border:1px solid #d1d5db; border-radius:6px; font-size:.85rem; cursor:pointer; }
-
-    /* Ações inline */
-    .btn-action { padding:3px 10px; border-radius:5px; font-size:.75rem; font-weight:600; cursor:pointer; border:1px solid; }
-    .btn-editar { background:#f0f9ff; color:#1d4ed8; border-color:#bfdbfe; }
-    .btn-excluir { background:#fff1f2; color:#dc2626; border-color:#fecdd3; }
-    .btn-editar:hover  { background:#dbeafe; }
-    .btn-excluir:hover { background:#fee2e2; }
-
-    td.valor { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
-    td.center { text-align:center; }
   </style>
 </head>
 <body>
@@ -82,107 +122,209 @@
     <h2 class="page-title">Tasy &mdash; Protocolo Convênio</h2>
 
     <!-- Tabs -->
-    <div class="tasy-tabs">
-      <a href="/admin/tasy"            class="tasy-tab">Contas de Paciente</a>
-      <a href="/admin/tasy/protocolos" class="tasy-tab active">Protocolo Convênio</a>
+    <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid #e5e7eb;">
+      <a href="/admin/tasy" style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#6b7280;text-decoration:none;border-radius:6px 6px 0 0;border:2px solid transparent;border-bottom:none;margin-bottom:-2px;">Contas de Paciente</a>
+      <a href="/admin/tasy/protocolos" style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#0d4e8b;background:#fff;border:2px solid #e5e7eb;border-bottom-color:#fff;border-radius:6px 6px 0 0;text-decoration:none;margin-bottom:-2px;">Protocolo Convênio</a>
     </div>
 
-    <!-- Cards de resumo -->
-    <div class="cards" style="grid-template-columns:repeat(4,1fr);">
-      <div class="card card-rascunho">
-        <div class="card-value"><%= cards.rascunho.qt.toLocaleString('pt-BR') %></div>
-        <div class="card-label">Rascunho</div>
-        <div class="card-sub"><%= cards.rascunho.vl %></div>
-      </div>
-      <div class="card card-enviado">
-        <div class="card-value"><%= cards.enviado.qt.toLocaleString('pt-BR') %></div>
-        <div class="card-label">Enviado ao Convênio</div>
-        <div class="card-sub"><%= cards.enviado.vl %></div>
-      </div>
-      <div class="card card-faturado">
-        <div class="card-value"><%= cards.faturado.qt.toLocaleString('pt-BR') %></div>
-        <div class="card-label">Faturado (NF emitida)</div>
-        <div class="card-sub"><%= cards.faturado.vl %></div>
-      </div>
-      <div class="card card-pago">
-        <div class="card-value"><%= cards.pago.qt.toLocaleString('pt-BR') %></div>
-        <div class="card-label">Pago</div>
-        <div class="card-sub"><%= cards.pago.vl %></div>
+    <!-- Cards por status (6 cards: 5 status + geral) -->
+    <div class="cards" style="grid-template-columns:repeat(6,1fr);">
+      <% for (const [k, label] of Object.entries(statusMap)) { %>
+        <% const n = Number(k); const c = cards[n] || {qt:0,vl:'R$ 0,00'}; %>
+        <div class="card card-prot-<%= n %>">
+          <div class="card-value"><%= c.qt.toLocaleString('pt-BR') %></div>
+          <div class="card-label"><%= label %></div>
+          <div class="card-sub"><%= c.vl %></div>
+        </div>
+      <% } %>
+      <div class="card card-prot-g" style="grid-column:span 6;display:none;" id="card-geral-wrap">
       </div>
     </div>
 
     <!-- Filtros -->
-    <form method="GET" action="/admin/tasy/protocolos" class="filter-bar">
-      <input type="text" name="convenio" placeholder="Filtrar convênio"
-             value="<%= filters.convenio || '' %>" style="min-width:200px;">
-      <select name="status">
-        <option value="">Todos os status</option>
-        <% ['rascunho','enviado','faturado','pago','cancelado'].forEach(s => { %>
-          <option value="<%= s %>" <%= filters.status === s ? 'selected' : '' %>>
-            <%= {rascunho:'Rascunho', enviado:'Enviado', faturado:'Faturado', pago:'Pago', cancelado:'Cancelado'}[s] %>
-          </option>
-        <% }) %>
-      </select>
+    <%
+      function toArr(v) { if (!v) return []; return Array.isArray(v) ? v : [v]; }
+      const fStatus   = toArr(filters.status).map(String);
+      const fConvenio = toArr(filters.convenio).map(String);
+    %>
+    <form method="GET" action="/admin/tasy/protocolos" class="filter-bar" id="filter-form">
+      <input type="text" name="q" placeholder="Nº protocolo / observação"
+             value="<%= filters.q || '' %>" style="min-width:200px;">
+
+      <!-- Status multi-select -->
+      <div class="ms-wrap">
+        <div class="ms-btn <%= fStatus.length ? 'has-value' : '' %>" onclick="msToggle(this)">
+          <%= fStatus.length ? fStatus.length + ' status' : 'Todos os status' %>
+        </div>
+        <div class="ms-panel">
+          <% for (const [k, label] of Object.entries(statusMap)) { %>
+            <label>
+              <input type="checkbox" name="status" value="<%= k %>" <%= fStatus.includes(k) ? 'checked' : '' %>>
+              <%= label %>
+            </label>
+          <% } %>
+        </div>
+      </div>
+
+      <!-- Convênio multi-select -->
+      <div class="ms-wrap">
+        <div class="ms-btn <%= fConvenio.length ? 'has-value' : '' %>" onclick="msToggle(this)">
+          <%= fConvenio.length ? fConvenio.length + ' convênio(s)' : 'Todos os convênios' %>
+        </div>
+        <div class="ms-panel">
+          <% convenios.forEach(cd => { %>
+            <label>
+              <input type="checkbox" name="convenio" value="<%= cd %>" <%= fConvenio.includes(String(cd)) ? 'checked' : '' %>>
+              Conv. #<%= cd %>
+            </label>
+          <% }) %>
+        </div>
+      </div>
+
+      <!-- Período -->
+      <div class="date-shortcuts">
+        <input type="date" name="dtInicio" id="dtInicio" value="<%= filters.dtInicio || '' %>" title="Período inicial de">
+        <input type="date" name="dtFim"    id="dtFim"    value="<%= filters.dtFim    || '' %>" title="Período inicial até">
+        <button type="button" class="btn-shortcut" onclick="setShortcut(30)">30d</button>
+        <button type="button" class="btn-shortcut" onclick="setShortcut(90)">90d</button>
+        <button type="button" class="btn-shortcut" onclick="setShortcut('mes')">Este mês</button>
+        <button type="button" class="btn-shortcut" onclick="setShortcut('trim')">Trim.</button>
+        <button type="button" class="btn-shortcut" onclick="setShortcut('ano')">Este ano</button>
+      </div>
+
       <button type="submit" class="btn-filter">Filtrar</button>
       <a href="/admin/tasy/protocolos" class="btn-clear">Limpar</a>
     </form>
 
     <!-- Toolbar -->
     <div class="toolbar">
-      <span style="font-size:.85rem;color:#374151;">
-        <strong><%= total.toLocaleString('pt-BR') %></strong> protocolo<%= total !== 1 ? 's' : '' %>
-      </span>
-      <button class="btn-novo" id="btn-novo">+ Novo Protocolo</button>
+      <div class="toolbar-left">
+        <span style="font-size:.85rem;color:#374151;">
+          <strong><%= total.toLocaleString('pt-BR') %></strong> protocolo<%= total !== 1 ? 's' : '' %>
+        </span>
+        <% if (lastSync) { %>
+          <span class="sync-info">Última sincronização: <%= lastSync %></span>
+        <% } else { %>
+          <span class="sync-info" style="color:#dc2626;">Nenhuma sincronização realizada</span>
+        <% } %>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn-sync" id="btn-sync">&#8635; Sincronizar agora</button>
+        <a href="/admin/tasy/protocolos/export?<%= new URLSearchParams(filters).toString() %>"
+           class="btn-export">&#8595; Exportar CSV</a>
+      </div>
     </div>
 
     <!-- Tabela -->
+    <%
+      function sortUrl(col) {
+        const newOrder = (sort === col && order === 'DESC') ? 'asc' : 'desc';
+        const p = { ...filters, sort: col, order: newOrder, page: 0 };
+        return '/admin/tasy/protocolos?' + new URLSearchParams(p).toString();
+      }
+      function sortIcon(col) {
+        if (sort !== col) return '<span class="sort-icon">⇅</span>';
+        return '<span class="sort-icon">' + (order === 'ASC' ? '↑' : '↓') + '</span>';
+      }
+    %>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Nº Protocolo</th>
-            <th>Convênio</th>
-            <th>Período (contas)</th>
-            <th class="center">Contas</th>
-            <th style="text-align:right;">Valor Total</th>
-            <th class="center">Status</th>
-            <th>Nº NF</th>
-            <th>Emissão</th>
-            <th>Envio</th>
-            <th>Faturamento</th>
-            <th>Pagamento</th>
-            <th class="center">Ações</th>
+            <th class="sortable <%= sort==='nr_seq_protocolo'?'active':'' %>"
+                onclick="location.href='<%- sortUrl('nr_seq_protocolo') %>'">
+              Seq <%- sortIcon('nr_seq_protocolo') %>
+            </th>
+            <th class="sortable <%= sort==='nr_protocolo'?'active':'' %>"
+                onclick="location.href='<%- sortUrl('nr_protocolo') %>'">
+              Protocolo <%- sortIcon('nr_protocolo') %>
+            </th>
+            <th>Conv.</th>
+            <th class="sortable <%= sort==='ie_status_protocolo'?'active':'' %>"
+                onclick="location.href='<%- sortUrl('ie_status_protocolo') %>'">
+              Status <%- sortIcon('ie_status_protocolo') %>
+            </th>
+            <th class="sortable <%= sort==='dt_periodo_inicial'?'active':'' %>"
+                onclick="location.href='<%- sortUrl('dt_periodo_inicial') %>'">
+              Período <%- sortIcon('dt_periodo_inicial') %>
+            </th>
+            <th>Enviado / Retorno</th>
+            <th class="sortable <%= sort==='dt_definitivo'?'active':'' %>"
+                onclick="location.href='<%- sortUrl('dt_definitivo') %>'">
+              Definitivo <%- sortIcon('dt_definitivo') %>
+            </th>
+            <th>Vencimento</th>
+            <th class="sortable <%= sort==='vl_recebimento'?'active':'' %>" style="text-align:right;"
+                onclick="location.href='<%- sortUrl('vl_recebimento') %>'">
+              Recebimento <%- sortIcon('vl_recebimento') %>
+            </th>
           </tr>
         </thead>
         <tbody>
           <% if (protocolos.length === 0) { %>
-            <tr><td colspan="12" style="text-align:center;color:#9ca3af;padding:32px;">
-              Nenhum protocolo encontrado. Clique em <strong>+ Novo Protocolo</strong> para criar.
+            <tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:32px;">
+              Nenhum protocolo encontrado.
+              <% if (!lastSync) { %>Realize a sincronização para importar os dados do Tasy.<% } %>
             </td></tr>
           <% } else { %>
             <% protocolos.forEach(p => { %>
-              <tr data-id="<%= p.id %>">
-                <td><code style="font-size:.8rem;"><%= p.nr_protocolo %></code></td>
-                <td style="font-size:.82rem;"><%= p.ds_convenio %></td>
-                <td style="font-size:.78rem;color:#6b7280;">
-                  <%= p.dt_inicio || '—' %> → <%= p.dt_fim || '—' %>
+              <tr class="modal-row-click" onclick="openModal(this)"
+                  data-prot="<%- JSON.stringify(p).replace(/\"/g,'&quot;') %>">
+                <td><code style="font-size:.8rem;">#<%= p.nr_seq_protocolo %></code></td>
+                <td style="font-size:.83rem; max-width:260px;">
+                  <%= p.nr_protocolo %>
+                  <% if (p.ds_inconsistencia) { %>
+                    <div class="inconsistencia">⚠ <%= p.ds_inconsistencia %></div>
+                  <% } %>
                 </td>
-                <td class="center"><%= (p.qt_contas || 0).toLocaleString('pt-BR') %></td>
-                <td class="valor"><%= p.vl_total_fmt %></td>
+                <td style="font-size:.82rem; color:#6b7280;">
+                  #<%= p.cd_convenio || '—' %>
+                </td>
                 <td class="center">
-                  <span class="badge badge-<%= p.status %>">
-                    <%= {rascunho:'Rascunho',enviado:'Enviado',faturado:'Faturado',pago:'Pago',cancelado:'Cancelado'}[p.status] || p.status %>
-                  </span>
+                  <% if (p.ie_status_protocolo) { %>
+                    <span class="badge badge-prot-<%= p.ie_status_protocolo %>"><%= p.ds_status_protocolo %></span>
+                  <% } else { %>
+                    <span style="color:#d1d5db;">—</span>
+                  <% } %>
                 </td>
-                <td style="font-size:.82rem;"><%= p.nr_nota_fiscal || '—' %></td>
-                <td style="font-size:.82rem;"><%= p.dt_emissao_fmt %></td>
-                <td style="font-size:.82rem;"><%= p.dt_envio_fmt %></td>
-                <td style="font-size:.82rem;"><%= p.dt_faturamento_fmt %></td>
-                <td style="font-size:.82rem;"><%= p.dt_pagamento_fmt %></td>
-                <td class="center" style="white-space:nowrap;">
-                  <button class="btn-action btn-editar" onclick="abrirEditar(<%- JSON.stringify(p) %>)">Editar</button>
-                  <% if (p.status === 'rascunho' || p.status === 'cancelado') { %>
-                    <button class="btn-action btn-excluir" onclick="excluir('<%= p.id %>', '<%= p.nr_protocolo %>')">Excluir</button>
+                <td style="font-size:.82rem;">
+                  <% if (p.dt_periodo_inicial) { %>
+                    <%= p.dt_periodo_inicial %>
+                    <% if (p.dt_periodo_final && p.dt_periodo_final !== p.dt_periodo_inicial) { %>
+                      <div class="td-sub">até <%= p.dt_periodo_final %></div>
+                    <% } %>
+                  <% } else { %>
+                    <span style="color:#d1d5db;">—</span>
+                  <% } %>
+                </td>
+                <td style="font-size:.82rem;">
+                  <% if (p.dt_envio) { %>
+                    <%= p.dt_envio %>
+                    <% if (p.dt_retorno) { %>
+                      <div class="td-sub">Ret: <%= p.dt_retorno %></div>
+                    <% } %>
+                  <% } else { %>
+                    <span style="color:#d1d5db;">—</span>
+                  <% } %>
+                </td>
+                <td style="font-size:.82rem;">
+                  <%= p.dt_definitivo || '<span style="color:#d1d5db;">—</span>' %>
+                </td>
+                <td style="font-size:.82rem;">
+                  <% if (p.dt_vencimento) { %>
+                    <%= p.dt_vencimento %>
+                    <% if (p.dt_entrega_convenio) { %>
+                      <div class="td-sub">Entrega: <%= p.dt_entrega_convenio %></div>
+                    <% } %>
+                  <% } else { %>
+                    <span style="color:#d1d5db;">—</span>
+                  <% } %>
+                </td>
+                <td class="valor">
+                  <% if (p.vl_recebimento_raw > 0) { %>
+                    <%= p.vl_recebimento %>
+                  <% } else { %>
+                    <span style="color:#d1d5db;">—</span>
                   <% } %>
                 </td>
               </tr>
@@ -206,195 +348,112 @@
     <% } %>
   </main>
 
-  <!-- Modal: Novo Protocolo -->
-  <div class="modal-overlay" id="modal-novo">
-    <div class="modal">
-      <button class="modal-close" id="fechar-novo">&times;</button>
-      <h3>Novo Protocolo de Cobrança</h3>
-      <form method="POST" action="/admin/tasy/protocolos" id="form-novo">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-
-        <div class="form-row">
-          <label>Convênio <span style="color:#dc2626">*</span></label>
-          <select name="ds_convenio" id="novo-convenio" required>
-            <option value="">Selecione o convênio...</option>
-            <% convenios.forEach(c => { %>
-              <option value="<%= c %>"><%= c %></option>
-            <% }) %>
-          </select>
-        </div>
-
-        <div class="form-row form-row-2">
-          <div>
-            <label>Data entrada (de)</label>
-            <input type="date" name="dtInicio" id="novo-dtInicio">
-          </div>
-          <div>
-            <label>Data entrada (até)</label>
-            <input type="date" name="dtFim" id="novo-dtFim">
-          </div>
-        </div>
-
-        <div class="preview-box" id="preview-box" style="display:none;">
-          Carregando...
-        </div>
-
-        <div class="form-row">
-          <label>Nº Protocolo <span style="font-weight:400;color:#9ca3af;">(deixe em branco para gerar automaticamente)</span></label>
-          <input type="text" name="nr_protocolo" placeholder="Ex: PROT-202503-001">
-        </div>
-
-        <div class="form-row">
-          <label>Observações</label>
-          <textarea name="obs" placeholder="Informações adicionais sobre este protocolo..."></textarea>
-        </div>
-
-        <div class="form-actions">
-          <button type="button" class="btn-cancel2" id="cancelar-novo">Cancelar</button>
-          <button type="submit" class="btn-salvar">Criar Protocolo</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Modal: Editar Status -->
-  <div class="modal-overlay" id="modal-editar">
-    <div class="modal">
-      <button class="modal-close" id="fechar-editar">&times;</button>
-      <h3 id="editar-titulo">Editar Protocolo</h3>
-      <div class="form-row">
-        <label>Status</label>
-        <select id="editar-status">
-          <option value="rascunho">Rascunho</option>
-          <option value="enviado">Enviado ao Convênio</option>
-          <option value="faturado">Faturado (NF emitida)</option>
-          <option value="pago">Pago</option>
-          <option value="cancelado">Cancelado</option>
-        </select>
-      </div>
-      <div class="form-row">
-        <label>Nº Nota Fiscal</label>
-        <input type="text" id="editar-nf" placeholder="Ex: NF-12345">
-      </div>
-      <div class="form-row form-row-2">
-        <div>
-          <label>Data envio ao convênio</label>
-          <input type="date" id="editar-dt-envio">
-        </div>
-        <div>
-          <label>Data faturamento (NF)</label>
-          <input type="date" id="editar-dt-faturamento">
-        </div>
-      </div>
-      <div class="form-row">
-        <label>Data pagamento</label>
-        <input type="date" id="editar-dt-pagamento">
-      </div>
-      <div class="form-row">
-        <label>Observações</label>
-        <textarea id="editar-obs"></textarea>
-      </div>
-      <div class="form-actions">
-        <button type="button" class="btn-cancel2" id="cancelar-editar">Cancelar</button>
-        <button type="button" class="btn-salvar" id="salvar-editar">Salvar</button>
-      </div>
+  <!-- Modal de detalhe -->
+  <div class="modal-overlay" id="modal-overlay" onclick="closeModalOutside(event)">
+    <div class="modal-box">
+      <button class="modal-close" onclick="closeModal()">✕</button>
+      <div class="modal-title" id="modal-title">Detalhes do Protocolo</div>
+      <div class="modal-grid" id="modal-body"></div>
     </div>
   </div>
 
   <%- include('_footer') %>
 
   <script>
-  (function () {
-    const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  // Multi-select
+  function msToggle(btn) {
+    const panel = btn.nextElementSibling;
+    const isOpen = panel.classList.contains('open');
+    document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+    if (!isOpen) panel.classList.add('open');
+  }
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.ms-wrap'))
+      document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+  });
 
-    // ---- Modal Novo ----
-    const modalNovo  = document.getElementById('modal-novo');
-    document.getElementById('btn-novo').addEventListener('click', () => modalNovo.classList.add('open'));
-    document.getElementById('fechar-novo').addEventListener('click', () => modalNovo.classList.remove('open'));
-    document.getElementById('cancelar-novo').addEventListener('click', () => modalNovo.classList.remove('open'));
-    modalNovo.addEventListener('click', e => { if (e.target === modalNovo) modalNovo.classList.remove('open'); });
+  // Atalhos de período
+  function setShortcut(mode) {
+    const today = new Date();
+    const fmt = d => d.toISOString().slice(0, 10);
+    let ini = today, fim = today;
+    if (typeof mode === 'number') { ini = new Date(today); ini.setDate(today.getDate() - mode); }
+    else if (mode === 'mes')  { ini = new Date(today.getFullYear(), today.getMonth(), 1); }
+    else if (mode === 'trim') { const q = Math.floor(today.getMonth() / 3); ini = new Date(today.getFullYear(), q * 3, 1); }
+    else if (mode === 'ano')  { ini = new Date(today.getFullYear(), 0, 1); }
+    document.getElementById('dtInicio').value = fmt(ini);
+    document.getElementById('dtFim').value    = fmt(fim);
+    document.getElementById('filter-form').submit();
+  }
 
-    // Preview ao selecionar convênio ou datas
-    let previewTimer;
-    function atualizarPreview() {
-      const convenio = document.getElementById('novo-convenio').value;
-      const dtInicio = document.getElementById('novo-dtInicio').value;
-      const dtFim    = document.getElementById('novo-dtFim').value;
-      const box = document.getElementById('preview-box');
-      if (!convenio) { box.style.display = 'none'; return; }
-      box.style.display = 'block';
-      box.textContent = 'Calculando...';
-      clearTimeout(previewTimer);
-      previewTimer = setTimeout(() => {
-        const p = new URLSearchParams({ convenio, dtInicio, dtFim });
-        fetch('/admin/tasy/protocolos/preview?' + p)
-          .then(r => r.json())
-          .then(d => {
-            box.textContent = `${d.qt.toLocaleString('pt-BR')} contas · Total: ${d.vlFmt}`;
-          })
-          .catch(() => { box.textContent = 'Erro ao calcular.'; });
-      }, 400);
-    }
-    document.getElementById('novo-convenio').addEventListener('change', atualizarPreview);
-    document.getElementById('novo-dtInicio').addEventListener('change', atualizarPreview);
-    document.getElementById('novo-dtFim').addEventListener('change', atualizarPreview);
+  // Modal
+  function openModal(tr) {
+    const p = JSON.parse(tr.getAttribute('data-prot'));
+    document.getElementById('modal-title').textContent = 'Protocolo #' + p.nr_seq_protocolo;
 
-    // ---- Modal Editar ----
-    const modalEditar = document.getElementById('modal-editar');
-    let editarId = null;
+    const d = v => (v && v !== '—') ? v : '—';
 
-    window.abrirEditar = function (p) {
-      editarId = p.id;
-      document.getElementById('editar-titulo').textContent = 'Editar — ' + p.nr_protocolo;
-      document.getElementById('editar-status').value         = p.status         || 'rascunho';
-      document.getElementById('editar-nf').value             = p.nr_nota_fiscal || '';
-      document.getElementById('editar-dt-envio').value       = p.dt_envio       || '';
-      document.getElementById('editar-dt-faturamento').value = p.dt_faturamento || '';
-      document.getElementById('editar-dt-pagamento').value   = p.dt_pagamento   || '';
-      document.getElementById('editar-obs').value            = p.obs            || '';
-      modalEditar.classList.add('open');
-    };
+    const fields = [
+      { section: 'Identificação' },
+      { label: 'Nº Seq.',       value: String(p.nr_seq_protocolo) },
+      { label: 'Protocolo',     value: p.nr_protocolo },
+      { label: 'Cód. Convênio', value: p.cd_convenio ? '#' + p.cd_convenio : '—' },
+      { label: 'Status',        value: p.ds_status_protocolo },
+      { label: 'Tipo',          value: p.ie_tipo_protocolo ? String(p.ie_tipo_protocolo) : '—' },
+      { label: 'Usuário',       value: p.nm_usuario || '—' },
 
-    document.getElementById('fechar-editar').addEventListener('click',  () => modalEditar.classList.remove('open'));
-    document.getElementById('cancelar-editar').addEventListener('click', () => modalEditar.classList.remove('open'));
-    modalEditar.addEventListener('click', e => { if (e.target === modalEditar) modalEditar.classList.remove('open'); });
+      { section: 'Período' },
+      { label: 'Início',   value: d(p.dt_periodo_inicial) },
+      { label: 'Fim',      value: d(p.dt_periodo_final) },
+      { label: 'Gerado em',value: p.dt_geracao || '—' },
 
-    document.getElementById('salvar-editar').addEventListener('click', async () => {
-      if (!editarId) return;
-      const body = {
-        status:          document.getElementById('editar-status').value,
-        nr_nota_fiscal:  document.getElementById('editar-nf').value,
-        dt_envio:        document.getElementById('editar-dt-envio').value,
-        dt_faturamento:  document.getElementById('editar-dt-faturamento').value,
-        dt_pagamento:    document.getElementById('editar-dt-pagamento').value,
-        obs:             document.getElementById('editar-obs').value,
-      };
-      try {
-        const r = await fetch('/admin/tasy/protocolos/' + editarId + '/status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
-          body: JSON.stringify(body),
-        });
-        const d = await r.json();
-        if (d.ok) { location.reload(); }
-        else alert('Erro: ' + (d.error || 'desconhecido'));
-      } catch { alert('Falha na requisição.'); }
+      { section: 'Datas de Trâmite' },
+      { label: 'Enviado em',       value: p.dt_envio      || '—' },
+      { label: 'Retorno',          value: p.dt_retorno    || '—' },
+      { label: 'Definitivo',       value: p.dt_definitivo || '—' },
+      { label: 'Vencimento',       value: d(p.dt_vencimento) },
+      { label: 'Entrega convênio', value: d(p.dt_entrega_convenio) },
+
+      { section: 'Financeiro' },
+      { label: 'Vl. Recebimento', value: p.vl_recebimento_raw > 0 ? p.vl_recebimento : '—' },
+
+      ...(p.ds_inconsistencia ? [{ section: 'Alertas' }, { label: '⚠ Inconsistência', value: p.ds_inconsistencia }] : []),
+      ...(p.ds_observacao     ? [{ section: 'Observação' }, { label: 'Obs.', value: p.ds_observacao }] : []),
+    ];
+
+    let html = '';
+    fields.forEach(f => {
+      if (f.section) html += `<div class="modal-section">${f.section}</div>`;
+      else           html += `<div class="modal-field"><label>${f.label}</label><p>${f.value}</p></div>`;
     });
 
-    // ---- Excluir ----
-    window.excluir = async function (id, nr) {
-      if (!confirm('Excluir protocolo ' + nr + '?')) return;
-      try {
-        const r = await fetch('/admin/tasy/protocolos/' + id, {
-          method: 'DELETE',
-          headers: { 'X-CSRF-Token': csrf },
-        });
-        const d = await r.json();
-        if (d.ok) location.reload();
+    document.getElementById('modal-body').innerHTML = html;
+    document.getElementById('modal-overlay').classList.add('open');
+  }
+  function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+  function closeModalOutside(e) { if (e.target === document.getElementById('modal-overlay')) closeModal(); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  // Sincronização
+  const btnSync = document.getElementById('btn-sync');
+  const csrf    = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  btnSync.addEventListener('click', () => {
+    if (!confirm('Sincronizar protocolos do Tasy agora?')) return;
+    btnSync.disabled = true;
+    btnSync.textContent = 'Sincronizando...';
+    fetch('/admin/tasy/protocolos/sync', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) { alert(`Sincronização concluída: ${d.count.toLocaleString('pt-BR')} protocolos.`); location.reload(); }
         else alert('Erro: ' + (d.error || 'desconhecido'));
-      } catch { alert('Falha na requisição.'); }
-    };
-  })();
+      })
+      .catch(() => alert('Falha na requisição.'))
+      .finally(() => { btnSync.disabled = false; btnSync.textContent = '↻ Sincronizar agora'; });
+  });
   </script>
 </body>
 </html>
