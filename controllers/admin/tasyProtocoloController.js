@@ -1,5 +1,5 @@
 const { Op, fn, col } = require('sequelize');
-const { TasyProtocolo } = require('../../models');
+const { TasyProtocolo, TasyConta } = require('../../models');
 const { syncProtocolos } = require('../../services/tasyService');
 const logger = require('../../utils/logger');
 const { PAGE_SIZE, formatDate, escapeCSV } = require('./helpers');
@@ -91,6 +91,26 @@ async function getConvenioList() {
   return rows.map(r => r.cd_convenio).filter(v => v != null);
 }
 
+// Retorna Map<nr_seq_protocolo, { qt_contas, vl_contas }> para os seqs fornecidos
+async function getContasTotais(seqs) {
+  if (!seqs.length) return new Map();
+  const rows = await TasyConta.findAll({
+    attributes: [
+      'nr_seq_protocolo',
+      [fn('COUNT', col('id')), 'qt'],
+      [fn('SUM', col('vl_conta')), 'vl'],
+    ],
+    where: { nr_seq_protocolo: { [Op.in]: seqs } },
+    group: ['nr_seq_protocolo'],
+    raw: true,
+  });
+  const map = new Map();
+  for (const r of rows) {
+    map.set(Number(r.nr_seq_protocolo), { qt: Number(r.qt || 0), vl: Number(r.vl || 0) });
+  }
+  return map;
+}
+
 const VALID_SORTS = [
   'dt_periodo_inicial', 'vl_recebimento', 'nr_protocolo',
   'ie_status_protocolo', 'dt_definitivo', 'nr_seq_protocolo',
@@ -116,6 +136,9 @@ exports.list = async (req, res) => {
       }),
     ]);
 
+    const seqs = rows.map(r => r.nr_seq_protocolo).filter(v => v != null);
+    const contasTotais = await getContasTotais(seqs);
+
     const protocolos = rows.map(r => ({
       id:                  r.id,
       nr_seq_protocolo:    r.nr_seq_protocolo,
@@ -138,6 +161,9 @@ exports.list = async (req, res) => {
       ds_inconsistencia:   r.ds_inconsistencia   || null,
       ds_observacao:       r.ds_observacao       || null,
       nm_usuario:          r.nm_usuario          || null,
+      qt_contas:           contasTotais.get(r.nr_seq_protocolo)?.qt ?? 0,
+      vl_contas_raw:       contasTotais.get(r.nr_seq_protocolo)?.vl ?? 0,
+      vl_contas:           formatBRL(contasTotais.get(r.nr_seq_protocolo)?.vl ?? 0),
     }));
 
     res.render('admin/tasy_protocolos', {

@@ -254,6 +254,7 @@
               Definitivo <%- sortIcon('dt_definitivo') %>
             </th>
             <th>Vencimento</th>
+            <th style="text-align:right;">Vl. Contas</th>
             <th class="sortable <%= sort==='vl_recebimento'?'active':'' %>" style="text-align:right;"
                 onclick="location.href='<%- sortUrl('vl_recebimento') %>'">
               Recebimento <%- sortIcon('vl_recebimento') %>
@@ -262,7 +263,7 @@
         </thead>
         <tbody>
           <% if (protocolos.length === 0) { %>
-            <tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:32px;">
+            <tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:32px;">
               Nenhum protocolo encontrado.
               <% if (!lastSync) { %>Realize a sincronização para importar os dados do Tasy.<% } %>
             </td></tr>
@@ -316,6 +317,14 @@
                     <% if (p.dt_entrega_convenio) { %>
                       <div class="td-sub">Entrega: <%= p.dt_entrega_convenio %></div>
                     <% } %>
+                  <% } else { %>
+                    <span style="color:#d1d5db;">—</span>
+                  <% } %>
+                </td>
+                <td class="valor">
+                  <% if (p.vl_contas_raw > 0) { %>
+                    <%= p.vl_contas %>
+                    <% if (p.qt_contas) { %><div class="td-sub" style="text-align:right;"><%= p.qt_contas %> conta<%= p.qt_contas !== 1 ? 's' : '' %></div><% } %>
                   <% } else { %>
                     <span style="color:#d1d5db;">—</span>
                   <% } %>
@@ -415,6 +424,7 @@
       { label: 'Entrega convênio', value: d(p.dt_entrega_convenio) },
 
       { section: 'Financeiro' },
+      { label: 'Vl. Contas',      value: p.vl_contas_raw > 0 ? `${p.vl_contas} (${p.qt_contas} conta${p.qt_contas !== 1 ? 's' : ''})` : '—' },
       { label: 'Vl. Recebimento', value: p.vl_recebimento_raw > 0 ? p.vl_recebimento : '—' },
 
       ...(p.ds_inconsistencia ? [{ section: 'Alertas' }, { label: '⚠ Inconsistência', value: p.ds_inconsistencia }] : []),
