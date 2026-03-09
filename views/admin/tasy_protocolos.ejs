@@ -127,18 +127,22 @@
       <a href="/admin/tasy/protocolos" style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#0d4e8b;background:#fff;border:2px solid #e5e7eb;border-bottom-color:#fff;border-radius:6px 6px 0 0;text-decoration:none;margin-bottom:-2px;">Protocolo Convênio</a>
     </div>
 
-    <!-- Cards por status (6 cards: 5 status + geral) -->
+    <!-- Cards por status (5 status + geral) -->
     <div class="cards" style="grid-template-columns:repeat(6,1fr);">
       <% for (const [k, label] of Object.entries(statusMap)) { %>
-        <% const n = Number(k); const c = cards[n] || {qt:0,vl:'R$ 0,00'}; %>
+        <% const n = Number(k); const c = cards[n] || {qt:0,vl:'R$ 0,00',vlContas:'R$ 0,00'}; %>
         <div class="card card-prot-<%= n %>">
           <div class="card-value"><%= c.qt.toLocaleString('pt-BR') %></div>
           <div class="card-label"><%= label %></div>
-          <div class="card-sub"><%= c.vl %></div>
+          <% if (c.vlContasRaw > 0) { %>
+            <div class="card-sub">Contas: <%= c.vlContas %></div>
+          <% } %>
+          <% if (c.vlRaw > 0) { %>
+            <div class="card-sub2">Receb: <%= c.vl %></div>
+          <% } %>
         </div>
       <% } %>
-      <div class="card card-prot-g" style="grid-column:span 6;display:none;" id="card-geral-wrap">
-      </div>
+      <div class="card card-prot-g" style="grid-column:span 6;display:none;" id="card-geral-wrap"></div>
     </div>
 
     <!-- Filtros -->

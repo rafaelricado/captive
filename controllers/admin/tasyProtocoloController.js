@@ -49,27 +49,69 @@ function buildWhere(query) {
 }
 
 async function getCards(where) {
-  const rows = await TasyProtocolo.findAll({
-    attributes: [
-      'ie_status_protocolo',
-      [fn('COUNT', col('id')), 'qt'],
-      [fn('SUM', col('vl_recebimento')), 'vl'],
-    ],
-    where,
-    group: ['ie_status_protocolo'],
-    raw: true,
-  });
+  // Agrega protocolos por status (count + vl_recebimento) e busca todos os seqs para cruzar contas
+  const [protAgg, allProts] = await Promise.all([
+    TasyProtocolo.findAll({
+      attributes: [
+        'ie_status_protocolo',
+        [fn('COUNT', col('id')), 'qt'],
+        [fn('SUM', col('vl_recebimento')), 'vl_receb'],
+      ],
+      where,
+      group: ['ie_status_protocolo'],
+      raw: true,
+    }),
+    TasyProtocolo.findAll({
+      attributes: ['nr_seq_protocolo', 'ie_status_protocolo'],
+      where,
+      raw: true,
+    }),
+  ]);
+
+  // Mapeia seq → status e busca totais de contas agrupados por seq
+  const seqStatusMap = new Map();
+  const seqs = [];
+  for (const r of allProts) {
+    if (r.nr_seq_protocolo != null) {
+      seqStatusMap.set(Number(r.nr_seq_protocolo), r.ie_status_protocolo);
+      seqs.push(Number(r.nr_seq_protocolo));
+    }
+  }
+
+  const contaByStatus = {};
+  if (seqs.length) {
+    const contaRows = await TasyConta.findAll({
+      attributes: ['nr_seq_protocolo', [fn('SUM', col('vl_conta')), 'vl']],
+      where: { nr_seq_protocolo: { [Op.in]: seqs } },
+      group: ['nr_seq_protocolo'],
+      raw: true,
+    });
+    for (const r of contaRows) {
+      const status = seqStatusMap.get(Number(r.nr_seq_protocolo));
+      if (status != null) {
+        contaByStatus[status] = (contaByStatus[status] || 0) + Number(r.vl || 0);
+      }
+    }
+  }
 
   const cards = {};
   for (const k of Object.keys(STATUS_PROTOCOLO)) {
     const n = Number(k);
-    const r = rows.find(x => Number(x.ie_status_protocolo) === n) || {};
-    cards[n] = { qt: Number(r.qt || 0), vl: formatBRL(r.vl || 0), vlRaw: Number(r.vl || 0) };
+    const r = protAgg.find(x => Number(x.ie_status_protocolo) === n) || {};
+    cards[n] = {
+      qt:          Number(r.qt || 0),
+      vl:          formatBRL(r.vl_receb || 0),
+      vlRaw:       Number(r.vl_receb || 0),
+      vlContas:    formatBRL(contaByStatus[n] || 0),
+      vlContasRaw: contaByStatus[n] || 0,
+    };
   }
   cards.geral = {
-    qt:    rows.reduce((s, r) => s + Number(r.qt || 0), 0),
-    vl:    formatBRL(rows.reduce((s, r) => s + Number(r.vl || 0), 0)),
-    vlRaw: rows.reduce((s, r) => s + Number(r.vl || 0), 0),
+    qt:          protAgg.reduce((s, r) => s + Number(r.qt || 0), 0),
+    vl:          formatBRL(protAgg.reduce((s, r) => s + Number(r.vl_receb || 0), 0)),
+    vlRaw:       protAgg.reduce((s, r) => s + Number(r.vl_receb || 0), 0),
+    vlContas:    formatBRL(Object.values(contaByStatus).reduce((s, v) => s + v, 0)),
+    vlContasRaw: Object.values(contaByStatus).reduce((s, v) => s + v, 0),
   };
   return cards;
 }
