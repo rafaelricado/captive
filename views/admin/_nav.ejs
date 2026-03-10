@@ -16,6 +16,7 @@
     <a href="/admin/security" class="<%= page === 'security' ? 'active' : '' %>">Segurança<% if (locals.securityUnreadCount > 0) { %> <span style="background:#dc2626;color:#fff;border-radius:99px;font-size:.65rem;padding:1px 6px;font-weight:700;vertical-align:middle;"><%= locals.securityUnreadCount %></span><% } %></a>
     <span class="nav-section">Hospitalar</span>
     <a href="/admin/tasy" class="<%= page === 'tasy' ? 'active' : '' %>">Contas Tasy</a>
+    <a href="/admin/tasy/ocupacao" class="<%= page === 'tasy-ocupacao' ? 'active' : '' %>">Ocupação</a>
     <a href="/admin/settings" class="<%= page === 'settings' ? 'active' : '' %>">Configurações</a>
     <div class="spacer"></div>
     <form method="POST" action="/admin/logout">

@@ -149,7 +149,7 @@ exports.ocupacao = async (req, res) => {
       : null;
 
     res.render('admin/tasy_ocupacao', {
-      page:          'tasy',
+      page:          'tasy-ocupacao',
       // Oracle em tempo real
       oracleData,
       oracleError,
@@ -168,7 +168,7 @@ exports.ocupacao = async (req, res) => {
   } catch (err) {
     logger.error(`[TasyOcupacao] ${err.message}`);
     res.status(500).render('admin/tasy_alertas_erro', {
-      page:      'tasy',
+      page:      'tasy-ocupacao',
       erro:      err.message,
       csrfToken: req.session.csrfToken,
     });
