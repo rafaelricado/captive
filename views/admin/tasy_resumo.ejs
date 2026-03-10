@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resumo por Convênio &mdash; Painel Admin</title>
+  <meta name="csrf-token" content="<%= csrfToken %>">
+  <%- include('_head') %>
+  <style>
+    .filter-bar {
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07);
+      padding:12px 16px; margin-bottom:16px;
+    }
+    .filter-bar input[type="date"] {
+      padding:6px 10px; border:1px solid #d1d5db; border-radius:6px;
+      font-size:.82rem; color:#1f2937; background:#f9fafb;
+    }
+    .btn-filter   { padding:6px 14px; background:#0d4e8b; color:#fff; border:none; border-radius:6px; font-size:.82rem; cursor:pointer; font-weight:600; }
+    .btn-clear    { font-size:.82rem; color:#6b7280; text-decoration:none; }
+    .btn-clear:hover { color:#0d4e8b; }
+    .btn-shortcut { padding:4px 10px; font-size:.75rem; border:1px solid #d1d5db; border-radius:5px; background:#f9fafb; color:#374151; cursor:pointer; white-space:nowrap; }
+    .btn-shortcut:hover { border-color:#0d4e8b; color:#0d4e8b; background:#eff6ff; }
+
+    .group-title {
+      font-size:.95rem; font-weight:700; color:#0d4e8b;
+      margin:24px 0 10px; padding-bottom:6px;
+      border-bottom:2px solid #e5e7eb;
+    }
+    td.valor { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    tfoot td  { font-weight:700; background:#f8fafc; }
+    .tfoot-label { color:#6b7280; font-size:.8rem; font-weight:600; }
+
+    .glosa-pct { font-size:.72rem; color:#b91c1c; }
+    @media (max-width:768px) {
+      .filter-bar { flex-direction:column; align-items:flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <%- include('_nav', { page: page }) %>
+
+  <main class="container">
+    <h2 class="page-title">Tasy &mdash; Resumo por Convênio</h2>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid #e5e7eb;">
+      <a href="/admin/tasy" style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#6b7280;text-decoration:none;border-radius:6px 6px 0 0;border:2px solid transparent;border-bottom:none;margin-bottom:-2px;">Contas de Paciente</a>
+      <a href="/admin/tasy/protocolos" style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#6b7280;text-decoration:none;border-radius:6px 6px 0 0;border:2px solid transparent;border-bottom:none;margin-bottom:-2px;">Protocolo Convênio</a>
+      <a href="/admin/tasy/resumo" style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#0d4e8b;background:#fff;border:2px solid #e5e7eb;border-bottom-color:#fff;border-radius:6px 6px 0 0;text-decoration:none;margin-bottom:-2px;">Resumo por Convênio</a>
+    </div>
+
+    <!-- Filtro de datas -->
+    <form method="GET" action="/admin/tasy/resumo" class="filter-bar" id="filter-form">
+      <label style="font-size:.82rem;font-weight:600;color:#374151;">Período:</label>
+      <input type="date" name="dtInicio" id="dtInicio" value="<%= filters.dtInicio || '' %>" title="De">
+      <input type="date" name="dtFim"    id="dtFim"    value="<%= filters.dtFim    || '' %>" title="Até">
+      <button type="button" class="btn-shortcut" onclick="setShortcut(30)">30d</button>
+      <button type="button" class="btn-shortcut" onclick="setShortcut(90)">90d</button>
+      <button type="button" class="btn-shortcut" onclick="setShortcut('mes')">Este mês</button>
+      <button type="button" class="btn-shortcut" onclick="setShortcut('trim')">Trim.</button>
+      <button type="button" class="btn-shortcut" onclick="setShortcut('ano')">Este ano</button>
+      <button type="submit" class="btn-filter">Filtrar</button>
+      <a href="/admin/tasy/resumo" class="btn-clear">Limpar</a>
+    </form>
+
+    <!-- Grupo: Contas de Paciente -->
+    <div class="group-title">Contas de Paciente por Convênio</div>
+    <% if (contas.length === 0) { %>
+      <p style="color:#9ca3af;font-size:.85rem;">Nenhuma conta encontrada para o período selecionado.</p>
+    <% } else { %>
+      <%
+        let totQtC = 0, totContaC = 0, totGlosaC = 0, totLiqC = 0;
+        contas.forEach(r => { totQtC += r.qt; totContaC += r.vl_conta_raw; totGlosaC += r.vl_glosa_raw; totLiqC += r.vl_liquido_raw; });
+        function fBRL(n) { return (n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+        function pct(g, t) { return t > 0 ? ((g/t)*100).toFixed(1) + '%' : '—'; }
+      %>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Convênio</th>
+              <th style="text-align:right;">Contas</th>
+              <th style="text-align:right;">Vl. Faturado</th>
+              <th style="text-align:right;">Vl. Glosa</th>
+              <th style="text-align:right;">% Glosa</th>
+              <th style="text-align:right;">Vl. Líquido</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% contas.forEach(r => { %>
+              <tr>
+                <td><%= r.ds_convenio %></td>
+                <td class="valor"><%= r.qt.toLocaleString('pt-BR') %></td>
+                <td class="valor"><%= r.vl_conta %></td>
+                <td class="valor"><%= r.vl_glosa %></td>
+                <td class="valor glosa-pct"><%= pct(r.vl_glosa_raw, r.vl_conta_raw) %></td>
+                <td class="valor"><%= r.vl_liquido %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td class="tfoot-label">Total (<%= contas.length %> convênios)</td>
+              <td class="valor"><%= totQtC.toLocaleString('pt-BR') %></td>
+              <td class="valor"><%= fBRL(totContaC) %></td>
+              <td class="valor"><%= fBRL(totGlosaC) %></td>
+              <td class="valor glosa-pct"><%= pct(totGlosaC, totContaC) %></td>
+              <td class="valor"><%= fBRL(totLiqC) %></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    <% } %>
+
+    <!-- Grupo: Protocolos de Convênio -->
+    <div class="group-title">Protocolos por Convênio</div>
+    <% if (protocolos.length === 0) { %>
+      <p style="color:#9ca3af;font-size:.85rem;">Nenhum protocolo encontrado para o período selecionado.</p>
+    <% } else { %>
+      <%
+        let totQtP = 0, totRecebP = 0;
+        protocolos.forEach(r => { totQtP += r.qt; totRecebP += r.vl_recebimento_raw; });
+      %>
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Cód.</th>
+              <th>Convênio</th>
+              <th style="text-align:right;">Protocolos</th>
+              <th style="text-align:right;">Vl. Recebimento</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% protocolos.forEach(r => { %>
+              <tr>
+                <td style="color:#9ca3af;font-size:.8rem;"><%= r.cd_convenio %></td>
+                <td><%= r.ds_nome_convenio %></td>
+                <td class="valor"><%= r.qt.toLocaleString('pt-BR') %></td>
+                <td class="valor"><%= r.vl_recebimento %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td></td>
+              <td class="tfoot-label">Total (<%= protocolos.length %> convênios)</td>
+              <td class="valor"><%= totQtP.toLocaleString('pt-BR') %></td>
+              <td class="valor"><%= fBRL(totRecebP) %></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    <% } %>
+  </main>
+
+  <script>
+    function setShortcut(range) {
+      const now = new Date();
+      let from, to = now.toISOString().slice(0, 10);
+      if (range === 'mes') {
+        from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+      } else if (range === 'trim') {
+        const q = Math.floor(now.getMonth() / 3);
+        from = new Date(now.getFullYear(), q * 3, 1).toISOString().slice(0, 10);
+      } else if (range === 'ano') {
+        from = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
+      } else {
+        const d = new Date(now); d.setDate(d.getDate() - Number(range));
+        from = d.toISOString().slice(0, 10);
+      }
+      document.getElementById('dtInicio').value = from;
+      document.getElementById('dtFim').value    = to;
+      document.getElementById('filter-form').submit();
+    }
+  </script>
+</body>
+</html>
