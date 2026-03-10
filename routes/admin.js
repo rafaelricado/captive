@@ -170,6 +170,7 @@ router.post('/tasy/protocolos/sync',          adminAuth, verifyCsrf,     tasyPro
 router.get ('/tasy/protocolos/sync/stream',   adminAuth,                 tasyProtocoloController.syncStream);
 router.get ('/tasy/protocolos/export',        adminAuth, exportLimiter,  tasyProtocoloController.export);
 router.get ('/tasy/resumo',                   adminAuth, csrfMiddleware, tasyProtocoloController.resumo);
+router.get ('/tasy/resumo/contas',            adminAuth, csrfMiddleware, tasyProtocoloController.resumoContas);
 
 // Configurações (protegido)
 router.get('/settings', adminAuth, settingsController.showSettings);

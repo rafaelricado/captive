@@ -30,8 +30,12 @@
     td.valor { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
     tfoot td  { font-weight:700; background:#f8fafc; }
     .tfoot-label { color:#6b7280; font-size:.8rem; font-weight:600; }
-
     .glosa-pct { font-size:.72rem; color:#b91c1c; }
+
+    .badge-aberto { display:inline-block; padding:2px 8px; border-radius:99px; font-size:.72rem; font-weight:700; background:#fef3c7; color:#b45309; }
+    tr.row-link { cursor:pointer; }
+    tr.row-link:hover td { background:#f0f7ff !important; }
+
     @media (max-width:768px) {
       .filter-bar { flex-direction:column; align-items:flex-start; }
     }
@@ -65,22 +69,29 @@
     </form>
 
     <!-- Grupo: Contas de Paciente -->
-    <div class="group-title">Contas de Paciente por Convênio</div>
+    <div class="group-title">Contas de Paciente por Convênio <span style="font-size:.78rem;font-weight:400;color:#9ca3af;">— clique na linha para ver as contas</span></div>
     <% if (contas.length === 0) { %>
       <p style="color:#9ca3af;font-size:.85rem;">Nenhuma conta encontrada para o período selecionado.</p>
     <% } else { %>
       <%
-        let totQtC = 0, totContaC = 0, totGlosaC = 0, totLiqC = 0;
-        contas.forEach(r => { totQtC += r.qt; totContaC += r.vl_conta_raw; totGlosaC += r.vl_glosa_raw; totLiqC += r.vl_liquido_raw; });
+        let totQtC = 0, totAbC = 0, totContaC = 0, totGlosaC = 0, totLiqC = 0;
+        contas.forEach(r => { totQtC += r.qt; totAbC += r.qt_aberto; totContaC += r.vl_conta_raw; totGlosaC += r.vl_glosa_raw; totLiqC += r.vl_liquido_raw; });
         function fBRL(n) { return (n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
         function pct(g, t) { return t > 0 ? ((g/t)*100).toFixed(1) + '%' : '—'; }
+        function detalheUrl(conv) {
+          const p = new URLSearchParams({ ds_convenio: conv });
+          if (filters.dtInicio) p.set('dtInicio', filters.dtInicio);
+          if (filters.dtFim)    p.set('dtFim',    filters.dtFim);
+          return '/admin/tasy/resumo/contas?' + p.toString();
+        }
       %>
       <div style="overflow-x:auto;">
         <table class="data-table">
           <thead>
             <tr>
               <th>Convênio</th>
-              <th style="text-align:right;">Contas</th>
+              <th style="text-align:right;">Total</th>
+              <th style="text-align:right;">Em Aberto</th>
               <th style="text-align:right;">Vl. Faturado</th>
               <th style="text-align:right;">Vl. Glosa</th>
               <th style="text-align:right;">% Glosa</th>
@@ -89,9 +100,16 @@
           </thead>
           <tbody>
             <% contas.forEach(r => { %>
-              <tr>
+              <tr class="row-link" onclick="location.href='<%= detalheUrl(r.ds_convenio) %>'">
                 <td><%= r.ds_convenio %></td>
                 <td class="valor"><%= r.qt.toLocaleString('pt-BR') %></td>
+                <td class="valor">
+                  <% if (r.qt_aberto > 0) { %>
+                    <span class="badge-aberto"><%= r.qt_aberto.toLocaleString('pt-BR') %></span>
+                  <% } else { %>
+                    <span style="color:#9ca3af;">0</span>
+                  <% } %>
+                </td>
                 <td class="valor"><%= r.vl_conta %></td>
                 <td class="valor"><%= r.vl_glosa %></td>
                 <td class="valor glosa-pct"><%= pct(r.vl_glosa_raw, r.vl_conta_raw) %></td>
@@ -103,6 +121,7 @@
             <tr>
               <td class="tfoot-label">Total (<%= contas.length %> convênios)</td>
               <td class="valor"><%= totQtC.toLocaleString('pt-BR') %></td>
+              <td class="valor"><% if (totAbC > 0) { %><span class="badge-aberto"><%= totAbC.toLocaleString('pt-BR') %></span><% } else { %>0<% } %></td>
               <td class="valor"><%= fBRL(totContaC) %></td>
               <td class="valor"><%= fBRL(totGlosaC) %></td>
               <td class="valor glosa-pct"><%= pct(totGlosaC, totContaC) %></td>

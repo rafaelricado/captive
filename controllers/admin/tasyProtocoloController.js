@@ -1,4 +1,4 @@
-const { Op, fn, col } = require('sequelize');
+const { Op, fn, col, literal } = require('sequelize');
 const { TasyProtocolo, TasyConta } = require('../../models');
 const { syncProtocolos } = require('../../services/tasyService');
 const logger = require('../../utils/logger');
@@ -318,6 +318,7 @@ exports.resumo = async (req, res) => {
         [fn('SUM', col('vl_conta')), 'vl_conta'],
         [fn('SUM', col('vl_glosa')), 'vl_glosa'],
         [fn('SUM', col('vl_liquido')), 'vl_liquido'],
+        [literal(`SUM(CASE WHEN status_categoria IN ('aberto','pendente') THEN 1 ELSE 0 END)`), 'qt_aberto'],
       ],
       where: contaWhere,
       group: ['ds_convenio'],
@@ -326,13 +327,14 @@ exports.resumo = async (req, res) => {
     });
 
     const contas = contaRows.map(r => ({
-      ds_convenio: r.ds_convenio || '(sem convênio)',
-      qt:          Number(r.qt || 0),
-      vl_conta:    formatBRL(r.vl_conta || 0),
-      vl_conta_raw: Number(r.vl_conta || 0),
-      vl_glosa:    formatBRL(r.vl_glosa || 0),
-      vl_glosa_raw: Number(r.vl_glosa || 0),
-      vl_liquido:  formatBRL(r.vl_liquido || 0),
+      ds_convenio:    r.ds_convenio || '(sem convênio)',
+      qt:             Number(r.qt || 0),
+      qt_aberto:      Number(r.qt_aberto || 0),
+      vl_conta:       formatBRL(r.vl_conta || 0),
+      vl_conta_raw:   Number(r.vl_conta || 0),
+      vl_glosa:       formatBRL(r.vl_glosa || 0),
+      vl_glosa_raw:   Number(r.vl_glosa || 0),
+      vl_liquido:     formatBRL(r.vl_liquido || 0),
       vl_liquido_raw: Number(r.vl_liquido || 0),
     }));
 
@@ -374,6 +376,62 @@ exports.resumo = async (req, res) => {
     });
   } catch (err) {
     logger.error(`[TasyProtocolo] resumo: ${err.message}`);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+// GET /admin/tasy/resumo/contas?ds_convenio=X&dtInicio=&dtFim=
+exports.resumoContas = async (req, res) => {
+  try {
+    const { ds_convenio, dtInicio, dtFim } = req.query;
+
+    const where = {};
+    if (ds_convenio != null) {
+      where.ds_convenio = ds_convenio === '' ? null : ds_convenio;
+    }
+    if (dtInicio || dtFim) {
+      where.dt_entrada = {};
+      if (dtInicio) where.dt_entrada[Op.gte] = dtInicio;
+      if (dtFim)    where.dt_entrada[Op.lte] = dtFim;
+    }
+
+    const rows = await TasyConta.findAll({
+      where,
+      order: [
+        [literal(`CASE WHEN status_categoria IN ('aberto','pendente') THEN 0 ELSE 1 END`), 'ASC'],
+        ['dt_entrada', 'DESC'],
+      ],
+      limit: 2000,
+      raw: true,
+    });
+
+    const abertas   = rows.filter(r => ['aberto', 'pendente'].includes(r.status_categoria));
+    const fechadas  = rows.filter(r => !['aberto', 'pendente'].includes(r.status_categoria));
+
+    function somaVl(arr, campo) { return arr.reduce((s, r) => s + Number(r[campo] || 0), 0); }
+
+    res.render('admin/tasy_resumo_contas', {
+      page:        'tasy',
+      ds_convenio: ds_convenio || '(sem convênio)',
+      abertas,
+      fechadas,
+      totAbertas: {
+        qt:  abertas.length,
+        vl_conta:   formatBRL(somaVl(abertas, 'vl_conta')),
+        vl_glosa:   formatBRL(somaVl(abertas, 'vl_glosa')),
+        vl_liquido: formatBRL(somaVl(abertas, 'vl_liquido')),
+      },
+      totFechadas: {
+        qt:  fechadas.length,
+        vl_conta:   formatBRL(somaVl(fechadas, 'vl_conta')),
+        vl_glosa:   formatBRL(somaVl(fechadas, 'vl_glosa')),
+        vl_liquido: formatBRL(somaVl(fechadas, 'vl_liquido')),
+      },
+      filters:    req.query,
+      csrfToken:  req.session.csrfToken,
+    });
+  } catch (err) {
+    logger.error(`[TasyProtocolo] resumoContas: ${err.message}`);
     res.status(500).send('Erro interno.');
   }
 };
