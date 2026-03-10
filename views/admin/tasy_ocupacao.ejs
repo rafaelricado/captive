@@ -116,14 +116,20 @@
     %>
 
     <!-- Banner Oracle -->
-    <% if (oracleError) { %>
+    <% if (oracleError && !oracleCached) { %>
       <div class="oracle-banner oracle-warn">
-        &#9888; Não foi possível consultar o Oracle: <%= oracleError %>. Exibindo dados da última sincronização.
+        &#9888; Não foi possível consultar o Oracle: <%= oracleError %>.
+        <a href="?refresh=1" style="color:inherit;margin-left:8px;text-decoration:underline;">Tentar novamente</a>
       </div>
     <% } else if (oracleData) { %>
       <div class="oracle-banner oracle-ok">
-        &#10003; Panorama em tempo real — consultado ao Oracle agora.
-        <span style="margin-left:auto;color:#6b7280;font-size:.72rem;">Atualiza a cada acesso</span>
+        <%- oracleCached
+          ? `&#8635; Dados em cache (${oracleCacheAge || 0}min atrás)`
+          : '&#10003; Panorama em tempo real — consultado ao Oracle agora.' %>
+        <span style="margin-left:auto;color:#6b7280;font-size:.72rem;">
+          Cache: Oracle 2min · PG 5min ·
+          <a href="?refresh=1" style="color:#3b82f6;">&#8635; forçar atualização</a>
+        </span>
       </div>
     <% } %>
 
@@ -326,7 +332,7 @@
           labels:conveniosData.map(c=>c.nome.length>26?c.nome.slice(0,26)+'…':c.nome),
           datasets:[{data:conveniosData.map(c=>c.qt),backgroundColor:COLORS.slice(0,conveniosData.length),borderRadius:4}]
         },
-        options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:'#f3f4f6'},ticks:{font:{size:11}}},y:{grid:{display:false},ticks:{font:{size:10}}}}}
+        options:{maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:'#f3f4f6'},ticks:{font:{size:11}}},y:{grid:{display:false},ticks:{font:{size:10}}}}}
       });
     })();
 
@@ -340,7 +346,7 @@
           labels:especialidades.map(e=>e.nome),
           datasets:[{data:especialidades.map(e=>e.qt),backgroundColor:COLORS.slice(0,especialidades.length),borderWidth:2,borderColor:'#fff'}]
         },
-        options:{plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:10}}},cutout:'55%'}
+        options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:10}}},cutout:'55%'}
       });
     })();
 
