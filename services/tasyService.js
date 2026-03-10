@@ -383,7 +383,6 @@ async function lookupPessoaFisica(cpf) {
                  FROM TASY.COMPL_PESSOA_FISICA C
                 WHERE C.CD_PESSOA_FISICA = PF.CD_PESSOA_FISICA
                   AND C.DS_EMAIL IS NOT NULL
-                  AND C.IE_NAO_POSSUI_EMAIL IS NULL
                 ORDER BY CASE WHEN C.IE_CONTATO_PRINCIPAL = '1' THEN 0 ELSE 1 END,
                          C.NR_SEQUENCIA
                 FETCH FIRST 1 ROW ONLY) AS DS_EMAIL
