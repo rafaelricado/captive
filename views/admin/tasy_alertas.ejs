@@ -53,6 +53,7 @@
     .badge-mat  { display:inline-block; padding:1px 7px; border-radius:99px; font-size:.7rem; font-weight:700; background:#f0fdf4; color:#15803d; white-space:nowrap; }
     .badge-out  { display:inline-block; padding:1px 7px; border-radius:99px; font-size:.7rem; font-weight:700; background:#f3f4f6; color:#6b7280; white-space:nowrap; }
 
+    tr.row-conv:hover td { background:#fef2f2 !important; }
     td.nm-pac { max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     td.ds-item { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
@@ -134,7 +135,20 @@
     </div>
 
     <!-- Resumo por convênio -->
-    <div class="group-title">Resumo por Convênio</div>
+    <%
+      const cdAtivo = filters.cdConvenio ? String(filters.cdConvenio) : null;
+      function convenioUrl(cd) {
+        const p = new URLSearchParams({ dtInicio, dtFim, cdConvenio: cd });
+        return '/admin/tasy/alertas?' + p.toString() + '#itens';
+      }
+      const limparFiltroUrl = '/admin/tasy/alertas?' + new URLSearchParams({ dtInicio, dtFim }).toString();
+    %>
+    <div class="group-title" style="display:flex;align-items:center;justify-content:space-between;">
+      <span>Resumo por Convênio <span style="font-size:.78rem;font-weight:400;color:#9ca3af;">— clique para filtrar os itens</span></span>
+      <% if (cdAtivo) { %>
+        <a href="<%= limparFiltroUrl %>" style="font-size:.78rem;font-weight:600;color:#b91c1c;text-decoration:none;">✕ Limpar filtro de convênio</a>
+      <% } %>
+    </div>
     <div style="overflow-x:auto;margin-bottom:24px;">
       <table class="data-table">
         <thead>
@@ -147,8 +161,18 @@
         </thead>
         <tbody>
           <% resumo.forEach(r => { %>
-            <tr>
-              <td><%= r.ds_nome_convenio %> <span style="font-size:.75rem;color:#9ca3af;">(#<%= r.cd_convenio %>)</span></td>
+            <%
+              const isAtivo = cdAtivo === String(r.cd_convenio);
+              const rowStyle = isAtivo
+                ? 'background:#fef2f2;cursor:pointer;'
+                : 'cursor:pointer;';
+            %>
+            <tr class="row-conv" style="<%= rowStyle %>" onclick="location.href='<%= convenioUrl(r.cd_convenio) %>'"
+                title="Clique para ver apenas os itens deste convênio">
+              <td>
+                <% if (isAtivo) { %><span style="color:#b91c1c;font-weight:700;">▶ </span><% } %>
+                <%= r.ds_nome_convenio %> <span style="font-size:.75rem;color:#9ca3af;">(#<%= r.cd_convenio %>)</span>
+              </td>
               <td class="valor"><%= r.qt_atend.toLocaleString('pt-BR') %></td>
               <td class="valor" style="color:#b91c1c;font-weight:700;"><%= r.qt_itens.toLocaleString('pt-BR') %></td>
               <td class="valor" style="color:#9ca3af;font-size:.82rem;"><%= (r.qt_itens / r.qt_atend).toFixed(1) %></td>
@@ -167,7 +191,13 @@
     </div>
 
     <!-- Lista de itens -->
-    <div class="group-title">Itens sem Valor <span style="font-size:.78rem;font-weight:400;color:#9ca3af;">— mais recentes primeiro</span></div>
+    <div class="group-title" id="itens">
+      Itens sem Valor
+      <% if (cdAtivo) { %>
+        <span style="font-size:.82rem;font-weight:400;color:#b91c1c;"> — filtrando por convênio #<%= cdAtivo %></span>
+      <% } %>
+      <span style="font-size:.78rem;font-weight:400;color:#9ca3af;"> — mais recentes primeiro</span>
+    </div>
 
     <% if (truncated) { %>
       <div class="alert-warn">&#9888; Exibindo os primeiros 1.000 itens. Refine o período ou filtre por convênio para ver mais.</div>
