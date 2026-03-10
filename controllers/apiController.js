@@ -4,6 +4,7 @@ const { validateCPF } = require('../utils/cpfValidator');
 const sessionService = require('../services/sessionService');
 const mikrotikService = require('../services/mikrotikService');
 const { getOrgSettings } = require('../utils/orgSettings');
+const { lookupPessoaFisica } = require('../services/tasyService');
 const logger = require('../utils/logger');
 
 // Registra tentativa de autenticação falha para detecção de força bruta
@@ -196,6 +197,21 @@ exports.login = async (req, res) => {
     try { await renderError('Erro interno. Tente novamente.'); } catch (_) {
       if (!res.headersSent) res.status(500).send('Erro interno.');
     }
+  }
+};
+
+exports.consultaPessoaFisica = async (req, res) => {
+  try {
+    const cpf = req.params.cpf.replace(/\D/g, '');
+    if (cpf.length !== 11) return res.status(400).json({ error: 'CPF inválido' });
+
+    const data = await lookupPessoaFisica(cpf);
+    if (!data) return res.status(404).json({ error: 'Não encontrado' });
+
+    res.json(data);
+  } catch (err) {
+    logger.error(`[API] consultaPessoaFisica: ${err.message}`);
+    res.status(500).json({ error: 'Erro interno' });
   }
 };
 

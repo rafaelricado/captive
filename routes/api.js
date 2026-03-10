@@ -31,6 +31,18 @@ const authLimiter = rateLimit({
   }
 });
 
+// Limita consulta de pessoa física: 30 requisições a cada 5 minutos por IP
+const pessoaFisicaLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logger.warn(`[API] Rate limit pessoa-fisica atingido — IP ${req.ip}`);
+    res.status(429).json({ error: 'Muitas consultas. Aguarde alguns minutos.' });
+  }
+});
+
 // Limita consulta de CEP: 60 requisições a cada 10 minutos por IP
 const cepLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
@@ -45,6 +57,7 @@ const cepLimiter = rateLimit({
 
 router.post('/register', authLimiter, apiController.register);
 router.post('/login', authLimiter, apiController.login);
+router.get('/pessoa-fisica/:cpf', pessoaFisicaLimiter, apiController.consultaPessoaFisica);
 router.get('/cep/:cep', cepLimiter, apiController.consultaCep);
 
 module.exports = router;

@@ -163,22 +163,74 @@ document.addEventListener('DOMContentLoaded', () => {
     return true;
   }
 
-  // Validação em tempo real do CPF
+  // Validação em tempo real do CPF + busca de dados no Tasy
   if (cpfInput) {
     const cpfStatus = document.getElementById('cpf-status');
+    let lastLookedupCpf = '';
+
+    function fillFromTasy(data) {
+      const nomeInput     = document.getElementById('nome_completo');
+      const emailInput    = document.getElementById('email');
+      const telefoneInput = document.getElementById('telefone');
+
+      if (nomeInput  && data.nm_pessoa)  nomeInput.value  = data.nm_pessoa;
+      if (emailInput && data.ds_email)   emailInput.value = data.ds_email;
+      if (telefoneInput && data.nr_telefone) {
+        telefoneInput.value = data.nr_telefone;
+        // Dispara input para aplicar a máscara (DDD) XXXXX-XXXX
+        telefoneInput.dispatchEvent(new Event('input'));
+      }
+      if (dataNascInput && data.dt_nascimento) {
+        dataNascInput.value = data.dt_nascimento;
+        // Dispara evento para ativar lógica de nome da mãe (menor de 18)
+        dataNascInput.dispatchEvent(new Event('input'));
+      }
+    }
+
     cpfInput.addEventListener('input', () => {
       const raw = cpfInput.value.replace(/\D/g, '');
       if (raw.length === 11) {
         if (validateCPF(raw)) {
-          cpfStatus.textContent = 'CPF valido';
-          cpfStatus.className = 'field-status valid';
-          cpfInput.style.borderColor = '#059669';
+          // Evita busca duplicada se o CPF não mudou
+          if (raw === lastLookedupCpf) return;
+          lastLookedupCpf = raw;
+
+          cpfStatus.textContent = 'Buscando...';
+          cpfStatus.className = 'field-status loading';
+          cpfInput.style.borderColor = '';
+
+          const controller = new AbortController();
+          const abortTimer = setTimeout(() => controller.abort(), 6000);
+
+          fetch('/api/pessoa-fisica/' + raw, { signal: controller.signal })
+            .then(r => r.json())
+            .then(data => {
+              clearTimeout(abortTimer);
+              if (data.error) {
+                cpfStatus.textContent = 'CPF valido';
+                cpfStatus.className = 'field-status valid';
+                cpfInput.style.borderColor = '#059669';
+              } else {
+                cpfStatus.textContent = 'Dados encontrados';
+                cpfStatus.className = 'field-status valid';
+                cpfInput.style.borderColor = '#059669';
+                fillFromTasy(data);
+              }
+            })
+            .catch(() => {
+              clearTimeout(abortTimer);
+              cpfStatus.textContent = 'CPF valido';
+              cpfStatus.className = 'field-status valid';
+              cpfInput.style.borderColor = '#059669';
+            });
         } else {
+          lastLookedupCpf = '';
           cpfStatus.textContent = 'CPF invalido';
           cpfStatus.className = 'field-status invalid';
           cpfInput.style.borderColor = '#dc2626';
         }
       } else {
+        lastLookedupCpf = '';
         cpfStatus.textContent = '';
         cpfStatus.className = 'field-status';
         cpfInput.style.borderColor = '';

@@ -360,4 +360,70 @@ async function syncProtocolos(onProgress) {
   }
 }
 
-module.exports = { discoverColumns, syncContas, syncProtocolos };
+/**
+ * Consulta dados básicos de uma pessoa pelo CPF.
+ * - PESSOA_FISICA: NM_PESSOA_FISICA, DT_NASCIMENTO (NR_CPF armazenado como 11 dígitos sem máscara)
+ * - COMPL_PESSOA_FISICA: DS_EMAIL (prioriza contato principal; ignora registros com IE_NAO_POSSUI_EMAIL)
+ * Retorna { nm_pessoa, dt_nascimento (DD/MM/AAAA), ds_email } ou null se não encontrado.
+ */
+async function lookupPessoaFisica(cpf) {
+  if (!cpf || !/^\d{11}$/.test(cpf)) return null;
+  if (!ORACLE_CONFIG.user) return null;
+
+  let conn;
+  try {
+    conn = await oracledb.getConnection({ ...ORACLE_CONFIG, connectTimeout: 5 });
+    conn.callTimeout = 5000;
+    const result = await conn.execute(
+      `SELECT PF.NM_PESSOA_FISICA,
+              PF.DT_NASCIMENTO,
+              PF.NR_DDD_CELULAR,
+              PF.NR_TELEFONE_CELULAR,
+              (SELECT C.DS_EMAIL
+                 FROM TASY.COMPL_PESSOA_FISICA C
+                WHERE C.CD_PESSOA_FISICA = PF.CD_PESSOA_FISICA
+                  AND C.DS_EMAIL IS NOT NULL
+                  AND C.IE_NAO_POSSUI_EMAIL IS NULL
+                ORDER BY CASE WHEN C.IE_CONTATO_PRINCIPAL = '1' THEN 0 ELSE 1 END,
+                         C.NR_SEQUENCIA
+                FETCH FIRST 1 ROW ONLY) AS DS_EMAIL
+         FROM TASY.PESSOA_FISICA PF
+        WHERE PF.NR_CPF = :cpf
+          AND ROWNUM = 1`,
+      { cpf },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT, fetchArraySize: 1 }
+    );
+
+    if (!result.rows || result.rows.length === 0) return null;
+
+    const row = result.rows[0];
+    let dtFormatted = null;
+    if (row.DT_NASCIMENTO instanceof Date) {
+      const d = String(row.DT_NASCIMENTO.getDate()).padStart(2, '0');
+      const m = String(row.DT_NASCIMENTO.getMonth() + 1).padStart(2, '0');
+      const y = row.DT_NASCIMENTO.getFullYear();
+      dtFormatted = `${d}/${m}/${y}`;
+    }
+
+    // Concatena DDD + número, retorna só dígitos para a máscara do frontend aplicar
+    let nrTelefone = null;
+    const ddd = row.NR_DDD_CELULAR ? String(row.NR_DDD_CELULAR).replace(/\D/g, '') : '';
+    const cel = row.NR_TELEFONE_CELULAR ? String(row.NR_TELEFONE_CELULAR).replace(/\D/g, '') : '';
+    if (ddd && cel) nrTelefone = ddd + cel;
+    else if (cel) nrTelefone = cel;
+
+    return {
+      nm_pessoa:     row.NM_PESSOA_FISICA ? String(row.NM_PESSOA_FISICA).trim() : null,
+      dt_nascimento: dtFormatted,
+      ds_email:      row.DS_EMAIL ? String(row.DS_EMAIL).trim() : null,
+      nr_telefone:   nrTelefone,
+    };
+  } catch (err) {
+    logger.warn(`[Tasy] lookupPessoaFisica: ${err.message}`);
+    return null;
+  } finally {
+    if (conn) await conn.close().catch(() => {});
+  }
+}
+
+module.exports = { discoverColumns, syncContas, syncProtocolos, lookupPessoaFisica };
