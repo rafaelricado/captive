@@ -425,4 +425,90 @@ async function lookupPessoaFisica(cpf) {
   }
 }
 
-module.exports = { discoverColumns, syncContas, syncProtocolos, lookupPessoaFisica };
+/**
+ * Busca itens sem valor na INTERFACE_CONTA_ITEM_V do Oracle.
+ * Retorna { resumo, itens } — filtro de data obrigatório para evitar full scan.
+ */
+async function queryItensSemValor({ dtInicio, dtFim, cdConvenio } = {}) {
+  // Defaults: últimos 30 dias
+  const hoje = new Date();
+  const from = dtInicio || new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 30).toISOString().slice(0, 10);
+  const to   = dtFim   || hoje.toISOString().slice(0, 10);
+
+  const binds = { dtInicio: from, dtFim: to };
+  const convenioClause = cdConvenio ? 'AND I.CD_CONVENIO = :cdConvenio' : '';
+  if (cdConvenio) binds.cdConvenio = Number(cdConvenio);
+
+  let conn;
+  try {
+    conn = await oracledb.getConnection({ ...ORACLE_CONFIG, connectTimeout: 8 });
+    conn.callTimeout = 25000;
+
+    // Resumo por convênio
+    const rResumo = await conn.execute(
+      `SELECT I.CD_CONVENIO,
+              COUNT(DISTINCT I.NR_ATENDIMENTO) AS QT_ATEND,
+              COUNT(*) AS QT_ITENS
+         FROM TASY.INTERFACE_CONTA_ITEM_V I
+        WHERE (I.VL_ITEM IS NULL OR I.VL_ITEM = 0)
+          AND I.DT_ITEM >= TO_DATE(:dtInicio, 'YYYY-MM-DD')
+          AND I.DT_ITEM <  TO_DATE(:dtFim,    'YYYY-MM-DD') + 1
+          ${convenioClause}
+        GROUP BY I.CD_CONVENIO
+        ORDER BY QT_ITENS DESC`,
+      binds,
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+
+    // Detalhe — top 1000 mais recentes
+    const rItens = await conn.execute(
+      `SELECT I.NR_ATENDIMENTO,
+              I.DS_ITEM,
+              I.TP_ITEM,
+              I.QT_ITEM,
+              I.VL_ITEM,
+              I.VL_UNITARIO,
+              I.DT_ITEM,
+              I.CD_CONVENIO,
+              I.CD_SETOR_ATENDIMENTO
+         FROM TASY.INTERFACE_CONTA_ITEM_V I
+        WHERE (I.VL_ITEM IS NULL OR I.VL_ITEM = 0)
+          AND I.DT_ITEM >= TO_DATE(:dtInicio, 'YYYY-MM-DD')
+          AND I.DT_ITEM <  TO_DATE(:dtFim,    'YYYY-MM-DD') + 1
+          ${convenioClause}
+        ORDER BY I.DT_ITEM DESC
+        FETCH FIRST 1000 ROWS ONLY`,
+      binds,
+      { outFormat: oracledb.OUT_FORMAT_OBJECT }
+    );
+
+    const fDate = d => d instanceof Date
+      ? d.toISOString().slice(0, 10)
+      : (d ? String(d).slice(0, 10) : null);
+
+    const resumo = rResumo.rows.map(r => ({
+      cd_convenio: r.CD_CONVENIO,
+      qt_atend:    Number(r.QT_ATEND || 0),
+      qt_itens:    Number(r.QT_ITENS || 0),
+    }));
+
+    const TP_ITEM = { '1': 'Procedimento', '2': 'Material' };
+    const itens = rItens.rows.map(r => ({
+      nr_atendimento:       Number(r.NR_ATENDIMENTO),
+      ds_item:              r.DS_ITEM || '—',
+      tp_item:              TP_ITEM[String(r.TP_ITEM)] || r.TP_ITEM || '—',
+      qt_item:              Number(r.QT_ITEM || 0),
+      vl_item:              Number(r.VL_ITEM || 0),
+      vl_unitario:          Number(r.VL_UNITARIO || 0),
+      dt_item:              fDate(r.DT_ITEM),
+      cd_convenio:          r.CD_CONVENIO,
+      cd_setor_atendimento: r.CD_SETOR_ATENDIMENTO,
+    }));
+
+    return { resumo, itens, dtInicio: from, dtFim: to };
+  } finally {
+    if (conn) await conn.close().catch(() => {});
+  }
+}
+
+module.exports = { discoverColumns, syncContas, syncProtocolos, lookupPessoaFisica, queryItensSemValor };

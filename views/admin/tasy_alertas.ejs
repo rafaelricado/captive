@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alertas de Cobrança &mdash; Painel Admin</title>
+  <meta name="csrf-token" content="<%= csrfToken %>">
+  <%- include('_head') %>
+  <style>
+    .filter-bar {
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07);
+      padding:12px 16px; margin-bottom:16px;
+    }
+    .filter-bar input[type="date"],
+    .filter-bar select {
+      padding:6px 10px; border:1px solid #d1d5db; border-radius:6px;
+      font-size:.82rem; color:#1f2937; background:#f9fafb;
+    }
+    .filter-bar select { min-width:180px; }
+    .btn-filter   { padding:6px 14px; background:#0d4e8b; color:#fff; border:none; border-radius:6px; font-size:.82rem; cursor:pointer; font-weight:600; }
+    .btn-clear    { font-size:.82rem; color:#6b7280; text-decoration:none; }
+    .btn-clear:hover { color:#0d4e8b; }
+    .btn-shortcut { padding:4px 10px; font-size:.75rem; border:1px solid #d1d5db; border-radius:5px; background:#f9fafb; color:#374151; cursor:pointer; white-space:nowrap; }
+    .btn-shortcut:hover { border-color:#b91c1c; color:#b91c1c; background:#fef2f2; }
+
+    /* Alert banner */
+    .alert-critical { background:#fef2f2; border:1px solid #fca5a5; border-radius:10px; padding:16px 20px; margin-bottom:20px; display:flex; align-items:center; gap:14px; }
+    .alert-critical-icon { font-size:2rem; line-height:1; }
+    .alert-critical-title { font-size:1rem; font-weight:700; color:#b91c1c; }
+    .alert-critical-sub   { font-size:.82rem; color:#7f1d1d; margin-top:2px; }
+
+    /* Cards */
+    .summary-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+    .scard { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:14px 18px; border-top:3px solid #e5e7eb; }
+    .scard-alert  { border-top-color:#b91c1c; }
+    .scard-warn   { border-top-color:#b45309; }
+    .scard-info   { border-top-color:#0d4e8b; }
+    .scard-label  { font-size:.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; }
+    .scard-value  { font-size:1.25rem; font-weight:700; margin-top:3px; }
+    .scard-alert .scard-value { color:#b91c1c; }
+    .scard-warn  .scard-value { color:#b45309; }
+    .scard-info  .scard-value { color:#0d4e8b; }
+    .scard-sub    { font-size:.75rem; color:#9ca3af; margin-top:2px; }
+
+    .group-title { font-size:.95rem; font-weight:700; color:#b91c1c; margin:24px 0 10px; padding-bottom:6px; border-bottom:2px solid #fecaca; }
+
+    td.valor { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    tfoot td  { font-weight:700; background:#f8fafc; }
+    .tfoot-label { color:#6b7280; font-size:.8rem; font-weight:600; }
+
+    .badge-proc { display:inline-block; padding:1px 7px; border-radius:99px; font-size:.7rem; font-weight:700; background:#eff6ff; color:#1d4ed8; white-space:nowrap; }
+    .badge-mat  { display:inline-block; padding:1px 7px; border-radius:99px; font-size:.7rem; font-weight:700; background:#f0fdf4; color:#15803d; white-space:nowrap; }
+    .badge-out  { display:inline-block; padding:1px 7px; border-radius:99px; font-size:.7rem; font-weight:700; background:#f3f4f6; color:#6b7280; white-space:nowrap; }
+
+    td.nm-pac { max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    td.ds-item { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+    .filter-inline { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+    .filter-inline input[type="text"] { padding:5px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:.82rem; background:#f9fafb; min-width:220px; }
+
+    .alert-warn { background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; padding:8px 14px; font-size:.82rem; color:#92400e; margin-bottom:12px; }
+
+    @media (max-width:900px) { .summary-cards { grid-template-columns:1fr 1fr; } }
+    @media (max-width:480px) { .summary-cards { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <%- include('_nav', { page: page }) %>
+
+  <main class="container">
+    <h2 class="page-title">Tasy &mdash; Alertas de Cobrança</h2>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid #e5e7eb;flex-wrap:wrap;">
+      <a href="/admin/tasy" style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#6b7280;text-decoration:none;border-radius:6px 6px 0 0;border:2px solid transparent;border-bottom:none;margin-bottom:-2px;">Contas de Paciente</a>
+      <a href="/admin/tasy/protocolos" style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#6b7280;text-decoration:none;border-radius:6px 6px 0 0;border:2px solid transparent;border-bottom:none;margin-bottom:-2px;">Protocolo Convênio</a>
+      <a href="/admin/tasy/resumo" style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#6b7280;text-decoration:none;border-radius:6px 6px 0 0;border:2px solid transparent;border-bottom:none;margin-bottom:-2px;">Resumo por Convênio</a>
+      <a href="/admin/tasy/alertas" style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#b91c1c;background:#fff;border:2px solid #fca5a5;border-bottom-color:#fff;border-radius:6px 6px 0 0;text-decoration:none;margin-bottom:-2px;">&#9888; Alertas de Cobrança</a>
+    </div>
+
+    <!-- Filtro -->
+    <form method="GET" action="/admin/tasy/alertas" class="filter-bar" id="filter-form">
+      <label style="font-size:.82rem;font-weight:600;color:#374151;">Período do item:</label>
+      <input type="date" name="dtInicio" id="dtInicio" value="<%= dtInicio %>" title="De">
+      <input type="date" name="dtFim"    id="dtFim"    value="<%= dtFim %>"    title="Até">
+      <button type="button" class="btn-shortcut" onclick="setShortcut(7)">7d</button>
+      <button type="button" class="btn-shortcut" onclick="setShortcut(30)">30d</button>
+      <button type="button" class="btn-shortcut" onclick="setShortcut(90)">90d</button>
+      <button type="button" class="btn-shortcut" onclick="setShortcut('mes')">Este mês</button>
+      <select name="cdConvenio">
+        <option value="">Todos os convênios</option>
+        <% conveniosFiltro.forEach(c => { %>
+          <option value="<%= c.cd %>" <%= String(filters.cdConvenio) === String(c.cd) ? 'selected' : '' %>><%= c.nome %></option>
+        <% }) %>
+      </select>
+      <button type="submit" class="btn-filter">Filtrar</button>
+      <a href="/admin/tasy/alertas" class="btn-clear">Limpar</a>
+    </form>
+
+    <% if (totItens === 0) { %>
+      <div style="text-align:center;padding:48px;color:#9ca3af;">
+        <div style="font-size:2rem;">✓</div>
+        <p style="font-size:.95rem;margin-top:8px;">Nenhum item sem valor encontrado no período selecionado.</p>
+      </div>
+    <% } else { %>
+
+    <!-- Banner de alerta -->
+    <div class="alert-critical">
+      <div class="alert-critical-icon">⚠️</div>
+      <div>
+        <div class="alert-critical-title"><%= totItens.toLocaleString('pt-BR') %> itens sem valor no período</div>
+        <div class="alert-critical-sub"><%= totAtend.toLocaleString('pt-BR') %> atendimentos afetados &mdash; procedimentos e exames registrados com valor R$ 0,00</div>
+      </div>
+    </div>
+
+    <!-- Cards -->
+    <div class="summary-cards">
+      <div class="scard scard-alert">
+        <div class="scard-label">Itens sem Valor</div>
+        <div class="scard-value"><%= totItens.toLocaleString('pt-BR') %></div>
+        <div class="scard-sub">procedimentos / exames / materiais</div>
+      </div>
+      <div class="scard scard-warn">
+        <div class="scard-label">Atendimentos Afetados</div>
+        <div class="scard-value"><%= totAtend.toLocaleString('pt-BR') %></div>
+        <div class="scard-sub">contas com pelo menos 1 item sem valor</div>
+      </div>
+      <div class="scard scard-info">
+        <div class="scard-label">Convênios Afetados</div>
+        <div class="scard-value"><%= resumo.length.toLocaleString('pt-BR') %></div>
+        <div class="scard-sub">período: <%= dtInicio %> a <%= dtFim %></div>
+      </div>
+    </div>
+
+    <!-- Resumo por convênio -->
+    <div class="group-title">Resumo por Convênio</div>
+    <div style="overflow-x:auto;margin-bottom:24px;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Convênio</th>
+            <th style="text-align:right;">Atendimentos</th>
+            <th style="text-align:right;">Itens sem Valor</th>
+            <th style="text-align:right;">Média por Atendimento</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% resumo.forEach(r => { %>
+            <tr>
+              <td><%= r.ds_nome_convenio %> <span style="font-size:.75rem;color:#9ca3af;">(#<%= r.cd_convenio %>)</span></td>
+              <td class="valor"><%= r.qt_atend.toLocaleString('pt-BR') %></td>
+              <td class="valor" style="color:#b91c1c;font-weight:700;"><%= r.qt_itens.toLocaleString('pt-BR') %></td>
+              <td class="valor" style="color:#9ca3af;font-size:.82rem;"><%= (r.qt_itens / r.qt_atend).toFixed(1) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td class="tfoot-label">Total (<%= resumo.length %> convênios)</td>
+            <td class="valor"><%= totAtend.toLocaleString('pt-BR') %></td>
+            <td class="valor" style="color:#b91c1c;"><%= totItens.toLocaleString('pt-BR') %></td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- Lista de itens -->
+    <div class="group-title">Itens sem Valor <span style="font-size:.78rem;font-weight:400;color:#9ca3af;">— mais recentes primeiro</span></div>
+
+    <% if (truncated) { %>
+      <div class="alert-warn">&#9888; Exibindo os primeiros 1.000 itens. Refine o período ou filtre por convênio para ver mais.</div>
+    <% } %>
+
+    <div class="filter-inline">
+      <input type="text" id="busca-item" placeholder="Buscar por paciente, atendimento ou item…" oninput="filtrar()">
+      <span id="cnt-resultado" style="font-size:.78rem;color:#9ca3af;"></span>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Data Item</th>
+            <th>Atendimento</th>
+            <th>Paciente</th>
+            <th>Convênio</th>
+            <th>Item / Procedimento</th>
+            <th>Tipo</th>
+            <th style="text-align:right;">Qtd.</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-itens">
+          <% itens.forEach(i => { %>
+            <%
+              const badgeCls = i.tp_item === 'Procedimento' ? 'badge-proc' : i.tp_item === 'Material' ? 'badge-mat' : 'badge-out';
+              const busca = ((i.nm_paciente||'') + ' ' + i.nr_atendimento + ' ' + i.ds_item).toLowerCase();
+            %>
+            <tr data-busca="<%= busca %>">
+              <td style="white-space:nowrap;"><%= i.dt_item || '—' %></td>
+              <td style="font-size:.78rem;color:#6b7280;"><%= i.nr_atendimento %></td>
+              <td class="nm-pac" title="<%= i.nm_paciente %>"><%= i.nm_paciente %></td>
+              <td style="font-size:.78rem;"><%= i.ds_convenio_nome %></td>
+              <td class="ds-item" title="<%= i.ds_item %>"><%= i.ds_item %></td>
+              <td><span class="<%= badgeCls %>"><%= i.tp_item %></span></td>
+              <td class="valor"><%= i.qt_item %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+
+    <% } %>
+  </main>
+
+  <script>
+    function setShortcut(range) {
+      const now = new Date();
+      let from, to = now.toISOString().slice(0, 10);
+      if (range === 'mes') {
+        from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+      } else {
+        const d = new Date(now); d.setDate(d.getDate() - Number(range));
+        from = d.toISOString().slice(0, 10);
+      }
+      document.getElementById('dtInicio').value = from;
+      document.getElementById('dtFim').value    = to;
+      document.getElementById('filter-form').submit();
+    }
+
+    function filtrar() {
+      const q = (document.getElementById('busca-item')?.value || '').toLowerCase().trim();
+      let cnt = 0;
+      document.querySelectorAll('#tbody-itens tr').forEach(tr => {
+        const show = !q || tr.dataset.busca.includes(q);
+        tr.style.display = show ? '' : 'none';
+        if (show) cnt++;
+      });
+      const el = document.getElementById('cnt-resultado');
+      if (el) el.textContent = q ? cnt + ' resultado(s)' : '';
+    }
+  </script>
+</body>
+</html>
