@@ -169,8 +169,11 @@ router.get ('/tasy/protocolos',               adminAuth, csrfMiddleware, tasyPro
 router.post('/tasy/protocolos/sync',          adminAuth, verifyCsrf,     tasyProtocoloController.sync);
 router.get ('/tasy/protocolos/sync/stream',   adminAuth,                 tasyProtocoloController.syncStream);
 router.get ('/tasy/protocolos/export',        adminAuth, exportLimiter,  tasyProtocoloController.export);
-router.get ('/tasy/resumo',                   adminAuth, csrfMiddleware, tasyProtocoloController.resumo);
-router.get ('/tasy/resumo/contas',            adminAuth, csrfMiddleware, tasyProtocoloController.resumoContas);
+router.get ('/tasy/resumo',                   adminAuth, csrfMiddleware,  tasyProtocoloController.resumo);
+router.get ('/tasy/resumo/export',            adminAuth, exportLimiter,   tasyProtocoloController.resumoExport);
+router.get ('/tasy/resumo/contas',            adminAuth, csrfMiddleware,  tasyProtocoloController.resumoContas);
+router.get ('/tasy/resumo/contas/export',     adminAuth, exportLimiter,   tasyProtocoloController.resumoContasExport);
+router.get ('/tasy/resumo/protocolos',        adminAuth, csrfMiddleware,  tasyProtocoloController.resumoProtocolos);
 
 // Configurações (protegido)
 router.get('/settings', adminAuth, settingsController.showSettings);

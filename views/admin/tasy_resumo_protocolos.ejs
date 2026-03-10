@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Protocolos — <%= ds_nome_convenio %> &mdash; Painel Admin</title>
+  <meta name="csrf-token" content="<%= csrfToken %>">
+  <%- include('_head') %>
+  <style>
+    .back-link { display:inline-flex; align-items:center; gap:6px; font-size:.82rem; color:#0d4e8b; text-decoration:none; margin-bottom:16px; }
+    .back-link:hover { text-decoration:underline; }
+
+    .summary-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+    .scard { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:14px 18px; border-top:3px solid #e5e7eb; }
+    .scard-label { font-size:.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; }
+    .scard-value { font-size:1.1rem; font-weight:700; color:#111827; margin-top:3px; }
+    .scard-sub { font-size:.75rem; color:#9ca3af; margin-top:2px; }
+    .scard-prot-1 { border-top-color:#1d4ed8; } .scard-prot-1 .scard-value { color:#1d4ed8; }
+    .scard-prot-2 { border-top-color:#15803d; } .scard-prot-2 .scard-value { color:#15803d; }
+    .scard-prot-3 { border-top-color:#c2410c; } .scard-prot-3 .scard-value { color:#c2410c; }
+    .scard-prot-4 { border-top-color:#b91c1c; } .scard-prot-4 .scard-value { color:#b91c1c; }
+    .scard-prot-5 { border-top-color:#9ca3af; } .scard-prot-5 .scard-value { color:#9ca3af; }
+
+    .filter-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:10px 14px; margin-bottom:16px; }
+    .filter-bar input[type="text"] { padding:5px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:.82rem; color:#1f2937; background:#f9fafb; min-width:220px; }
+    .btn-export { padding:6px 14px; background:#fff; color:#374151; border:1px solid #d1d5db; border-radius:6px; font-size:.82rem; font-weight:600; text-decoration:none; margin-left:auto; }
+    .btn-export:hover { border-color:#0d4e8b; color:#0d4e8b; }
+
+    td.valor { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    tfoot td  { font-weight:700; background:#f8fafc; }
+    .tfoot-label { color:#6b7280; font-size:.8rem; font-weight:600; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:99px; font-size:.72rem; font-weight:700; white-space:nowrap; }
+    .badge-prot-1 { background:#eff6ff; color:#1d4ed8; }
+    .badge-prot-2 { background:#f0fdf4; color:#15803d; }
+    .badge-prot-3 { background:#fff7ed; color:#c2410c; }
+    .badge-prot-4 { background:#fef2f2; color:#b91c1c; }
+    .badge-prot-5 { background:#f3f4f6; color:#6b7280; }
+    .alert-warn { background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; padding:8px 14px; font-size:.82rem; color:#92400e; margin-bottom:12px; }
+    tr.hidden-row { display:none; }
+
+    @media (max-width:768px) { .summary-cards { grid-template-columns:1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <%- include('_nav', { page: page }) %>
+
+  <main class="container">
+    <%
+      const qs = new URLSearchParams();
+      if (filters.dtInicio) qs.set('dtInicio', filters.dtInicio);
+      if (filters.dtFim)    qs.set('dtFim',    filters.dtFim);
+      const backUrl = '/admin/tasy/resumo' + (qs.toString() ? '?' + qs.toString() : '');
+      function fBRL(n) { return (n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+      function fDate(d) { return d ? String(d).slice(0,10) : '—'; }
+    %>
+
+    <a href="<%= backUrl %>" class="back-link">&#8592; Resumo por Convênio</a>
+    <h2 class="page-title" style="margin-top:0;">Protocolos — <%= ds_nome_convenio %></h2>
+    <% if (filters.dtInicio || filters.dtFim) { %>
+      <p style="font-size:.8rem;color:#6b7280;margin-top:-12px;margin-bottom:16px;">
+        Período de início: <%= filters.dtInicio || '…' %> até <%= filters.dtFim || '…' %>
+      </p>
+    <% } %>
+
+    <!-- Cards por status -->
+    <div class="summary-cards">
+      <% for (const [k, s] of Object.entries(porStatus)) { if (s.qt === 0) continue; %>
+        <div class="scard scard-prot-<%= k %>">
+          <div class="scard-label"><%= s.label %></div>
+          <div class="scard-value"><%= s.qt.toLocaleString('pt-BR') %></div>
+          <div class="scard-sub"><%= fBRL(s.vl_raw) %></div>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="filter-bar">
+      <input type="text" id="busca-prot" placeholder="Buscar por nº protocolo ou observação…" oninput="filtrar()">
+      <a href="/admin/tasy/protocolos?convenio=<%= cd_convenio %><%= filters.dtInicio ? '&dtInicio=' + filters.dtInicio : '' %><%= filters.dtFim ? '&dtFim=' + filters.dtFim : '' %>" class="btn-export" style="border-color:#0d4e8b;color:#0d4e8b;">Ver em Protocolo Convênio &#8599;</a>
+    </div>
+
+    <% if (truncated) { %>
+      <div class="alert-warn">&#9888; Exibindo os primeiros 2.000 registros. Acesse a aba "Protocolo Convênio" para ver todos com filtros completos.</div>
+    <% } %>
+
+    <div style="overflow-x:auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Nº Protocolo</th>
+            <th>Seq.</th>
+            <th>Status</th>
+            <th style="text-align:right;">Período Inicial</th>
+            <th style="text-align:right;">Período Final</th>
+            <th style="text-align:right;">Definitivo em</th>
+            <th style="text-align:right;">Vl. Recebimento</th>
+            <th>Observação</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-prot">
+          <% rows.forEach(r => { %>
+            <tr data-busca="<%= ((r.nr_protocolo||'') + ' ' + (r.ds_observacao||'')).toLowerCase() %>">
+              <td><%= r.nr_protocolo || '—' %></td>
+              <td style="font-size:.78rem;color:#6b7280;"><%= r.nr_seq_protocolo %></td>
+              <td><span class="badge badge-prot-<%= r.ie_status_protocolo %>"><%= r.ds_status %></span></td>
+              <td class="valor"><%= r.dt_periodo_inicial_fmt %></td>
+              <td class="valor"><%= r.dt_periodo_final_fmt %></td>
+              <td class="valor"><%= r.dt_definitivo_fmt %></td>
+              <td class="valor"><%= r.vl_recebimento_fmt %></td>
+              <td style="font-size:.78rem;color:#6b7280;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<%= r.ds_observacao || '' %>"><%= r.ds_observacao || '—' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td class="tfoot-label" colspan="6">Total (<%= totais.qt %> protocolos)</td>
+            <td class="valor"><%= totais.recebimento %></td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    function filtrar() {
+      const q = (document.getElementById('busca-prot')?.value || '').toLowerCase().trim();
+      document.querySelectorAll('#tbody-prot tr').forEach(tr => {
+        tr.style.display = !q || tr.dataset.busca.includes(q) ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>

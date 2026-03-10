@@ -367,10 +367,22 @@ exports.resumo = async (req, res) => {
       vl_recebimento_raw: Number(r.vl_receb || 0),
     }));
 
+    const totais = {
+      qt:            contas.reduce((s, r) => s + r.qt, 0),
+      qt_aberto:     contas.reduce((s, r) => s + r.qt_aberto, 0),
+      cobrado:       formatBRL(contas.reduce((s, r) => s + r.vl_conta_raw, 0)),
+      cobrado_raw:   contas.reduce((s, r) => s + r.vl_conta_raw, 0),
+      glosa:         formatBRL(contas.reduce((s, r) => s + r.vl_glosa_raw, 0)),
+      glosa_raw:     contas.reduce((s, r) => s + r.vl_glosa_raw, 0),
+      liquido:       formatBRL(contas.reduce((s, r) => s + r.vl_liquido_raw, 0)),
+      liquido_raw:   contas.reduce((s, r) => s + r.vl_liquido_raw, 0),
+    };
+
     res.render('admin/tasy_resumo', {
       page:       'tasy',
       contas,
       protocolos,
+      totais,
       filters:    req.query,
       csrfToken:  req.session.csrfToken,
     });
@@ -432,6 +444,162 @@ exports.resumoContas = async (req, res) => {
     });
   } catch (err) {
     logger.error(`[TasyProtocolo] resumoContas: ${err.message}`);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+// GET /admin/tasy/resumo/export
+exports.resumoExport = async (req, res) => {
+  try {
+    const { dtInicio, dtFim } = req.query;
+    const contaWhere = {};
+    if (dtInicio || dtFim) {
+      contaWhere.dt_entrada = {};
+      if (dtInicio) contaWhere.dt_entrada[Op.gte] = dtInicio;
+      if (dtFim)    contaWhere.dt_entrada[Op.lte] = dtFim;
+    }
+    const rows = await TasyConta.findAll({
+      attributes: [
+        'ds_convenio',
+        [fn('COUNT', col('id')), 'qt'],
+        [fn('SUM', col('vl_conta')), 'vl_conta'],
+        [fn('SUM', col('vl_glosa')), 'vl_glosa'],
+        [fn('SUM', col('vl_liquido')), 'vl_liquido'],
+        [literal(`SUM(CASE WHEN status_categoria IN ('aberto','pendente') THEN 1 ELSE 0 END)`), 'qt_aberto'],
+      ],
+      where: contaWhere,
+      group: ['ds_convenio'],
+      order: [[fn('SUM', col('vl_conta')), 'DESC']],
+      raw: true,
+    });
+    const header = 'Convenio,Total Contas,Em Aberto,Cobrado do Convenio,Glosa,% Glosa,Liquido Aprovado';
+    const lines = rows.map(r => {
+      const vl = Number(r.vl_conta || 0);
+      const gl = Number(r.vl_glosa || 0);
+      return [
+        r.ds_convenio || '',
+        Number(r.qt || 0),
+        Number(r.qt_aberto || 0),
+        vl.toFixed(2).replace('.', ','),
+        gl.toFixed(2).replace('.', ','),
+        vl > 0 ? ((gl / vl) * 100).toFixed(1) : '0,0',
+        Number(r.vl_liquido || 0).toFixed(2).replace('.', ','),
+      ].map(escapeCSV).join(',');
+    });
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="resumo_convenios_${date}.csv"`);
+    res.send('\uFEFF' + header + '\n' + lines.join('\n'));
+  } catch (err) {
+    logger.error(`[TasyProtocolo] resumoExport: ${err.message}`);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+// GET /admin/tasy/resumo/contas/export
+exports.resumoContasExport = async (req, res) => {
+  try {
+    const { ds_convenio, dtInicio, dtFim } = req.query;
+    const where = {};
+    if (ds_convenio != null) where.ds_convenio = ds_convenio === '' ? null : ds_convenio;
+    if (dtInicio || dtFim) {
+      where.dt_entrada = {};
+      if (dtInicio) where.dt_entrada[Op.gte] = dtInicio;
+      if (dtFim)    where.dt_entrada[Op.lte] = dtFim;
+    }
+    const rows = await TasyConta.findAll({
+      where,
+      order: [
+        [literal(`CASE WHEN status_categoria IN ('aberto','pendente') THEN 0 ELSE 1 END`), 'ASC'],
+        ['dt_entrada', 'DESC'],
+      ],
+      raw: true,
+    });
+    const header = 'Situacao,Atendimento,Paciente,Convenio,Plano,Status,Entrada,Saida,Cobrado,Glosa,% Glosa,Liquido';
+    const lines = rows.map(r => {
+      const vl = Number(r.vl_conta || 0);
+      const gl = Number(r.vl_glosa || 0);
+      return [
+        ['aberto','pendente'].includes(r.status_categoria) ? 'Em Aberto' : 'Fechada',
+        r.nr_atendimento || '',
+        r.nm_paciente    || '',
+        r.ds_convenio    || '',
+        r.ds_plano       || '',
+        r.status_categoria || '',
+        r.dt_entrada     || '',
+        r.dt_saida       || '',
+        vl.toFixed(2).replace('.', ','),
+        gl.toFixed(2).replace('.', ','),
+        vl > 0 ? ((gl / vl) * 100).toFixed(1) : '0,0',
+        Number(r.vl_liquido || 0).toFixed(2).replace('.', ','),
+      ].map(escapeCSV).join(',');
+    });
+    const conv = (ds_convenio || 'todas').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="contas_${conv}_${date}.csv"`);
+    res.send('\uFEFF' + header + '\n' + lines.join('\n'));
+  } catch (err) {
+    logger.error(`[TasyProtocolo] resumoContasExport: ${err.message}`);
+    res.status(500).send('Erro interno.');
+  }
+};
+
+// GET /admin/tasy/resumo/protocolos?cd_convenio=X
+exports.resumoProtocolos = async (req, res) => {
+  try {
+    const { cd_convenio, dtInicio, dtFim } = req.query;
+    const where = { nr_seq_protocolo: { [Op.ne]: null } };
+    if (cd_convenio) where.cd_convenio = Number(cd_convenio);
+    if (dtInicio || dtFim) {
+      where.dt_periodo_inicial = {};
+      if (dtInicio) where.dt_periodo_inicial[Op.gte] = dtInicio;
+      if (dtFim)    where.dt_periodo_inicial[Op.lte] = dtFim;
+    }
+
+    const rows = await TasyProtocolo.findAll({
+      where,
+      order: [['dt_periodo_inicial', 'DESC']],
+      limit: 2000,
+      raw: true,
+    });
+
+    const ds_nome = rows[0]?.ds_nome_convenio || `Conv. #${cd_convenio}`;
+
+    function somaVl(campo) { return rows.reduce((s, r) => s + Number(r[campo] || 0), 0); }
+    const totais = {
+      qt:         rows.length,
+      recebimento: formatBRL(somaVl('vl_recebimento')),
+    };
+
+    const porStatus = {};
+    for (const k of Object.keys(STATUS_PROTOCOLO)) {
+      const n = Number(k);
+      const subset = rows.filter(r => r.ie_status_protocolo === n);
+      const vlRaw = subset.reduce((s, r) => s + Number(r.vl_recebimento || 0), 0);
+      porStatus[n] = { label: STATUS_PROTOCOLO[n], qt: subset.length, vl: formatBRL(vlRaw), vl_raw: vlRaw };
+    }
+
+    res.render('admin/tasy_resumo_protocolos', {
+      page:        'tasy',
+      ds_nome_convenio: ds_nome,
+      cd_convenio,
+      rows: rows.map(r => ({
+        ...r,
+        ds_status: STATUS_PROTOCOLO[r.ie_status_protocolo] || `Status ${r.ie_status_protocolo}`,
+        vl_recebimento_fmt: formatBRL(r.vl_recebimento),
+        dt_periodo_inicial_fmt: r.dt_periodo_inicial || '—',
+        dt_periodo_final_fmt:   r.dt_periodo_final   || '—',
+        dt_definitivo_fmt:      r.dt_definitivo ? formatDate(r.dt_definitivo) : '—',
+      })),
+      totais,
+      porStatus,
+      truncated: rows.length >= 2000,
+      filters:    req.query,
+      csrfToken:  req.session.csrfToken,
+    });
+  } catch (err) {
+    logger.error(`[TasyProtocolo] resumoProtocolos: ${err.message}`);
     res.status(500).send('Erro interno.');
   }
 };

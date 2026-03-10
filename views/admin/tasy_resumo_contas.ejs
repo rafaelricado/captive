@@ -10,10 +10,32 @@
     .back-link { display:inline-flex; align-items:center; gap:6px; font-size:.82rem; color:#0d4e8b; text-decoration:none; margin-bottom:16px; }
     .back-link:hover { text-decoration:underline; }
 
-    .section-title {
-      font-size:.88rem; font-weight:700; padding:8px 14px; border-radius:6px;
-      margin:20px 0 10px; display:flex; align-items:center; gap:10px;
-    }
+    /* Cards */
+    .summary-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+    .scard { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:14px 18px; border-top:3px solid #e5e7eb; }
+    .scard-aberto   { border-top-color:#b45309; }
+    .scard-fechado  { border-top-color:#15803d; }
+    .scard-cobrado  { border-top-color:#0d4e8b; }
+    .scard-glosa    { border-top-color:#b91c1c; }
+    .scard-label { font-size:.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; }
+    .scard-value { font-size:1.1rem; font-weight:700; color:#111827; margin-top:3px; }
+    .scard-aberto  .scard-value { color:#b45309; }
+    .scard-fechado .scard-value { color:#15803d; }
+    .scard-cobrado .scard-value { color:#0d4e8b; }
+    .scard-glosa   .scard-value { color:#b91c1c; }
+    .scard-sub { font-size:.75rem; color:#9ca3af; margin-top:2px; }
+
+    /* Filter bar */
+    .filter-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:10px 14px; margin-bottom:16px; }
+    .filter-bar input[type="text"] { padding:5px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:.82rem; color:#1f2937; background:#f9fafb; min-width:200px; }
+    .btn-toggle { padding:5px 12px; font-size:.78rem; border:1px solid #d1d5db; border-radius:6px; background:#f9fafb; color:#374151; cursor:pointer; font-weight:600; }
+    .btn-toggle.active-all    { border-color:#374151; background:#374151; color:#fff; }
+    .btn-toggle.active-aberto { border-color:#b45309; background:#fef3c7; color:#b45309; }
+    .btn-toggle.active-fechado{ border-color:#15803d; background:#f0fdf4; color:#15803d; }
+    .btn-export { padding:6px 14px; background:#fff; color:#374151; border:1px solid #d1d5db; border-radius:6px; font-size:.82rem; font-weight:600; text-decoration:none; display:inline-block; margin-left:auto; }
+    .btn-export:hover { border-color:#0d4e8b; color:#0d4e8b; }
+
+    .section-title { font-size:.88rem; font-weight:700; padding:8px 14px; border-radius:6px; margin:20px 0 10px; display:flex; align-items:center; gap:10px; }
     .section-aberto  { background:#fef3c7; color:#92400e; }
     .section-fechado { background:#f0fdf4; color:#166534; }
     .section-count   { font-size:.75rem; font-weight:400; opacity:.8; }
@@ -22,16 +44,18 @@
     tfoot td  { font-weight:700; background:#f8fafc; }
     .tfoot-label { color:#6b7280; font-size:.8rem; font-weight:600; }
     .glosa-pct { font-size:.72rem; color:#b91c1c; }
-
     .badge-cat { display:inline-block; padding:1px 7px; border-radius:99px; font-size:.7rem; font-weight:700; white-space:nowrap; }
     .badge-aberto   { background:#fef3c7; color:#b45309; }
     .badge-pendente { background:#ffe4e6; color:#9f1239; }
     .badge-faturado { background:#f0fdf4; color:#15803d; }
     .badge-outro    { background:#f3f4f6; color:#6b7280; }
-
     td.nm-pac { max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .alert-warn { background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; padding:8px 14px; font-size:.82rem; color:#92400e; margin-bottom:12px; }
 
-    @media (max-width:768px) { table { font-size:.75rem; } }
+    tr.hidden-row { display:none; }
+
+    @media (max-width:900px) { .summary-cards { grid-template-columns:repeat(2,1fr); } }
+    @media (max-width:480px) { .summary-cards { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -43,10 +67,18 @@
       if (filters.dtInicio) qs.set('dtInicio', filters.dtInicio);
       if (filters.dtFim)    qs.set('dtFim',    filters.dtFim);
       const backUrl = '/admin/tasy/resumo' + (qs.toString() ? '?' + qs.toString() : '');
+      const exportQs = new URLSearchParams(filters);
+      const exportUrl = '/admin/tasy/resumo/contas/export?' + exportQs.toString();
 
       function fBRL(n) { return (n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
       function fDate(d) { return d ? String(d).slice(0,10).split('-').reverse().join('/') : '—'; }
       function pct(g, t) { return t > 0 ? ((g/t)*100).toFixed(1) + '%' : '—'; }
+
+      const totalGeral = abertas.length + fechadas.length;
+      function somaVl(arr, campo) { return arr.reduce((s,r) => s + Number(r[campo]||0), 0); }
+      const vlContaTotal  = somaVl(abertas,'vl_conta')  + somaVl(fechadas,'vl_conta');
+      const vlGlosaTotal  = somaVl(abertas,'vl_glosa')  + somaVl(fechadas,'vl_glosa');
+      const vlLiqTotal    = somaVl(abertas,'vl_liquido') + somaVl(fechadas,'vl_liquido');
     %>
 
     <a href="<%= backUrl %>" class="back-link">&#8592; Resumo por Convênio</a>
@@ -57,22 +89,58 @@
       </p>
     <% } %>
 
-    <p style="font-size:.78rem;color:#6b7280;margin-bottom:16px;background:#f8fafc;border-left:3px solid #d1d5db;padding:6px 10px;border-radius:0 4px 4px 0;">
+    <!-- Cards -->
+    <div class="summary-cards">
+      <div class="scard scard-aberto">
+        <div class="scard-label">Em Aberto</div>
+        <div class="scard-value"><%= abertas.length.toLocaleString('pt-BR') %></div>
+        <div class="scard-sub"><%= totAbertas.vl_conta %> cobrado</div>
+      </div>
+      <div class="scard scard-fechado">
+        <div class="scard-label">Fechadas / Faturadas</div>
+        <div class="scard-value"><%= fechadas.length.toLocaleString('pt-BR') %></div>
+        <div class="scard-sub"><%= totFechadas.vl_conta %> cobrado</div>
+      </div>
+      <div class="scard scard-cobrado">
+        <div class="scard-label">Total Cobrado</div>
+        <div class="scard-value"><%= fBRL(vlContaTotal) %></div>
+        <div class="scard-sub"><%= totalGeral.toLocaleString('pt-BR') %> contas no total</div>
+      </div>
+      <div class="scard scard-glosa">
+        <div class="scard-label">Glosa Total</div>
+        <div class="scard-value"><%= fBRL(vlGlosaTotal) %></div>
+        <div class="scard-sub">Líquido: <%= fBRL(vlLiqTotal) %></div>
+      </div>
+    </div>
+
+    <!-- Legenda + filter bar -->
+    <p style="font-size:.78rem;color:#6b7280;margin-bottom:10px;background:#f8fafc;border-left:3px solid #d1d5db;padding:6px 10px;border-radius:0 4px 4px 0;">
       <strong>Cobrado do convênio</strong> = valor enviado para faturamento &nbsp;·&nbsp;
       <strong>Glosa</strong> = valor recusado pelo convênio &nbsp;·&nbsp;
       <strong>Líquido aprovado</strong> = Cobrado − Glosa
     </p>
 
-    <!-- Contas em Aberto -->
-    <div class="section-title section-aberto">
-      Contas em Aberto
-      <span class="section-count">(<%= abertas.length.toLocaleString('pt-BR') %> registros)</span>
+    <div class="filter-bar">
+      <input type="text" id="busca-paciente" placeholder="Buscar por paciente ou atendimento…" oninput="filtrarTabela()">
+      <button class="btn-toggle active-all"    id="btn-all"    onclick="setSecao('all')">Todas (<%= totalGeral %>)</button>
+      <button class="btn-toggle"               id="btn-aberto" onclick="setSecao('aberto')">Em Aberto (<%= abertas.length %>)</button>
+      <button class="btn-toggle"               id="btn-fechado" onclick="setSecao('fechado')">Fechadas (<%= fechadas.length %>)</button>
+      <a href="<%= exportUrl %>" class="btn-export">&#8595; Exportar CSV</a>
     </div>
 
+    <% if (totalGeral >= 2000) { %>
+      <div class="alert-warn">&#9888; Exibindo os primeiros 2.000 registros. Use o botão "Exportar CSV" para obter todos os dados.</div>
+    <% } %>
+
+    <!-- Contas em Aberto -->
+    <div class="section-title section-aberto" id="sec-aberto">
+      Contas em Aberto
+      <span class="section-count">(<span id="cnt-aberto"><%= abertas.length %></span> registros)</span>
+    </div>
     <% if (abertas.length === 0) { %>
-      <p style="color:#9ca3af;font-size:.85rem;margin-bottom:16px;">Nenhuma conta em aberto.</p>
+      <p style="color:#9ca3af;font-size:.85rem;margin-bottom:16px;" id="empty-aberto">Nenhuma conta em aberto.</p>
     <% } else { %>
-      <div style="overflow-x:auto;margin-bottom:4px;">
+      <div style="overflow-x:auto;margin-bottom:4px;" id="wrap-aberto">
         <table class="data-table">
           <thead>
             <tr>
@@ -87,9 +155,9 @@
               <th style="text-align:right;">Líquido Aprovado</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="tbody-aberto">
             <% abertas.forEach(r => { %>
-              <tr>
+              <tr data-busca="<%= ((r.nm_paciente||'') + ' ' + (r.nr_atendimento||'')).toLowerCase() %>" data-secao="aberto">
                 <td style="font-size:.78rem;color:#6b7280;"><%= r.nr_atendimento %></td>
                 <td class="nm-pac" title="<%= r.nm_paciente || '' %>"><%= r.nm_paciente || '—' %></td>
                 <td style="font-size:.8rem;"><%= r.ds_plano || '—' %></td>
@@ -104,7 +172,7 @@
           </tbody>
           <tfoot>
             <tr>
-              <td class="tfoot-label" colspan="6">Total</td>
+              <td class="tfoot-label" colspan="6">Total em aberto</td>
               <td class="valor"><%= totAbertas.vl_conta %></td>
               <td class="valor"><%= totAbertas.vl_glosa %></td>
               <td class="valor"><%= totAbertas.vl_liquido %></td>
@@ -115,15 +183,14 @@
     <% } %>
 
     <!-- Contas Fechadas -->
-    <div class="section-title section-fechado" style="margin-top:28px;">
+    <div class="section-title section-fechado" style="margin-top:28px;" id="sec-fechado">
       Contas Fechadas / Faturadas
-      <span class="section-count">(<%= fechadas.length.toLocaleString('pt-BR') %> registros)</span>
+      <span class="section-count">(<span id="cnt-fechado"><%= fechadas.length %></span> registros)</span>
     </div>
-
     <% if (fechadas.length === 0) { %>
-      <p style="color:#9ca3af;font-size:.85rem;">Nenhuma conta fechada.</p>
+      <p style="color:#9ca3af;font-size:.85rem;" id="empty-fechado">Nenhuma conta fechada.</p>
     <% } else { %>
-      <div style="overflow-x:auto;">
+      <div style="overflow-x:auto;" id="wrap-fechado">
         <table class="data-table">
           <thead>
             <tr>
@@ -139,9 +206,9 @@
               <th style="text-align:right;">Líquido Aprovado</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="tbody-fechado">
             <% fechadas.forEach(r => { %>
-              <tr>
+              <tr data-busca="<%= ((r.nm_paciente||'') + ' ' + (r.nr_atendimento||'')).toLowerCase() %>" data-secao="fechado">
                 <td style="font-size:.78rem;color:#6b7280;"><%= r.nr_atendimento %></td>
                 <td class="nm-pac" title="<%= r.nm_paciente || '' %>"><%= r.nm_paciente || '—' %></td>
                 <td style="font-size:.8rem;"><%= r.ds_plano || '—' %></td>
@@ -157,7 +224,7 @@
           </tbody>
           <tfoot>
             <tr>
-              <td class="tfoot-label" colspan="6">Total</td>
+              <td class="tfoot-label" colspan="6">Total fechadas</td>
               <td class="valor"><%= totFechadas.vl_conta %></td>
               <td class="valor"><%= totFechadas.vl_glosa %></td>
               <td></td>
@@ -168,5 +235,47 @@
       </div>
     <% } %>
   </main>
+
+  <script>
+    let secaoAtiva = 'all';
+
+    function setSecao(secao) {
+      secaoAtiva = secao;
+      ['all','aberto','fechado'].forEach(s => {
+        document.getElementById('btn-' + s)?.classList.remove('active-all','active-aberto','active-fechado');
+      });
+      const cls = secao === 'all' ? 'active-all' : secao === 'aberto' ? 'active-aberto' : 'active-fechado';
+      document.getElementById('btn-' + secao)?.classList.add(cls);
+
+      const showAberto  = secao === 'all' || secao === 'aberto';
+      const showFechado = secao === 'all' || secao === 'fechado';
+      ['sec-aberto','wrap-aberto','empty-aberto'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.style.display = showAberto ? '' : 'none';
+      });
+      ['sec-fechado','wrap-fechado','empty-fechado'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.style.display = showFechado ? '' : 'none';
+      });
+      filtrarTabela();
+    }
+
+    function filtrarTabela() {
+      const q = (document.getElementById('busca-paciente')?.value || '').toLowerCase().trim();
+      let cntA = 0, cntF = 0;
+
+      document.querySelectorAll('tr[data-secao]').forEach(tr => {
+        const secao = tr.dataset.secao;
+        const match = !q || tr.dataset.busca.includes(q);
+        const secaoOk = secaoAtiva === 'all' || secaoAtiva === secao;
+        tr.style.display = match && secaoOk ? '' : 'none';
+        if (match && secaoOk) {
+          if (secao === 'aberto') cntA++;
+          else cntF++;
+        }
+      });
+
+      const ca = document.getElementById('cnt-aberto'); if (ca) ca.textContent = cntA;
+      const cf = document.getElementById('cnt-fechado'); if (cf) cf.textContent = cntF;
+    }
+  </script>
 </body>
 </html>

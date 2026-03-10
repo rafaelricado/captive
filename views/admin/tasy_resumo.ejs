@@ -6,6 +6,7 @@
   <title>Resumo por Convênio &mdash; Painel Admin</title>
   <meta name="csrf-token" content="<%= csrfToken %>">
   <%- include('_head') %>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <style>
     .filter-bar {
       display:flex; align-items:center; gap:8px; flex-wrap:wrap;
@@ -21,24 +22,52 @@
     .btn-clear:hover { color:#0d4e8b; }
     .btn-shortcut { padding:4px 10px; font-size:.75rem; border:1px solid #d1d5db; border-radius:5px; background:#f9fafb; color:#374151; cursor:pointer; white-space:nowrap; }
     .btn-shortcut:hover { border-color:#0d4e8b; color:#0d4e8b; background:#eff6ff; }
+    .btn-export { padding:6px 14px; background:#fff; color:#374151; border:1px solid #d1d5db; border-radius:6px; font-size:.82rem; font-weight:600; text-decoration:none; display:inline-block; }
+    .btn-export:hover { border-color:#0d4e8b; color:#0d4e8b; }
+
+    /* Summary cards */
+    .summary-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+    .scard { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:14px 18px; border-top:3px solid #e5e7eb; }
+    .scard-cobrado  { border-top-color:#0d4e8b; }
+    .scard-glosa    { border-top-color:#b91c1c; }
+    .scard-liquido  { border-top-color:#15803d; }
+    .scard-aberto   { border-top-color:#b45309; }
+    .scard-label { font-size:.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; }
+    .scard-value { font-size:1.18rem; font-weight:700; color:#111827; margin-top:3px; }
+    .scard-cobrado .scard-value  { color:#0d4e8b; }
+    .scard-glosa   .scard-value  { color:#b91c1c; }
+    .scard-liquido .scard-value  { color:#15803d; }
+    .scard-aberto  .scard-value  { color:#b45309; }
+    .scard-sub { font-size:.75rem; color:#9ca3af; margin-top:2px; }
+
+    /* Chart */
+    .chart-wrap { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:16px 20px; margin-bottom:20px; }
+    .chart-title { font-size:.85rem; font-weight:600; color:#374151; margin-bottom:10px; }
 
     .group-title {
       font-size:.95rem; font-weight:700; color:#0d4e8b;
-      margin:24px 0 10px; padding-bottom:6px;
-      border-bottom:2px solid #e5e7eb;
+      margin:24px 0 6px; padding-bottom:6px;
+      border-bottom:2px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between;
     }
     td.valor { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
     tfoot td  { font-weight:700; background:#f8fafc; }
     .tfoot-label { color:#6b7280; font-size:.8rem; font-weight:600; }
     .glosa-pct { font-size:.72rem; color:#b91c1c; }
-
     .badge-aberto { display:inline-block; padding:2px 8px; border-radius:99px; font-size:.72rem; font-weight:700; background:#fef3c7; color:#b45309; }
     tr.row-link { cursor:pointer; }
     tr.row-link:hover td { background:#f0f7ff !important; }
 
-    @media (max-width:768px) {
+    th.sortable { cursor:pointer; user-select:none; }
+    th.sortable:hover { background:#f0f4f8; }
+    th.sortable::after { content:' ↕'; font-size:.65rem; color:#9ca3af; }
+    th.sortable.asc::after  { content:' ↑'; color:#0d4e8b; }
+    th.sortable.desc::after { content:' ↓'; color:#0d4e8b; }
+
+    @media (max-width:900px) {
+      .summary-cards { grid-template-columns:repeat(2,1fr); }
       .filter-bar { flex-direction:column; align-items:flex-start; }
     }
+    @media (max-width:480px) { .summary-cards { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -68,8 +97,43 @@
       <a href="/admin/tasy/resumo" class="btn-clear">Limpar</a>
     </form>
 
+    <!-- Cards de totais -->
+    <div class="summary-cards">
+      <div class="scard scard-cobrado">
+        <div class="scard-label">Cobrado do Convênio</div>
+        <div class="scard-value"><%= totais.cobrado %></div>
+        <div class="scard-sub"><%= totais.qt.toLocaleString('pt-BR') %> contas</div>
+      </div>
+      <div class="scard scard-glosa">
+        <div class="scard-label">Glosa (recusado)</div>
+        <div class="scard-value"><%= totais.glosa %></div>
+        <div class="scard-sub"><%= totais.cobrado_raw > 0 ? ((totais.glosa_raw / totais.cobrado_raw)*100).toFixed(1) + '% do cobrado' : '—' %></div>
+      </div>
+      <div class="scard scard-liquido">
+        <div class="scard-label">Líquido Aprovado</div>
+        <div class="scard-value"><%= totais.liquido %></div>
+        <div class="scard-sub">Cobrado − Glosa</div>
+      </div>
+      <div class="scard scard-aberto">
+        <div class="scard-label">Contas em Aberto</div>
+        <div class="scard-value"><%= totais.qt_aberto.toLocaleString('pt-BR') %></div>
+        <div class="scard-sub"><%= totais.qt > 0 ? ((totais.qt_aberto / totais.qt)*100).toFixed(1) + '% do total' : '—' %></div>
+      </div>
+    </div>
+
+    <!-- Gráfico top convênios -->
+    <% if (contas.length > 0) { %>
+    <div class="chart-wrap">
+      <div class="chart-title">Top convênios — Cobrado vs Líquido aprovado</div>
+      <canvas id="chart-convenios" height="<%= Math.min(contas.length, 10) * 28 + 20 %>"></canvas>
+    </div>
+    <% } %>
+
     <!-- Grupo: Contas de Paciente -->
-    <div class="group-title">Contas de Paciente por Convênio <span style="font-size:.78rem;font-weight:400;color:#9ca3af;">— clique na linha para ver as contas</span></div>
+    <div class="group-title">
+      <span>Contas de Paciente por Convênio <span style="font-size:.78rem;font-weight:400;color:#9ca3af;">— clique na linha para ver as contas</span></span>
+      <a href="/admin/tasy/resumo/export?<%= new URLSearchParams(filters).toString() %>" class="btn-export">&#8595; CSV</a>
+    </div>
     <p style="font-size:.78rem;color:#6b7280;margin:-4px 0 12px;background:#f8fafc;border-left:3px solid #d1d5db;padding:6px 10px;border-radius:0 4px 4px 0;">
       <strong>Cobrado do convênio</strong> = valor total enviado para faturamento &nbsp;·&nbsp;
       <strong>Glosa</strong> = valor recusado/contestado pelo convênio &nbsp;·&nbsp;
@@ -79,8 +143,6 @@
       <p style="color:#9ca3af;font-size:.85rem;">Nenhuma conta encontrada para o período selecionado.</p>
     <% } else { %>
       <%
-        let totQtC = 0, totAbC = 0, totContaC = 0, totGlosaC = 0, totLiqC = 0;
-        contas.forEach(r => { totQtC += r.qt; totAbC += r.qt_aberto; totContaC += r.vl_conta_raw; totGlosaC += r.vl_glosa_raw; totLiqC += r.vl_liquido_raw; });
         function fBRL(n) { return (n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
         function pct(g, t) { return t > 0 ? ((g/t)*100).toFixed(1) + '%' : '—'; }
         function detalheUrl(conv) {
@@ -89,23 +151,26 @@
           if (filters.dtFim)    p.set('dtFim',    filters.dtFim);
           return '/admin/tasy/resumo/contas?' + p.toString();
         }
+        let totQtC = 0, totAbC = 0, totContaC = 0, totGlosaC = 0, totLiqC = 0;
+        contas.forEach(r => { totQtC += r.qt; totAbC += r.qt_aberto; totContaC += r.vl_conta_raw; totGlosaC += r.vl_glosa_raw; totLiqC += r.vl_liquido_raw; });
       %>
       <div style="overflow-x:auto;">
-        <table class="data-table">
+        <table class="data-table" id="tbl-contas">
           <thead>
             <tr>
-              <th>Convênio</th>
-              <th style="text-align:right;">Total</th>
-              <th style="text-align:right;">Em Aberto</th>
-              <th style="text-align:right;">Cobrado do Convênio</th>
-              <th style="text-align:right;">Glosa (recusado)</th>
-              <th style="text-align:right;">% Glosa</th>
-              <th style="text-align:right;">Líquido Aprovado</th>
+              <th class="sortable" data-col="0">Convênio</th>
+              <th class="sortable" data-col="1" style="text-align:right;">Total</th>
+              <th class="sortable" data-col="2" style="text-align:right;">Em Aberto</th>
+              <th class="sortable" data-col="3" style="text-align:right;">Cobrado do Convênio</th>
+              <th class="sortable" data-col="4" style="text-align:right;">Glosa (recusado)</th>
+              <th class="sortable" data-col="5" style="text-align:right;">% Glosa</th>
+              <th class="sortable" data-col="6" style="text-align:right;">Líquido Aprovado</th>
             </tr>
           </thead>
           <tbody>
             <% contas.forEach(r => { %>
-              <tr class="row-link" onclick="location.href='<%= detalheUrl(r.ds_convenio) %>'">
+              <tr class="row-link" onclick="location.href='<%= detalheUrl(r.ds_convenio) %>'"
+                  data-vals="<%= [r.ds_convenio, r.qt, r.qt_aberto, r.vl_conta_raw, r.vl_glosa_raw, r.vl_glosa_raw > 0 && r.vl_conta_raw > 0 ? (r.vl_glosa_raw/r.vl_conta_raw*100).toFixed(2) : 0, r.vl_liquido_raw].join('|') %>">
                 <td><%= r.ds_convenio %></td>
                 <td class="valor"><%= r.qt.toLocaleString('pt-BR') %></td>
                 <td class="valor">
@@ -138,27 +203,36 @@
     <% } %>
 
     <!-- Grupo: Protocolos de Convênio -->
-    <div class="group-title">Protocolos por Convênio</div>
+    <div class="group-title" style="margin-top:32px;">
+      <span>Protocolos por Convênio <span style="font-size:.78rem;font-weight:400;color:#9ca3af;">— clique na linha para ver os protocolos</span></span>
+    </div>
     <% if (protocolos.length === 0) { %>
       <p style="color:#9ca3af;font-size:.85rem;">Nenhum protocolo encontrado para o período selecionado.</p>
     <% } else { %>
       <%
         let totQtP = 0, totRecebP = 0;
         protocolos.forEach(r => { totQtP += r.qt; totRecebP += r.vl_recebimento_raw; });
+        function protUrl(cdConvenio) {
+          const p = new URLSearchParams({ cd_convenio: cdConvenio });
+          if (filters.dtInicio) p.set('dtInicio', filters.dtInicio);
+          if (filters.dtFim)    p.set('dtFim',    filters.dtFim);
+          return '/admin/tasy/resumo/protocolos?' + p.toString();
+        }
       %>
       <div style="overflow-x:auto;">
-        <table class="data-table">
+        <table class="data-table" id="tbl-prot">
           <thead>
             <tr>
-              <th>Cód.</th>
-              <th>Convênio</th>
-              <th style="text-align:right;">Protocolos</th>
-              <th style="text-align:right;">Vl. Recebimento</th>
+              <th class="sortable" data-col="0">Cód.</th>
+              <th class="sortable" data-col="1">Convênio</th>
+              <th class="sortable" data-col="2" style="text-align:right;">Protocolos</th>
+              <th class="sortable" data-col="3" style="text-align:right;">Vl. Recebimento</th>
             </tr>
           </thead>
           <tbody>
             <% protocolos.forEach(r => { %>
-              <tr>
+              <tr class="row-link" onclick="location.href='<%= protUrl(r.cd_convenio) %>'"
+                  data-vals="<%= [r.cd_convenio, r.ds_nome_convenio, r.qt, r.vl_recebimento_raw].join('|') %>">
                 <td style="color:#9ca3af;font-size:.8rem;"><%= r.cd_convenio %></td>
                 <td><%= r.ds_nome_convenio %></td>
                 <td class="valor"><%= r.qt.toLocaleString('pt-BR') %></td>
@@ -180,6 +254,7 @@
   </main>
 
   <script>
+    // ---- Atalhos de data ----
     function setShortcut(range) {
       const now = new Date();
       let from, to = now.toISOString().slice(0, 10);
@@ -198,6 +273,71 @@
       document.getElementById('dtFim').value    = to;
       document.getElementById('filter-form').submit();
     }
+
+    // ---- Ordenação por coluna ----
+    function initSort(tableId) {
+      const table = document.getElementById(tableId);
+      if (!table) return;
+      const headers = table.querySelectorAll('th.sortable');
+      headers.forEach(th => {
+        th.addEventListener('click', () => {
+          const col = parseInt(th.dataset.col);
+          const isAsc = th.classList.contains('asc');
+          headers.forEach(h => h.classList.remove('asc', 'desc'));
+          th.classList.add(isAsc ? 'desc' : 'asc');
+          const tbody = table.querySelector('tbody');
+          const rows = Array.from(tbody.querySelectorAll('tr'));
+          rows.sort((a, b) => {
+            const av = (a.dataset.vals || '').split('|')[col] || '';
+            const bv = (b.dataset.vals || '').split('|')[col] || '';
+            const an = parseFloat(av.replace(',', '.'));
+            const bn = parseFloat(bv.replace(',', '.'));
+            const cmp = isNaN(an) || isNaN(bn) ? av.localeCompare(bv, 'pt-BR') : an - bn;
+            return isAsc ? -cmp : cmp;
+          });
+          rows.forEach(r => tbody.appendChild(r));
+        });
+      });
+    }
+    initSort('tbl-contas');
+    initSort('tbl-prot');
+
+    // ---- Gráfico ----
+    <% if (contas.length > 0) { %>
+    (function() {
+      const top = <%- JSON.stringify(contas.slice(0, 10).map(r => ({
+        label: r.ds_convenio.length > 30 ? r.ds_convenio.slice(0, 28) + '…' : r.ds_convenio,
+        cobrado: r.vl_conta_raw,
+        liquido: r.vl_liquido_raw,
+      }))) %>;
+      const ctx = document.getElementById('chart-convenios').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: top.map(r => r.label),
+          datasets: [
+            { label: 'Cobrado', data: top.map(r => r.cobrado), backgroundColor: 'rgba(13,78,139,.55)', borderColor: '#0d4e8b', borderWidth: 1 },
+            { label: 'Líquido', data: top.map(r => r.liquido), backgroundColor: 'rgba(21,128,61,.55)',  borderColor: '#15803d', borderWidth: 1 },
+          ],
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          plugins: {
+            legend: { position: 'top' },
+            tooltip: {
+              callbacks: {
+                label: ctx => ' ' + ctx.dataset.label + ': ' + ctx.parsed.x.toLocaleString('pt-BR', { style:'currency', currency:'BRL' }),
+              },
+            },
+          },
+          scales: {
+            x: { ticks: { callback: v => v.toLocaleString('pt-BR', { style:'currency', currency:'BRL', maximumFractionDigits:0 }) } },
+          },
+        },
+      });
+    })();
+    <% } %>
   </script>
 </body>
 </html>
