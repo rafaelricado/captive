@@ -511,4 +511,95 @@ async function queryItensSemValor({ dtInicio, dtFim, cdConvenio } = {}) {
   }
 }
 
-module.exports = { discoverColumns, syncContas, syncProtocolos, lookupPessoaFisica, queryItensSemValor };
+/**
+ * Consulta ocupação hospitalar em tempo real via OCUPACAO_SETORES_V e EIS_CENSO_DIARIO_V.
+ * Retorna { setores, totais, censo14d }
+ */
+async function queryOcupacaoHospitalar() {
+  let conn;
+  try {
+    conn = await oracledb.getConnection({ ...ORACLE_CONFIG, connectTimeout: 8 });
+    conn.callTimeout = 20000;
+
+    const [rSetores, rCenso] = await Promise.all([
+      // Ocupação por setor (tempo real)
+      conn.execute(
+        `SELECT CD_SETOR_ATENDIMENTO,
+                DS_SETOR_ATENDIMENTO,
+                NR_UNIDADES_SETOR,
+                NR_UNIDADES_OCUPADAS,
+                NR_UNIDADES_LIVRES,
+                NR_UNIDADES_INTERDITADAS,
+                NR_UNIDADES_HIGIENIZACAO,
+                NR_UNIDADES_RESERVADAS,
+                QT_UNIDADES_ALTA,
+                QT_PAC_ISOLADO,
+                NM_UNIDADE
+           FROM TASY.OCUPACAO_SETORES_V
+          WHERE IE_OCUP_HOSPITALAR  IN ('S', 'T')
+            AND IE_SITUACAO         = 'A'
+            AND NR_UNIDADES_OCUPADAS > 0
+          ORDER BY NR_UNIDADES_OCUPADAS DESC, DS_SETOR_ATENDIMENTO`,
+        [],
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      ),
+
+      // Censo diário: últimos 14 dias
+      conn.execute(
+        `SELECT TRUNC(DT_REFERENCIA) AS DT,
+                SUM(NR_PACIENTES)   AS TOT_PAC,
+                SUM(NR_ADMISSOES)   AS ADMISSOES,
+                SUM(NR_ALTAS)       AS ALTAS,
+                SUM(NR_OBITOS)      AS OBITOS
+           FROM TASY.EIS_CENSO_DIARIO_V
+          WHERE DT_REFERENCIA >= TRUNC(SYSDATE) - 13
+            AND IE_SITUACAO = 'A'
+          GROUP BY TRUNC(DT_REFERENCIA)
+          ORDER BY TRUNC(DT_REFERENCIA) ASC`,
+        [],
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      ),
+    ]);
+
+    const fDate = d => d instanceof Date ? d.toISOString().slice(0, 10) : (d ? String(d).slice(0, 10) : null);
+
+    const setores = rSetores.rows.map(r => ({
+      cd_setor:         r.CD_SETOR_ATENDIMENTO,
+      ds_setor:         String(r.DS_SETOR_ATENDIMENTO || '').trim(),
+      nm_unidade:       r.NM_UNIDADE ? String(r.NM_UNIDADE).trim() : null,
+      nr_total:         Number(r.NR_UNIDADES_SETOR       || 0),
+      nr_ocupados:      Number(r.NR_UNIDADES_OCUPADAS    || 0),
+      nr_livres:        Number(r.NR_UNIDADES_LIVRES       || 0),
+      nr_interditados:  Number(r.NR_UNIDADES_INTERDITADAS || 0),
+      nr_higienizacao:  Number(r.NR_UNIDADES_HIGIENIZACAO || 0),
+      nr_reservados:    Number(r.NR_UNIDADES_RESERVADAS   || 0),
+      qt_alta:          Number(r.QT_UNIDADES_ALTA         || 0),
+      qt_isolado:       Number(r.QT_PAC_ISOLADO           || 0),
+    }));
+
+    const totais = setores.reduce((acc, s) => ({
+      nr_total:        acc.nr_total        + s.nr_total,
+      nr_ocupados:     acc.nr_ocupados     + s.nr_ocupados,
+      nr_livres:       acc.nr_livres       + s.nr_livres,
+      nr_interditados: acc.nr_interditados + s.nr_interditados,
+      nr_higienizacao: acc.nr_higienizacao + s.nr_higienizacao,
+      nr_reservados:   acc.nr_reservados   + s.nr_reservados,
+      qt_alta:         acc.qt_alta         + s.qt_alta,
+      qt_isolado:      acc.qt_isolado      + s.qt_isolado,
+    }), { nr_total: 0, nr_ocupados: 0, nr_livres: 0, nr_interditados: 0, nr_higienizacao: 0, nr_reservados: 0, qt_alta: 0, qt_isolado: 0 });
+
+    const censo14d = rCenso.rows.map(r => ({
+      dt:         fDate(r.DT),
+      tot_pac:    Number(r.TOT_PAC   || 0),
+      admissoes:  Number(r.ADMISSOES || 0),
+      altas:      Number(r.ALTAS     || 0),
+      obitos:     Number(r.OBITOS    || 0),
+    }));
+
+    return { setores, totais, censo14d };
+  } finally {
+    if (conn) await conn.close().catch(() => {});
+  }
+}
+
+module.exports = { discoverColumns, syncContas, syncProtocolos, lookupPessoaFisica, queryItensSemValor, queryOcupacaoHospitalar };

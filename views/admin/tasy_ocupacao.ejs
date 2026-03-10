@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ocupação Hospitalar &mdash; Painel Admin</title>
+  <meta name="csrf-token" content="<%= csrfToken %>">
+  <%- include('_head') %>
+  <style>
+    /* Cards de resumo */
+    .occ-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px; }
+    .ocard { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.08); padding:16px 20px; border-top:4px solid #e5e7eb; position:relative; overflow:hidden; }
+    .ocard-blue   { border-top-color:#0d4e8b; }
+    .ocard-green  { border-top-color:#15803d; }
+    .ocard-amber  { border-top-color:#b45309; }
+    .ocard-red    { border-top-color:#b91c1c; }
+    .ocard-purple { border-top-color:#7c3aed; }
+    .ocard-label  { font-size:.7rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.06em; }
+    .ocard-value  { font-size:2rem; font-weight:800; line-height:1.1; margin-top:4px; }
+    .ocard-blue   .ocard-value { color:#0d4e8b; }
+    .ocard-green  .ocard-value { color:#15803d; }
+    .ocard-amber  .ocard-value { color:#b45309; }
+    .ocard-red    .ocard-value { color:#b91c1c; }
+    .ocard-purple .ocard-value { color:#7c3aed; }
+    .ocard-sub  { font-size:.75rem; color:#9ca3af; margin-top:4px; }
+    .ocard-icon { position:absolute; right:16px; top:50%; transform:translateY(-50%); font-size:2.4rem; opacity:.12; }
+
+    /* Painel genérico */
+    .occ-panel { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:18px 20px; margin-bottom:16px; }
+    .occ-panel-title { font-size:.8rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.06em; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; }
+    .occ-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+
+    /* Cartão de setor */
+    .setor-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:12px; }
+    .setor-card { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:14px 16px; border-left:4px solid #e5e7eb; }
+    .setor-card.uti   { border-left-color:#b91c1c; }
+    .setor-card.high  { border-left-color:#d97706; }
+    .setor-card.med   { border-left-color:#0d4e8b; }
+    .setor-card.low   { border-left-color:#15803d; }
+    .setor-card.empty { border-left-color:#e5e7eb; opacity:.6; }
+    .setor-name { font-size:.85rem; font-weight:700; color:#1f2937; margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    /* Mini grid de leitos */
+    .bed-grid { display:flex; flex-wrap:wrap; gap:3px; margin-bottom:8px; min-height:14px; }
+    .bed { width:14px; height:14px; border-radius:3px; display:inline-block; }
+    .bed-ocupado      { background:#0d4e8b; }
+    .bed-alta         { background:#f59e0b; }
+    .bed-higienizacao { background:#6366f1; }
+    .bed-interditado  { background:#ef4444; }
+    .bed-reservado    { background:#a78bfa; }
+    .bed-isolado      { background:#be185d; }
+    .bed-livre        { background:#d1fae5; border:1px solid #86efac; }
+
+    /* Ocupação % badge */
+    .pct-badge { float:right; font-size:.78rem; font-weight:800; padding:2px 8px; border-radius:99px; margin-left:6px; }
+    .pct-crit { background:#fef2f2; color:#b91c1c; }
+    .pct-high { background:#fef3c7; color:#92400e; }
+    .pct-med  { background:#eff6ff; color:#1d4ed8; }
+    .pct-low  { background:#f0fdf4; color:#15803d; }
+
+    /* Stats do setor */
+    .setor-stats { display:flex; gap:8px; font-size:.7rem; flex-wrap:wrap; }
+    .stat-item { display:flex; align-items:center; gap:3px; color:#6b7280; }
+    .stat-dot { width:8px; height:8px; border-radius:50%; display:inline-block; flex-shrink:0; }
+
+    /* Legenda */
+    .legend { display:flex; gap:12px; flex-wrap:wrap; font-size:.73rem; color:#4b5563; margin-bottom:16px; }
+    .legend-item { display:flex; align-items:center; gap:5px; }
+    .legend-box { width:13px; height:13px; border-radius:3px; flex-shrink:0; }
+
+    /* Filtros tabela */
+    .filter-bar2 { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .filter-bar2 input[type="text"],
+    .filter-bar2 select { padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:.82rem; color:#1f2937; background:#f9fafb; }
+    .filter-bar2 input[type="text"] { min-width:220px; }
+
+    /* Dias badge */
+    .dias-badge { display:inline-block; padding:2px 8px; border-radius:99px; font-size:.72rem; font-weight:700; white-space:nowrap; }
+    .dias-ok     { background:#f0fdf4; color:#15803d; }
+    .dias-medium { background:#fef3c7; color:#92400e; }
+    .dias-long   { background:#fef2f2; color:#b91c1c; }
+
+    /* Banner Oracle */
+    .oracle-banner { border-radius:8px; padding:8px 14px; font-size:.78rem; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+    .oracle-ok   { background:#f0fdf4; border:1px solid #86efac; color:#15803d; }
+    .oracle-warn { background:#fef3c7; border:1px solid #fcd34d; color:#92400e; }
+
+    @media (max-width:900px)  { .occ-cards { grid-template-columns:1fr 1fr; } .occ-grid2 { grid-template-columns:1fr; } }
+    @media (max-width:480px)  { .occ-cards { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <%- include('_nav', { page: page }) %>
+  <main class="container">
+    <h2 class="page-title">Tasy &mdash; Ocupação Hospitalar</h2>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid #e5e7eb;flex-wrap:wrap;">
+      <a href="/admin/tasy"            style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#6b7280;text-decoration:none;border-radius:6px 6px 0 0;border:2px solid transparent;border-bottom:none;margin-bottom:-2px;">Contas de Paciente</a>
+      <a href="/admin/tasy/protocolos" style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#6b7280;text-decoration:none;border-radius:6px 6px 0 0;border:2px solid transparent;border-bottom:none;margin-bottom:-2px;">Protocolo Convênio</a>
+      <a href="/admin/tasy/resumo"     style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#6b7280;text-decoration:none;border-radius:6px 6px 0 0;border:2px solid transparent;border-bottom:none;margin-bottom:-2px;">Resumo por Convênio</a>
+      <a href="/admin/tasy/alertas"    style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#b91c1c;text-decoration:none;border-radius:6px 6px 0 0;border:2px solid transparent;border-bottom:none;margin-bottom:-2px;">&#9888; Alertas</a>
+      <a href="/admin/tasy/ocupacao"   style="padding:8px 18px;font-size:.85rem;font-weight:600;color:#0d4e8b;background:#fff;border:2px solid #bfdbfe;border-bottom-color:#fff;border-radius:6px 6px 0 0;text-decoration:none;margin-bottom:-2px;">&#127973; Ocupação</a>
+    </div>
+
+    <%
+      function pctBadgeClass(p) { return p>=90?'pct-crit':p>=70?'pct-high':p>=40?'pct-med':'pct-low'; }
+      function setorCardClass(p, ds) {
+        const n = (ds||'').toUpperCase();
+        if (n.includes('UTI')||n.includes('CTI')||n.includes('UCI')) return 'uti';
+        if (p>=90) return 'high';
+        if (p>=50) return 'med';
+        if (p>0)   return 'low';
+        return 'empty';
+      }
+    %>
+
+    <!-- Banner Oracle -->
+    <% if (oracleError) { %>
+      <div class="oracle-banner oracle-warn">
+        &#9888; Não foi possível consultar o Oracle: <%= oracleError %>. Exibindo dados da última sincronização.
+      </div>
+    <% } else if (oracleData) { %>
+      <div class="oracle-banner oracle-ok">
+        &#10003; Panorama em tempo real — consultado ao Oracle agora.
+        <span style="margin-left:auto;color:#6b7280;font-size:.72rem;">Atualiza a cada acesso</span>
+      </div>
+    <% } %>
+
+    <!-- Cards de resumo -->
+    <%
+      const totOcupados = oracleData ? oracleData.totais.nr_ocupados  : totalAtivos;
+      const totLivres   = oracleData ? oracleData.totais.nr_livres    : null;
+      const totAltaEsp  = oracleData ? oracleData.totais.qt_alta      : altasHoje;
+      const totLeitos   = oracleData ? oracleData.totais.nr_total     : null;
+      const pctGeral    = totLeitos > 0 ? Math.round(totOcupados / totLeitos * 100) : null;
+    %>
+    <div class="occ-cards">
+      <div class="ocard ocard-blue">
+        <div class="ocard-label">Leitos Ocupados</div>
+        <div class="ocard-value"><%= totOcupados.toLocaleString('pt-BR') %></div>
+        <div class="ocard-sub"><%= pctGeral !== null ? pctGeral + '% do total (' + totLeitos + ')' : 'contas em aberto' %></div>
+        <div class="ocard-icon">🛏️</div>
+      </div>
+      <div class="ocard ocard-green">
+        <div class="ocard-label">Leitos Livres</div>
+        <div class="ocard-value"><%= totLivres !== null ? totLivres.toLocaleString('pt-BR') : '—' %></div>
+        <div class="ocard-sub">disponíveis para internação</div>
+        <div class="ocard-icon">✅</div>
+      </div>
+      <div class="ocard ocard-amber">
+        <div class="ocard-label">Aguard. Alta</div>
+        <div class="ocard-value"><%= typeof totAltaEsp === 'number' ? totAltaEsp.toLocaleString('pt-BR') : '—' %></div>
+        <div class="ocard-sub">leitos com alta pendente</div>
+        <div class="ocard-icon">🔔</div>
+      </div>
+      <div class="ocard <%= pctGeral !== null && pctGeral >= 90 ? 'ocard-red' : 'ocard-purple' %>">
+        <div class="ocard-label">Taxa de Ocupação</div>
+        <div class="ocard-value"><%= pctGeral !== null ? pctGeral + '%' : (permMediaDias ? permMediaDias+'d' : '—') %></div>
+        <div class="ocard-sub">
+          <% if (pctGeral !== null) { %>
+            <%= pctGeral>=90 ? '⚠ capacidade crítica' : pctGeral>=70 ? 'atenção: alta ocupação' : 'dentro do normal' %>
+          <% } else { %>
+            permanência média (dias)
+          <% } %>
+        </div>
+        <div class="ocard-icon">📊</div>
+      </div>
+    </div>
+
+    <% if (oracleData && oracleData.setores.length > 0) { %>
+
+    <!-- Legenda de cores -->
+    <div class="legend">
+      <strong style="color:#374151;font-size:.73rem;">Leitos:</strong>
+      <div class="legend-item"><div class="legend-box" style="background:#0d4e8b;"></div>Ocupado</div>
+      <div class="legend-item"><div class="legend-box" style="background:#d1fae5;border:1px solid #86efac;"></div>Livre</div>
+      <div class="legend-item"><div class="legend-box" style="background:#f59e0b;"></div>Aguardando alta</div>
+      <div class="legend-item"><div class="legend-box" style="background:#6366f1;"></div>Higienização</div>
+      <div class="legend-item"><div class="legend-box" style="background:#ef4444;"></div>Interditado</div>
+      <div class="legend-item"><div class="legend-box" style="background:#a78bfa;"></div>Reservado</div>
+      <div class="legend-item"><div class="legend-box" style="background:#be185d;"></div>Isolamento</div>
+    </div>
+
+    <!-- Panorama por setor -->
+    <div class="occ-panel">
+      <div class="occ-panel-title">
+        Panorama por Setor — Tempo Real
+        <span style="font-size:.72rem;font-weight:400;color:#9ca3af;text-transform:none;"><%= oracleData.setores.length %> setores</span>
+      </div>
+      <div class="setor-grid">
+        <% oracleData.setores.forEach(s => {
+          const total  = s.nr_total;
+          const pct    = total > 0 ? Math.round(s.nr_ocupados / total * 100) : 0;
+          const cc     = setorCardClass(pct, s.ds_setor);
+          const bc     = pctBadgeClass(pct);
+          // Montar lista de leitos visuais (limitada para não poluir)
+          const maxBeds = Math.min(total, 60);
+          const beds = [];
+          const ocupPuro = Math.max(0, s.nr_ocupados - s.qt_isolado - s.qt_alta);
+          for (let i=0; i<Math.min(ocupPuro,        maxBeds); i++) beds.push('ocupado');
+          for (let i=0; i<Math.min(s.qt_isolado,    maxBeds-beds.length); i++) beds.push('isolado');
+          for (let i=0; i<Math.min(s.qt_alta,       maxBeds-beds.length); i++) beds.push('alta');
+          for (let i=0; i<Math.min(s.nr_higienizacao,maxBeds-beds.length); i++) beds.push('higienizacao');
+          for (let i=0; i<Math.min(s.nr_interditados,maxBeds-beds.length); i++) beds.push('interditado');
+          for (let i=0; i<Math.min(s.nr_reservados,  maxBeds-beds.length); i++) beds.push('reservado');
+          for (let i=0; i<Math.min(s.nr_livres,      maxBeds-beds.length); i++) beds.push('livre');
+        %>
+          <div class="setor-card <%= cc %>">
+            <div class="setor-name" title="<%= s.ds_setor %>">
+              <span class="pct-badge <%= bc %>"><%= pct %>%</span>
+              <%= s.ds_setor %>
+            </div>
+            <div class="bed-grid">
+              <% beds.forEach(b => { %><div class="bed bed-<%= b %>" title="<%= b %>"></div><% }) %>
+              <% if (total > maxBeds) { %><span style="font-size:.65rem;color:#9ca3af;align-self:center;">+<%= total-maxBeds %></span><% } %>
+            </div>
+            <div class="setor-stats">
+              <div class="stat-item"><div class="stat-dot" style="background:#0d4e8b;"></div><%= s.nr_ocupados %> ocup.</div>
+              <div class="stat-item"><div class="stat-dot" style="background:#86efac;"></div><%= s.nr_livres %> liv.</div>
+              <% if (s.qt_alta>0) { %><div class="stat-item"><div class="stat-dot" style="background:#f59e0b;"></div><%= s.qt_alta %> alta</div><% } %>
+              <% if (s.nr_higienizacao>0) { %><div class="stat-item"><div class="stat-dot" style="background:#6366f1;"></div><%= s.nr_higienizacao %> hig.</div><% } %>
+              <% if (s.nr_interditados>0) { %><div class="stat-item"><div class="stat-dot" style="background:#ef4444;"></div><%= s.nr_interditados %> interd.</div><% } %>
+              <% if (s.qt_isolado>0) { %><div class="stat-item"><div class="stat-dot" style="background:#be185d;"></div><%= s.qt_isolado %> isol.</div><% } %>
+              <span style="margin-left:auto;font-size:.7rem;color:#9ca3af;"><%= total %> total</span>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    </div><!-- /panorama -->
+
+    <!-- Censo Diário -->
+    <% if (oracleData.censo14d.length > 0) { %>
+    <div class="occ-panel">
+      <div class="occ-panel-title">Censo Diário — últimos 14 dias</div>
+      <canvas id="chart-censo" style="height:220px;width:100%;"></canvas>
+    </div>
+    <% } %>
+
+    <% } /* /oracleData */ %>
+
+    <!-- Gráficos complementares (dados locais PG) -->
+    <div class="occ-grid2">
+      <div class="occ-panel" style="margin-bottom:0;">
+        <div class="occ-panel-title">Convênios dos Internados</div>
+        <canvas id="chart-convenio" style="height:220px;"></canvas>
+      </div>
+      <div class="occ-panel" style="margin-bottom:0;">
+        <div class="occ-panel-title">Especialidades</div>
+        <canvas id="chart-espec" style="height:220px;"></canvas>
+      </div>
+    </div>
+
+    <!-- Tabela de internados -->
+    <div class="occ-panel" style="margin-top:16px;">
+      <div class="occ-panel-title">
+        Lista de Internados Ativos
+        <span style="font-weight:400;color:#9ca3af;text-transform:none;font-size:.75rem;">
+          <%= internados.length %><%= internados.length >= 300 ? ' — primeiros 300' : '' %>
+        </span>
+      </div>
+      <div class="filter-bar2">
+        <input type="text" id="busca-pac" placeholder="Buscar paciente, setor, médico…" oninput="filtrarTabela()">
+        <select id="filtro-setor" onchange="filtrarTabela()">
+          <option value="">Todos os setores</option>
+          <% setoresFiltro.forEach(s => { %>
+            <option value="<%= s.toLowerCase() %>"><%= s %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="tabela-internados">
+          <thead>
+            <tr>
+              <th>Atend.</th><th>Paciente</th><th>Setor</th><th>Convênio</th>
+              <th>Médico</th><th>Entrada</th><th style="text-align:center;">Dias</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% internados.forEach(i => {
+              const d = i.dias_internado || 0;
+              const dc = d>30?'dias-long':d>14?'dias-medium':'dias-ok';
+              const busca = ((i.nm_paciente||'')+(i.ds_setor||'')+(i.nm_medico||'')+(i.ds_convenio||'')).toLowerCase();
+            %>
+              <tr data-busca="<%= busca %>" data-setor="<%= (i.ds_setor||'(sem setor)').toLowerCase() %>">
+                <td style="font-size:.78rem;color:#6b7280;"><%= i.nr_atendimento %></td>
+                <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<%= i.nm_paciente||'' %>"><%= i.nm_paciente||'—' %></td>
+                <td style="font-size:.78rem;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<%= i.ds_setor||'' %>"><%= i.ds_setor||'—' %></td>
+                <td style="font-size:.78rem;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<%= i.ds_convenio||'' %>"><%= i.ds_convenio||'—' %></td>
+                <td style="font-size:.75rem;color:#6b7280;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<%= i.nm_medico||'' %>"><%= i.nm_medico||'—' %></td>
+                <td style="font-size:.78rem;white-space:nowrap;"><%= i.dt_entrada||'—' %></td>
+                <td style="text-align:center;"><span class="dias-badge <%= dc %>"><%= d %>d</span></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+        <% if (!internados.length) { %>
+          <p style="text-align:center;color:#9ca3af;padding:32px;">Nenhum internado ativo encontrado.</p>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Legenda informativa -->
+    <div style="background:#f8fafc;border-radius:8px;padding:12px 18px;font-size:.75rem;color:#6b7280;margin-top:16px;margin-bottom:24px;border:1px solid #e5e7eb;">
+      <strong style="color:#374151;">ℹ Sobre os dados:</strong>
+      O panorama por setor é consultado diretamente no Oracle Tasy (<code>OCUPACAO_SETORES_V</code>) a cada acesso — dados em tempo real.
+      A lista de internados e os gráficos de convênio/especialidade usam a última sincronização local.
+      Dias em vermelho (&gt;30d) indicam internações prolongadas que merecem atenção.
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script>
+    const conveniosData  = <%- JSON.stringify(convenios) %>;
+    const especialidades = <%- JSON.stringify(especialidades) %>;
+    const censo14d       = <%- JSON.stringify(oracleData ? oracleData.censo14d : []) %>;
+    const COLORS = ['#0d4e8b','#15803d','#7c3aed','#b45309','#b91c1c','#0891b2','#65a30d','#9333ea','#d97706','#e11d48'];
+
+    // Convênios
+    (function() {
+      const el = document.getElementById('chart-convenio');
+      if (!el || !conveniosData.length) return;
+      new Chart(el, {
+        type:'bar',
+        data:{
+          labels:conveniosData.map(c=>c.nome.length>26?c.nome.slice(0,26)+'…':c.nome),
+          datasets:[{data:conveniosData.map(c=>c.qt),backgroundColor:COLORS.slice(0,conveniosData.length),borderRadius:4}]
+        },
+        options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:'#f3f4f6'},ticks:{font:{size:11}}},y:{grid:{display:false},ticks:{font:{size:10}}}}}
+      });
+    })();
+
+    // Especialidades
+    (function() {
+      const el = document.getElementById('chart-espec');
+      if (!el || !especialidades.length) return;
+      new Chart(el, {
+        type:'doughnut',
+        data:{
+          labels:especialidades.map(e=>e.nome),
+          datasets:[{data:especialidades.map(e=>e.qt),backgroundColor:COLORS.slice(0,especialidades.length),borderWidth:2,borderColor:'#fff'}]
+        },
+        options:{plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:10}}},cutout:'55%'}
+      });
+    })();
+
+    // Censo Diário
+    (function() {
+      const el = document.getElementById('chart-censo');
+      if (!el || !censo14d.length) return;
+      const labels = censo14d.map(d => { const p=d.dt.split('-'); return p[2]+'/'+p[1]; });
+      new Chart(el, {
+        type:'bar',
+        data:{
+          labels,
+          datasets:[
+            {label:'Internados',data:censo14d.map(d=>d.tot_pac),backgroundColor:'rgba(13,78,139,.75)',borderRadius:3},
+            {label:'Admissões', data:censo14d.map(d=>d.admissoes),backgroundColor:'rgba(21,128,61,.75)',borderRadius:3},
+            {label:'Altas',     data:censo14d.map(d=>d.altas),    backgroundColor:'rgba(180,83,9,.75)',borderRadius:3},
+          ]
+        },
+        options:{plugins:{legend:{position:'bottom',labels:{font:{size:11},padding:12}}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{beginAtZero:true,grid:{color:'#f3f4f6'},ticks:{font:{size:11}}}}}
+      });
+    })();
+
+    // Filtro tabela
+    function filtrarTabela() {
+      const q = (document.getElementById('busca-pac')?.value||'').toLowerCase().trim();
+      const s = (document.getElementById('filtro-setor')?.value||'').toLowerCase();
+      document.querySelectorAll('#tabela-internados tbody tr').forEach(tr => {
+        tr.style.display = (!q||tr.dataset.busca.includes(q)) && (!s||tr.dataset.setor===s) ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>

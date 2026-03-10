@@ -18,6 +18,7 @@ const managedIpsController   = require('../controllers/admin/managedIpsControlle
 const tasyController         = require('../controllers/admin/tasyController');
 const tasyProtocoloController = require('../controllers/admin/tasyProtocoloController');
 const tasyAlertaController    = require('../controllers/admin/tasyAlertaController');
+const tasyOcupacaoController  = require('../controllers/admin/tasyOcupacaoController');
 const { Setting } = require('../models');
 const securityCountCache = require('../utils/securityCountCache');
 
@@ -176,6 +177,7 @@ router.get ('/tasy/resumo/contas',            adminAuth, csrfMiddleware,  tasyPr
 router.get ('/tasy/resumo/contas/export',     adminAuth, exportLimiter,   tasyProtocoloController.resumoContasExport);
 router.get ('/tasy/resumo/protocolos',        adminAuth, csrfMiddleware,  tasyProtocoloController.resumoProtocolos);
 router.get ('/tasy/alertas',                  adminAuth, csrfMiddleware,  tasyAlertaController.alertas);
+router.get ('/tasy/ocupacao',                 adminAuth, csrfMiddleware,  tasyOcupacaoController.ocupacao);
 
 // Configurações (protegido)
 router.get('/settings', adminAuth, settingsController.showSettings);
