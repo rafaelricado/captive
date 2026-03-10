@@ -70,6 +70,11 @@
 
     <!-- Grupo: Contas de Paciente -->
     <div class="group-title">Contas de Paciente por Convênio <span style="font-size:.78rem;font-weight:400;color:#9ca3af;">— clique na linha para ver as contas</span></div>
+    <p style="font-size:.78rem;color:#6b7280;margin:-4px 0 12px;background:#f8fafc;border-left:3px solid #d1d5db;padding:6px 10px;border-radius:0 4px 4px 0;">
+      <strong>Cobrado do convênio</strong> = valor total enviado para faturamento &nbsp;·&nbsp;
+      <strong>Glosa</strong> = valor recusado/contestado pelo convênio &nbsp;·&nbsp;
+      <strong>Líquido aprovado</strong> = Cobrado − Glosa (o que o convênio aceitou pagar)
+    </p>
     <% if (contas.length === 0) { %>
       <p style="color:#9ca3af;font-size:.85rem;">Nenhuma conta encontrada para o período selecionado.</p>
     <% } else { %>
@@ -92,10 +97,10 @@
               <th>Convênio</th>
               <th style="text-align:right;">Total</th>
               <th style="text-align:right;">Em Aberto</th>
-              <th style="text-align:right;">Vl. Faturado</th>
-              <th style="text-align:right;">Vl. Glosa</th>
+              <th style="text-align:right;">Cobrado do Convênio</th>
+              <th style="text-align:right;">Glosa (recusado)</th>
               <th style="text-align:right;">% Glosa</th>
-              <th style="text-align:right;">Vl. Líquido</th>
+              <th style="text-align:right;">Líquido Aprovado</th>
             </tr>
           </thead>
           <tbody>
