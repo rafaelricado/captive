@@ -675,8 +675,8 @@ async function queryAgendaConsulta({ dtInicio, dtFim } = {}) {
       ? `LEFT JOIN TASY.CONVENIO CONV ON CONV.${cm.conv_pk} = AC.CD_CONVENIO`
       : '';
     const colConvenio = (cm.conv_pk && cm.conv_nm)
-      ? `NVL(TO_CHAR(CONV.${cm.conv_nm}), '(Sem convênio)')`
-      : `NVL(TO_CHAR(AC.CD_CONVENIO), '(Sem convênio)')`;
+      ? `NVL(TO_CHAR(CONV.${cm.conv_nm}), 'Particular')`
+      : `NVL(TO_CHAR(AC.CD_CONVENIO), 'Particular')`;
     const gbConvenio = (cm.conv_pk && cm.conv_nm)
       ? `TO_CHAR(CONV.${cm.conv_nm})`
       : `TO_CHAR(AC.CD_CONVENIO)`;
