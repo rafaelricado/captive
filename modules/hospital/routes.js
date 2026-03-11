@@ -9,6 +9,7 @@ const tasyController          = require('./controllers/tasyController');
 const tasyProtocoloController = require('./controllers/tasyProtocoloController');
 const tasyAlertaController    = require('./controllers/tasyAlertaController');
 const tasyOcupacaoController  = require('./controllers/tasyOcupacaoController');
+const tasyAgendaController    = require('./controllers/tasyAgendaController');
 
 // Rate limit compartilhado para exportações do módulo hospital
 const exportLimiter = rateLimit({
@@ -44,8 +45,9 @@ router.get('/tasy/resumo/contas',         adminAuth, csrfMiddleware, tasyProtoco
 router.get('/tasy/resumo/contas/export',  adminAuth, exportLimiter,  tasyProtocoloController.resumoContasExport);
 router.get('/tasy/resumo/protocolos',     adminAuth, csrfMiddleware, tasyProtocoloController.resumoProtocolos);
 
-// Alertas e Ocupação
+// Alertas, Ocupação e Agenda
 router.get('/tasy/alertas',   adminAuth, csrfMiddleware, tasyAlertaController.alertas);
 router.get('/tasy/ocupacao',  adminAuth, csrfMiddleware, tasyOcupacaoController.ocupacao);
+router.get('/tasy/agenda',    adminAuth, csrfMiddleware, tasyAgendaController.agenda);
 
 module.exports = router;

@@ -592,4 +592,94 @@ async function queryOcupacaoHospitalar() {
   }
 }
 
-module.exports = { discoverColumns, syncContas, syncProtocolos, lookupPessoaFisica, queryItensSemValor, queryOcupacaoHospitalar };
+/**
+ * Consulta agenda de consultas em tempo real via TASY.AGENDA_CONSULTA.
+ * Retorna resumo agrupado por agenda, convênio e forma de agendamento,
+ * além de totais por situação (cards) para o período informado.
+ */
+async function queryAgendaConsulta({ dtInicio, dtFim } = {}) {
+  let conn;
+  try {
+    const hoje = new Date().toISOString().slice(0, 10);
+    const from = dtInicio || hoje;
+    const to   = dtFim   || hoje;
+
+    conn = await oracledb.getConnection({ ...ORACLE_CONFIG, connectTimeout: 8 });
+    conn.callTimeout = 20000;
+
+    const [rResumo, rSituacao] = await Promise.all([
+      // Agrupamento principal: agenda × convênio × forma de agendamento
+      conn.execute(
+        `SELECT
+           NVL(AC.NM_PRESTADOR,        '(Sem agenda)')    AS NM_AGENDA,
+           NVL(AC.DS_CONVENIO,         '(Sem convênio)')  AS DS_CONVENIO,
+           NVL(AC.IE_TIPO_AGENDAMENTO, 'N')               AS IE_TIPO_AGENDAMENTO,
+           NVL(AC.IE_SITUACAO,         'N')               AS IE_SITUACAO,
+           COUNT(*)                                        AS QT
+         FROM TASY.AGENDA_CONSULTA AC
+         WHERE TRUNC(AC.DT_AGENDA)
+               BETWEEN TO_DATE(:dtIni, 'YYYY-MM-DD')
+                   AND TO_DATE(:dtFim, 'YYYY-MM-DD')
+         GROUP BY AC.NM_PRESTADOR, AC.DS_CONVENIO,
+                  AC.IE_TIPO_AGENDAMENTO, AC.IE_SITUACAO
+         ORDER BY NM_AGENDA, QT DESC`,
+        { dtIni: from, dtFim: to },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      ),
+
+      // Totais por situação (para os cards de resumo)
+      conn.execute(
+        `SELECT
+           NVL(IE_SITUACAO, 'N') AS IE_SITUACAO,
+           COUNT(*)              AS QT
+         FROM TASY.AGENDA_CONSULTA
+         WHERE TRUNC(DT_AGENDA)
+               BETWEEN TO_DATE(:dtIni, 'YYYY-MM-DD')
+                   AND TO_DATE(:dtFim, 'YYYY-MM-DD')
+         GROUP BY IE_SITUACAO
+         ORDER BY QT DESC`,
+        { dtIni: from, dtFim: to },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      ),
+    ]);
+
+    // Mapeamentos de label
+    const SITUACAO_LABEL = {
+      A: 'Agendado',  R: 'Realizado', C: 'Cancelado',
+      F: 'Faltou',    L: 'Liberado',  S: 'Suspenso',  N: '(Sem status)',
+    };
+    const TIPO_AGND_LABEL = {
+      P: 'Presencial', I: 'Internet',  T: 'Telefone',
+      C: 'Central',    W: 'WhatsApp',  N: '(Não informado)',
+      // numéricos (algumas versões do Tasy)
+      '1': 'Presencial', '2': 'Internet', '3': 'Telefone',
+      '4': 'Central',    '5': 'WhatsApp',
+    };
+
+    const resumo = rResumo.rows.map(r => ({
+      nm_agenda:            String(r.NM_AGENDA   || '').trim(),
+      ds_convenio:          String(r.DS_CONVENIO || '').trim(),
+      ie_tipo_agendamento:  String(r.IE_TIPO_AGENDAMENTO || 'N'),
+      ds_tipo_agendamento:  TIPO_AGND_LABEL[String(r.IE_TIPO_AGENDAMENTO || 'N')] || String(r.IE_TIPO_AGENDAMENTO),
+      ie_situacao:          String(r.IE_SITUACAO || 'N'),
+      ds_situacao:          SITUACAO_LABEL[String(r.IE_SITUACAO || 'N')]  || String(r.IE_SITUACAO),
+      qt:                   Number(r.QT || 0),
+    }));
+
+    // Cards: total e por situação
+    const situacaoMap = {};
+    let total = 0;
+    for (const r of rSituacao.rows) {
+      const key = String(r.IE_SITUACAO || 'N');
+      const qt  = Number(r.QT || 0);
+      situacaoMap[key] = { label: SITUACAO_LABEL[key] || key, qt };
+      total += qt;
+    }
+
+    return { resumo, situacaoMap, total, dtInicio: from, dtFim: to };
+  } finally {
+    if (conn) await conn.close().catch(() => {});
+  }
+}
+
+module.exports = { discoverColumns, syncContas, syncProtocolos, lookupPessoaFisica, queryItensSemValor, queryOcupacaoHospitalar, queryAgendaConsulta };

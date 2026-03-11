@@ -1,7 +1,7 @@
 <%
   const _captivePages  = new Set(['captive','users','sessions','security','settings']);
   const _networkPages  = new Set(['access-points','traffic','wan','connections','dns','devices','managed-ips']);
-  const _hospitalPages = new Set(['tasy','tasy-protocolos','tasy-resumo','tasy-alertas','tasy-ocupacao']);
+  const _hospitalPages = new Set(['tasy','tasy-protocolos','tasy-resumo','tasy-alertas','tasy-ocupacao','tasy-agenda']);
 
   const _section = _captivePages.has(page)  ? 'captive'
                  : _networkPages.has(page)   ? 'network'
@@ -46,6 +46,7 @@
       <a href="/admin/tasy/resumo"            class="<%= page === 'tasy-resumo'       ? 'active' : '' %>">Resumo</a>
       <a href="/admin/tasy/alertas"           class="<%= page === 'tasy-alertas'      ? 'active' : '' %>">Alertas</a>
       <a href="/admin/tasy/ocupacao"          class="<%= page === 'tasy-ocupacao'     ? 'active' : '' %>">Ocupação</a>
+      <a href="/admin/tasy/agenda"           class="<%= page === 'tasy-agenda'       ? 'active' : '' %>">Agenda</a>
 
     <% } %>
 

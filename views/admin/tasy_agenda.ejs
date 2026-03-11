@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agenda de Consultas — Admin</title>
+  <%- include('_head') %>
+  <style>
+    /* ── Filtro de datas ──────────────────────────────────────────────── */
+    .filter-bar {
+      display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;
+      background: #fff; border-radius: 10px; padding: 16px 20px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08); margin-bottom: 24px;
+    }
+    .filter-bar label { font-size: .8rem; color: #6b7280; display: block; margin-bottom: 4px; }
+    .filter-bar input[type="date"] {
+      padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+      font-size: .875rem; color: #374151;
+    }
+    .btn-primary {
+      background: #0d4e8b; color: #fff; border: none;
+      padding: 8px 20px; border-radius: 6px; font-size: .875rem;
+      cursor: pointer; transition: background .15s;
+    }
+    .btn-primary:hover { background: #0b4070; }
+    .btn-refresh {
+      background: none; border: 1px solid #d1d5db; color: #6b7280;
+      padding: 7px 14px; border-radius: 6px; font-size: .8rem;
+      cursor: pointer; transition: all .15s; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .btn-refresh:hover { border-color: #0d4e8b; color: #0d4e8b; }
+
+    /* ── Cards de situação ────────────────────────────────────────────── */
+    .cards-situacao {
+      display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px;
+    }
+    .card-sit {
+      flex: 1; min-width: 120px;
+      background: #fff; border-radius: 10px; padding: 16px 18px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08); text-align: center;
+    }
+    .card-sit-total  { border-top: 4px solid #0d4e8b; }
+    .card-sit-A      { border-top: 4px solid #2563eb; }
+    .card-sit-R      { border-top: 4px solid #16a34a; }
+    .card-sit-C      { border-top: 4px solid #dc2626; }
+    .card-sit-F      { border-top: 4px solid #d97706; }
+    .card-sit-L      { border-top: 4px solid #7c3aed; }
+    .card-sit-S      { border-top: 4px solid #6b7280; }
+    .card-sit-val    { font-size: 2rem; font-weight: 700; color: #1f2937; line-height: 1; }
+    .card-sit-label  { font-size: .75rem; color: #6b7280; margin-top: 5px; }
+
+    /* ── Tabela de resumo ─────────────────────────────────────────────── */
+    .section-title {
+      font-size: 1rem; font-weight: 700; color: #0d4e8b;
+      margin: 28px 0 12px; display: flex; align-items: center; gap: 8px;
+    }
+    .section-title span.count {
+      background: #e0f2fe; color: #0d4e8b; border-radius: 99px;
+      font-size: .75rem; padding: 2px 10px;
+    }
+
+    /* ── Badge forma agendamento ──────────────────────────────────────── */
+    .badge-P { background: #dbeafe; color: #1d4ed8; }
+    .badge-I { background: #d1fae5; color: #065f46; }
+    .badge-T { background: #fef3c7; color: #92400e; }
+    .badge-C { background: #ede9fe; color: #5b21b6; }
+    .badge-W { background: #dcfce7; color: #166534; }
+    .badge-N { background: #f3f4f6; color: #6b7280; }
+    /* numéricos mapeados para as mesmas classes */
+    .badge-1 { background: #dbeafe; color: #1d4ed8; }
+    .badge-2 { background: #d1fae5; color: #065f46; }
+    .badge-3 { background: #fef3c7; color: #92400e; }
+    .badge-4 { background: #ede9fe; color: #5b21b6; }
+    .badge-5 { background: #dcfce7; color: #166534; }
+
+    /* ── Badge situação ───────────────────────────────────────────────── */
+    .sit-A { background: #dbeafe; color: #1d4ed8; }
+    .sit-R { background: #dcfce7; color: #166534; }
+    .sit-C { background: #fee2e2; color: #991b1b; }
+    .sit-F { background: #fef3c7; color: #92400e; }
+    .sit-L { background: #ede9fe; color: #5b21b6; }
+    .sit-S { background: #f3f4f6; color: #6b7280; }
+    .sit-N { background: #f3f4f6; color: #6b7280; }
+
+    /* ── Aviso offline / cache ────────────────────────────────────────── */
+    .cache-notice {
+      background: #fefce8; border: 1px solid #fde047; border-radius: 8px;
+      padding: 10px 16px; font-size: .8rem; color: #854d0e;
+      margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    }
+    .error-notice {
+      background: #fee2e2; border: 1px solid #fca5a5; border-radius: 8px;
+      padding: 10px 16px; font-size: .8rem; color: #991b1b;
+      margin-bottom: 16px;
+    }
+
+    /* ── Tabela pivot por agenda ──────────────────────────────────────── */
+    .agenda-group { margin-bottom: 28px; }
+    .agenda-group-header {
+      background: #f0f4f8; padding: 10px 14px; border-radius: 8px 8px 0 0;
+      font-weight: 700; font-size: .9rem; color: #0d4e8b;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .agenda-group-header .total-badge {
+      background: #0d4e8b; color: #fff;
+      border-radius: 99px; font-size: .75rem; padding: 2px 10px;
+    }
+  </style>
+</head>
+<body>
+  <%- include('_nav', { page }) %>
+
+  <div class="container">
+    <h1 class="page-title">Agenda de Consultas</h1>
+
+    <!-- ── Filtro de período ──────────────────────────────────────────── -->
+    <form class="filter-bar" method="GET" action="/admin/tasy/agenda">
+      <div>
+        <label for="dtInicio">Data início</label>
+        <input type="date" id="dtInicio" name="dtInicio" value="<%= dtInicio %>">
+      </div>
+      <div>
+        <label for="dtFim">Data fim</label>
+        <input type="date" id="dtFim" name="dtFim" value="<%= dtFim %>">
+      </div>
+      <button type="submit" class="btn-primary">Filtrar</button>
+      <a href="/admin/tasy/agenda?dtInicio=<%= dtInicio %>&dtFim=<%= dtFim %>&refresh=1"
+         class="btn-refresh" title="Forçar atualização do Oracle">
+        &#8635; Atualizar
+      </a>
+    </form>
+
+    <% if (oracleCached) { %>
+      <div class="cache-notice">
+        &#9432; Exibindo dados em cache
+        <% if (oracleCacheAge !== null) { %>(atualizado há <%= oracleCacheAge %> min)<% } %>.
+        <a href="/admin/tasy/agenda?dtInicio=<%= dtInicio %>&dtFim=<%= dtFim %>&refresh=1">Atualizar agora</a>
+      </div>
+    <% } %>
+
+    <% if (oracleError && !oracleData) { %>
+      <div class="error-notice">
+        <strong>Oracle indisponível:</strong> <%= oracleError %>
+      </div>
+    <% } %>
+
+    <% if (oracleData) { %>
+      <%
+        const situacaoMap = oracleData.situacaoMap;
+        const total       = oracleData.total;
+        const resumo      = oracleData.resumo;
+
+        // Agrupa resumo por agenda
+        const porAgenda = {};
+        for (const row of resumo) {
+          if (!porAgenda[row.nm_agenda]) porAgenda[row.nm_agenda] = [];
+          porAgenda[row.nm_agenda].push(row);
+        }
+        const agendas = Object.keys(porAgenda).sort();
+      %>
+
+      <!-- ── Cards de situação ────────────────────────────────────────── -->
+      <div class="cards-situacao">
+        <div class="card-sit card-sit-total">
+          <div class="card-sit-val"><%= total.toLocaleString('pt-BR') %></div>
+          <div class="card-sit-label">Total no período</div>
+        </div>
+        <% for (const [key, sit] of Object.entries(situacaoMap)) { %>
+          <div class="card-sit card-sit-<%= key %>">
+            <div class="card-sit-val"><%= sit.qt.toLocaleString('pt-BR') %></div>
+            <div class="card-sit-label"><%= sit.label %></div>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- ── Tabela por agenda ─────────────────────────────────────────── -->
+      <% if (agendas.length === 0) { %>
+        <p class="meta">Nenhum agendamento encontrado para o período selecionado.</p>
+      <% } else { %>
+        <div class="section-title">
+          Agendamentos por agenda
+          <span class="count"><%= agendas.length %> agenda<%= agendas.length !== 1 ? 's' : '' %></span>
+        </div>
+
+        <% for (const nm of agendas) {
+             const linhas    = porAgenda[nm];
+             const totalAg   = linhas.reduce((s, r) => s + r.qt, 0);
+        %>
+          <div class="agenda-group">
+            <div class="agenda-group-header">
+              <span><%= nm %></span>
+              <span class="total-badge"><%= totalAg.toLocaleString('pt-BR') %></span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Convênio</th>
+                    <th>Forma de agendamento</th>
+                    <th>Situação</th>
+                    <th style="text-align:right">Qtd.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% for (const row of linhas) { %>
+                    <tr>
+                      <td><%= row.ds_convenio %></td>
+                      <td>
+                        <span class="badge badge-<%= row.ie_tipo_agendamento %>">
+                          <%= row.ds_tipo_agendamento %>
+                        </span>
+                      </td>
+                      <td>
+                        <span class="badge sit-<%= row.ie_situacao %>">
+                          <%= row.ds_situacao %>
+                        </span>
+                      </td>
+                      <td style="text-align:right; font-weight:600">
+                        <%= row.qt.toLocaleString('pt-BR') %>
+                      </td>
+                    </tr>
+                  <% } %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% } %>
+      <% } %>
+
+    <% } /* oracleData */ %>
+  </div>
+
+  <footer>Captive Portal Admin</footer>
+</body>
+</html>
