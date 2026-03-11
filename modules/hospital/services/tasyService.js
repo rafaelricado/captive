@@ -592,10 +592,45 @@ async function queryOcupacaoHospitalar() {
   }
 }
 
+// Cache do mapeamento de colunas da AGENDA_CONSULTA (descoberto uma vez)
+let _agendaColMap = null;
+
+/**
+ * Descobre os nomes reais das colunas de TASY.AGENDA_CONSULTA via ALL_TAB_COLUMNS.
+ * Usa candidatos em ordem de prioridade para cada campo lógico.
+ */
+async function discoverAgendaColMap(conn) {
+  if (_agendaColMap) return _agendaColMap;
+
+  const r = await conn.execute(
+    `SELECT COLUMN_NAME FROM ALL_TAB_COLUMNS
+      WHERE OWNER = 'TASY' AND TABLE_NAME = 'AGENDA_CONSULTA'
+      ORDER BY COLUMN_ID`,
+    [],
+    { outFormat: oracledb.OUT_FORMAT_OBJECT }
+  );
+  const cols = new Set(r.rows.map(row => row.COLUMN_NAME));
+  logger.info(`[TasyAgenda] Colunas AGENDA_CONSULTA: ${[...cols].join(', ')}`);
+
+  function pick(candidates) {
+    for (const c of candidates) if (cols.has(c)) return c;
+    return null;
+  }
+
+  _agendaColMap = {
+    dt_agenda:         pick(['DT_AGENDA', 'DT_AGENDAMENTO', 'DT_CONSULTA']),
+    nm_agenda:         pick(['NM_PRESTADOR', 'NM_AGENDA', 'NM_PROFISSIONAL', 'DS_AGENDA', 'NM_USUARIO']),
+    ds_convenio:       pick(['DS_CONVENIO', 'NM_CONVENIO', 'DS_PLANO', 'NM_PLANO']),
+    ie_situacao:       pick(['IE_SITUACAO', 'IE_SITUACAO_AGENDA', 'IE_SITUACAO_AGND', 'CD_SITUACAO']),
+    ie_tipo_agnd:      pick(['IE_TIPO_AGENDAMENTO', 'IE_ORIGEM_AGEND', 'IE_FORMA_AGENDAMENTO', 'TP_AGENDAMENTO', 'IE_TIPO_AGND']),
+  };
+  logger.info(`[TasyAgenda] Mapeamento: ${JSON.stringify(_agendaColMap)}`);
+  return _agendaColMap;
+}
+
 /**
  * Consulta agenda de consultas em tempo real via TASY.AGENDA_CONSULTA.
- * Retorna resumo agrupado por agenda, convênio e forma de agendamento,
- * além de totais por situação (cards) para o período informado.
+ * Descobre automaticamente os nomes reais das colunas antes de executar a query.
  */
 async function queryAgendaConsulta({ dtInicio, dtFim } = {}) {
   let conn;
@@ -607,36 +642,48 @@ async function queryAgendaConsulta({ dtInicio, dtFim } = {}) {
     conn = await oracledb.getConnection({ ...ORACLE_CONFIG, connectTimeout: 8 });
     conn.callTimeout = 20000;
 
+    const cm = await discoverAgendaColMap(conn);
+
+    // Monta expressões seguras para cada campo (NULL se coluna não existir)
+    const colAgenda   = cm.nm_agenda   ? `NVL(AC.${cm.nm_agenda}, '(Sem agenda)')` : `'(Sem agenda)'`;
+    const colConvenio = cm.ds_convenio ? `NVL(AC.${cm.ds_convenio}, '(Sem convênio)')` : `'(Sem convênio)'`;
+    const colSituacao = cm.ie_situacao ? `NVL(AC.${cm.ie_situacao}, 'N')` : `'N'`;
+    const colTipo     = cm.ie_tipo_agnd ? `NVL(AC.${cm.ie_tipo_agnd}, 'N')` : `'N'`;
+    const colDt       = cm.dt_agenda || 'DT_AGENDA';
+
+    // GROUP BY usa só os nomes de coluna reais (sem NVL)
+    const gbAgenda   = cm.nm_agenda   || `'(Sem agenda)'`;
+    const gbConvenio = cm.ds_convenio || `'(Sem convênio)'`;
+    const gbSituacao = cm.ie_situacao || `'N'`;
+    const gbTipo     = cm.ie_tipo_agnd || `'N'`;
+
     const [rResumo, rSituacao] = await Promise.all([
-      // Agrupamento principal: agenda × convênio × forma de agendamento
       conn.execute(
         `SELECT
-           NVL(AC.NM_PRESTADOR,        '(Sem agenda)')    AS NM_AGENDA,
-           NVL(AC.DS_CONVENIO,         '(Sem convênio)')  AS DS_CONVENIO,
-           NVL(AC.IE_TIPO_AGENDAMENTO, 'N')               AS IE_TIPO_AGENDAMENTO,
-           NVL(AC.IE_SITUACAO,         'N')               AS IE_SITUACAO,
-           COUNT(*)                                        AS QT
+           ${colAgenda}   AS NM_AGENDA,
+           ${colConvenio} AS DS_CONVENIO,
+           ${colTipo}     AS IE_TIPO_AGENDAMENTO,
+           ${colSituacao} AS IE_SITUACAO,
+           COUNT(*)       AS QT
          FROM TASY.AGENDA_CONSULTA AC
-         WHERE TRUNC(AC.DT_AGENDA)
+         WHERE TRUNC(AC.${colDt})
                BETWEEN TO_DATE(:dtIni, 'YYYY-MM-DD')
                    AND TO_DATE(:dtFim, 'YYYY-MM-DD')
-         GROUP BY AC.NM_PRESTADOR, AC.DS_CONVENIO,
-                  AC.IE_TIPO_AGENDAMENTO, AC.IE_SITUACAO
+         GROUP BY ${gbAgenda}, ${gbConvenio}, ${gbTipo}, ${gbSituacao}
          ORDER BY NM_AGENDA, QT DESC`,
         { dtIni: from, dtFim: to },
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
       ),
 
-      // Totais por situação (para os cards de resumo)
       conn.execute(
         `SELECT
-           NVL(IE_SITUACAO, 'N') AS IE_SITUACAO,
-           COUNT(*)              AS QT
-         FROM TASY.AGENDA_CONSULTA
-         WHERE TRUNC(DT_AGENDA)
+           ${colSituacao} AS IE_SITUACAO,
+           COUNT(*)       AS QT
+         FROM TASY.AGENDA_CONSULTA AC
+         WHERE TRUNC(AC.${colDt})
                BETWEEN TO_DATE(:dtIni, 'YYYY-MM-DD')
                    AND TO_DATE(:dtFim, 'YYYY-MM-DD')
-         GROUP BY IE_SITUACAO
+         GROUP BY ${gbSituacao}
          ORDER BY QT DESC`,
         { dtIni: from, dtFim: to },
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
@@ -651,7 +698,6 @@ async function queryAgendaConsulta({ dtInicio, dtFim } = {}) {
     const TIPO_AGND_LABEL = {
       P: 'Presencial', I: 'Internet',  T: 'Telefone',
       C: 'Central',    W: 'WhatsApp',  N: '(Não informado)',
-      // numéricos (algumas versões do Tasy)
       '1': 'Presencial', '2': 'Internet', '3': 'Telefone',
       '4': 'Central',    '5': 'WhatsApp',
     };
