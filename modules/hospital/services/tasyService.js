@@ -795,6 +795,19 @@ async function discoverAgendaExamesColMap(conn) {
     return result;
   };
 
+  // Descobre tabelas candidatas com DT_ e CD_AGENDA no schema TASY
+  const rTables = await conn.execute(
+    `SELECT DISTINCT TABLE_NAME FROM ALL_TAB_COLUMNS
+      WHERE OWNER = 'TASY'
+        AND TABLE_NAME LIKE '%EXAME%'
+         OR (OWNER = 'TASY' AND TABLE_NAME LIKE '%HORARIO%')
+         OR (OWNER = 'TASY' AND TABLE_NAME LIKE '%AGEND%')
+      ORDER BY TABLE_NAME`,
+    {},
+    { outFormat: oracledb.OUT_FORMAT_OBJECT }
+  );
+  logger.info(`[TasyAgendaExames] Tabelas candidatas: ${rTables.rows.map(r => r.TABLE_NAME).join(', ')}`);
+
   const tables = await getTables('AGENDA', 'PROCEDIMENTO', 'PROCEDIMENTO_INTERNO', 'CONVENIO');
   const ag    = tables['AGENDA'];
   const proc  = tables['PROCEDIMENTO'];
