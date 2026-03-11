@@ -592,38 +592,50 @@ async function queryOcupacaoHospitalar() {
   }
 }
 
-// Cache do mapeamento de colunas da AGENDA_CONSULTA (descoberto uma vez)
+// Cache do mapeamento de colunas (descoberto uma vez por processo)
 let _agendaColMap = null;
 
 /**
- * Descobre os nomes reais das colunas de TASY.AGENDA_CONSULTA via ALL_TAB_COLUMNS.
- * Usa candidatos em ordem de prioridade para cada campo lógico.
+ * Descobre colunas reais de AGENDA_CONSULTA, AGENDA e CONVENIO via ALL_TAB_COLUMNS.
  */
 async function discoverAgendaColMap(conn) {
   if (_agendaColMap) return _agendaColMap;
-  _agendaColMap = null; // garante reset em caso de erro abaixo
 
-  const r = await conn.execute(
-    `SELECT COLUMN_NAME FROM ALL_TAB_COLUMNS
-      WHERE OWNER = 'TASY' AND TABLE_NAME = 'AGENDA_CONSULTA'
-      ORDER BY COLUMN_ID`,
-    [],
-    { outFormat: oracledb.OUT_FORMAT_OBJECT }
-  );
-  const cols = new Set(r.rows.map(row => row.COLUMN_NAME));
-  logger.info(`[TasyAgenda] Colunas AGENDA_CONSULTA: ${[...cols].join(', ')}`);
+  const getTables = async (...names) => {
+    const result = {};
+    for (const tbl of names) {
+      const r = await conn.execute(
+        `SELECT COLUMN_NAME FROM ALL_TAB_COLUMNS
+          WHERE OWNER = 'TASY' AND TABLE_NAME = :tbl ORDER BY COLUMN_ID`,
+        { tbl },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      result[tbl] = new Set(r.rows.map(row => row.COLUMN_NAME));
+    }
+    return result;
+  };
 
-  function pick(candidates) {
+  const tables = await getTables('AGENDA_CONSULTA', 'AGENDA', 'CONVENIO');
+  const ac   = tables['AGENDA_CONSULTA'];
+  const ag   = tables['AGENDA'];
+  const conv = tables['CONVENIO'];
+
+  function pick(cols, candidates) {
     for (const c of candidates) if (cols.has(c)) return c;
     return null;
   }
 
   _agendaColMap = {
-    dt_agenda:         pick(['DT_AGENDA', 'DT_AGENDAMENTO', 'DT_CONSULTA']),
-    nm_agenda:         pick(['NM_PRESTADOR', 'NM_AGENDA', 'NM_PROFISSIONAL', 'DS_AGENDA', 'NM_USUARIO']),
-    ds_convenio:       pick(['DS_CONVENIO', 'NM_CONVENIO', 'DS_PLANO', 'NM_PLANO']),
-    ie_situacao:       pick(['IE_SITUACAO', 'IE_SITUACAO_AGENDA', 'IE_SITUACAO_AGND', 'CD_SITUACAO']),
-    ie_tipo_agnd:      pick(['IE_TIPO_AGENDAMENTO', 'IE_ORIGEM_AGEND', 'IE_FORMA_AGENDAMENTO', 'TP_AGENDAMENTO', 'IE_TIPO_AGND']),
+    // AGENDA_CONSULTA
+    dt_agenda:    pick(ac, ['DT_AGENDA', 'DT_AGENDAMENTO', 'DT_CONSULTA']),
+    ie_situacao:  pick(ac, ['IE_STATUS_AGENDA', 'IE_SITUACAO', 'IE_SITUACAO_AGENDA', 'IE_SITUACAO_AGND']),
+    ie_tipo_agnd: pick(ac, ['IE_FORMA_AGENDAMENTO', 'IE_TIPO_AGENDAMENTO', 'IE_ORIGEM_AGEND', 'TP_AGENDAMENTO']),
+    // JOIN com TASY.AGENDA → nome da agenda
+    ag_pk:        pick(ag, ['CD_AGENDA', 'NR_SEQ_AGENDA']),
+    ag_nm:        pick(ag, ['DS_AGENDA', 'NM_AGENDA', 'DS_DESCRICAO', 'NM_DESCRICAO']),
+    // JOIN com TASY.CONVENIO → nome do convênio
+    conv_pk:      pick(conv, ['CD_CONVENIO', 'NR_SEQ_CONVENIO']),
+    conv_nm:      pick(conv, ['NM_CONVENIO', 'DS_CONVENIO', 'NM_PLANO', 'DS_PLANO']),
   };
   logger.info(`[TasyAgenda] Mapeamento: ${JSON.stringify(_agendaColMap)}`);
   return _agendaColMap;
@@ -631,7 +643,7 @@ async function discoverAgendaColMap(conn) {
 
 /**
  * Consulta agenda de consultas em tempo real via TASY.AGENDA_CONSULTA.
- * Descobre automaticamente os nomes reais das colunas antes de executar a query.
+ * Faz JOIN com AGENDA (nome da agenda) e CONVENIO (nome do convênio).
  */
 async function queryAgendaConsulta({ dtInicio, dtFim } = {}) {
   let conn;
@@ -645,18 +657,35 @@ async function queryAgendaConsulta({ dtInicio, dtFim } = {}) {
 
     const cm = await discoverAgendaColMap(conn);
 
-    // TO_CHAR() garante VARCHAR antes do NVL — evita ORA-01722 quando a coluna é NUMBER
-    const colAgenda   = cm.nm_agenda   ? `NVL(TO_CHAR(AC.${cm.nm_agenda}),   '(Sem agenda)')` : `'(Sem agenda)'`;
-    const colConvenio = cm.ds_convenio ? `NVL(TO_CHAR(AC.${cm.ds_convenio}), '(Sem convênio)')` : `'(Sem convênio)'`;
-    const colSituacao = cm.ie_situacao ? `NVL(TO_CHAR(AC.${cm.ie_situacao}), 'N')` : `'N'`;
-    const colTipo     = cm.ie_tipo_agnd ? `NVL(TO_CHAR(AC.${cm.ie_tipo_agnd}), 'N')` : `'N'`;
-    const colDt       = cm.dt_agenda || 'DT_AGENDA';
+    const colDt = cm.dt_agenda || 'DT_AGENDA';
 
-    // GROUP BY usa TO_CHAR da coluna base — deve ser idêntico ao SELECT
-    const gbAgenda   = cm.nm_agenda   ? `TO_CHAR(AC.${cm.nm_agenda})`   : `'(Sem agenda)'`;
-    const gbConvenio = cm.ds_convenio ? `TO_CHAR(AC.${cm.ds_convenio})` : `'(Sem convênio)'`;
-    const gbSituacao = cm.ie_situacao ? `TO_CHAR(AC.${cm.ie_situacao})` : `'N'`;
-    const gbTipo     = cm.ie_tipo_agnd ? `TO_CHAR(AC.${cm.ie_tipo_agnd})` : `'N'`;
+    // JOIN com AGENDA para o nome — fallback para CD_AGENDA se não houver tabela/coluna
+    const joinAgenda = (cm.ag_pk && cm.ag_nm)
+      ? `LEFT JOIN TASY.AGENDA AG ON AG.${cm.ag_pk} = AC.CD_AGENDA`
+      : '';
+    const colAgenda = (cm.ag_pk && cm.ag_nm)
+      ? `NVL(TO_CHAR(AG.${cm.ag_nm}), '(Sem agenda)')`
+      : `NVL(TO_CHAR(AC.CD_AGENDA), '(Sem agenda)')`;
+    const gbAgenda = (cm.ag_pk && cm.ag_nm)
+      ? `TO_CHAR(AG.${cm.ag_nm})`
+      : `TO_CHAR(AC.CD_AGENDA)`;
+
+    // JOIN com CONVENIO para o nome — fallback para CD_CONVENIO
+    const joinConvenio = (cm.conv_pk && cm.conv_nm)
+      ? `LEFT JOIN TASY.CONVENIO CONV ON CONV.${cm.conv_pk} = AC.CD_CONVENIO`
+      : '';
+    const colConvenio = (cm.conv_pk && cm.conv_nm)
+      ? `NVL(TO_CHAR(CONV.${cm.conv_nm}), '(Sem convênio)')`
+      : `NVL(TO_CHAR(AC.CD_CONVENIO), '(Sem convênio)')`;
+    const gbConvenio = (cm.conv_pk && cm.conv_nm)
+      ? `TO_CHAR(CONV.${cm.conv_nm})`
+      : `TO_CHAR(AC.CD_CONVENIO)`;
+
+    // Situação e tipo
+    const colSituacao = cm.ie_situacao  ? `NVL(TO_CHAR(AC.${cm.ie_situacao}),  'N')` : `'N'`;
+    const colTipo     = cm.ie_tipo_agnd ? `NVL(TO_CHAR(AC.${cm.ie_tipo_agnd}), 'N')` : `'N'`;
+    const gbSituacao  = cm.ie_situacao  ? `TO_CHAR(AC.${cm.ie_situacao})`  : `'N'`;
+    const gbTipo      = cm.ie_tipo_agnd ? `TO_CHAR(AC.${cm.ie_tipo_agnd})` : `'N'`;
 
     const [rResumo, rSituacao] = await Promise.all([
       conn.execute(
@@ -667,6 +696,8 @@ async function queryAgendaConsulta({ dtInicio, dtFim } = {}) {
            ${colSituacao} AS IE_SITUACAO,
            COUNT(*)       AS QT
          FROM TASY.AGENDA_CONSULTA AC
+         ${joinAgenda}
+         ${joinConvenio}
          WHERE TRUNC(AC.${colDt})
                BETWEEN TO_DATE(:dtIni, 'YYYY-MM-DD')
                    AND TO_DATE(:dtFim, 'YYYY-MM-DD')
