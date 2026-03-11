@@ -795,27 +795,13 @@ async function discoverAgendaExamesColMap(conn) {
     return result;
   };
 
-  // Descobre tabelas candidatas com DT_ e CD_AGENDA no schema TASY
-  const rTables = await conn.execute(
-    `SELECT DISTINCT TABLE_NAME FROM ALL_TAB_COLUMNS
-      WHERE OWNER = 'TASY'
-        AND TABLE_NAME LIKE '%EXAME%'
-         OR (OWNER = 'TASY' AND TABLE_NAME LIKE '%HORARIO%')
-         OR (OWNER = 'TASY' AND TABLE_NAME LIKE '%AGEND%')
-      ORDER BY TABLE_NAME`,
-    {},
-    { outFormat: oracledb.OUT_FORMAT_OBJECT }
-  );
-  logger.info(`[TasyAgendaExames] Tabelas candidatas: ${rTables.rows.map(r => r.TABLE_NAME).join(', ')}`);
-
-  const tables = await getTables('AGENDA', 'PROCEDIMENTO', 'PROCEDIMENTO_INTERNO', 'CONVENIO');
-  const ag    = tables['AGENDA'];
+  const tables = await getTables('AGENDA_PACIENTE', 'PROCEDIMENTO', 'PROCEDIMENTO_INTERNO', 'CONVENIO');
+  const ap    = tables['AGENDA_PACIENTE'];
   const proc  = tables['PROCEDIMENTO'];
   const procI = tables['PROCEDIMENTO_INTERNO'];
   const conv  = tables['CONVENIO'];
 
-  // Loga todas as colunas de AGENDA para facilitar diagnóstico
-  logger.info(`[TasyAgendaExames] Colunas de TASY.AGENDA: ${[...ag].join(', ')}`);
+  logger.info(`[TasyAgendaExames] Colunas de TASY.AGENDA_PACIENTE: ${[...ap].join(', ')}`);
 
   function pick(cols, candidates) {
     for (const c of candidates) if (cols.has(c)) return c;
@@ -834,16 +820,16 @@ async function discoverAgendaExamesColMap(conn) {
     proc_nm = pick(procI, ['NM_PROCEDIMENTO', 'DS_PROCEDIMENTO', 'DS_DESCRICAO', 'NM_DESCRICAO']);
     if (proc_pk && proc_nm) proc_table = 'PROCEDIMENTO_INTERNO';
   }
-  // FK de AGENDA para o procedimento — busca independente de proc_table
-  proc_fk = pick(ag, ['CD_PROCEDIMENTO', 'NR_SEQ_PROCEDIMENTO', 'CD_EXAME', 'NR_SEQ_EXAME',
+  // FK de AGENDA_PACIENTE para o procedimento
+  proc_fk = pick(ap, ['CD_PROCEDIMENTO', 'NR_SEQ_PROCEDIMENTO', 'CD_EXAME', 'NR_SEQ_EXAME',
                        'CD_SERVICO', 'NR_SEQ_SERVICO', 'CD_ITEM_AGENDAMENTO',
                        'NR_SEQ_PROCEDIMENTO_INTERNO', 'CD_PROCEDIMENTO_INTERNO']);
 
   _agendaExamesColMap = {
-    dt_agenda:    pick(ag, ['DT_AGENDA', 'DT_AGENDAMENTO', 'DT_EXAME']),
-    ie_situacao:  pick(ag, ['IE_SITUACAO', 'IE_STATUS_AGENDA', 'IE_STATUS', 'IE_SITUACAO_AGENDA']),
-    ie_tipo_agnd: pick(ag, ['IE_FORMA_AGENDAMENTO', 'IE_TIPO_AGENDAMENTO', 'IE_ORIGEM_AGEND', 'TP_AGENDAMENTO']),
-    ag_cd_conv:   pick(ag, ['CD_CONVENIO', 'NR_SEQ_CONVENIO', 'CD_CONV', 'NR_CONVENIO', 'CD_PLANO_SAUDE', 'NR_SEQ_PLANO_SAUDE']),
+    dt_agenda:    pick(ap, ['DT_AGENDA', 'DT_AGENDAMENTO', 'DT_EXAME', 'DT_AGENDA_PACIENTE']),
+    ie_situacao:  pick(ap, ['IE_SITUACAO', 'IE_STATUS_AGENDA', 'IE_STATUS', 'IE_SITUACAO_AGENDA']),
+    ie_tipo_agnd: pick(ap, ['IE_FORMA_AGENDAMENTO', 'IE_TIPO_AGENDAMENTO', 'IE_ORIGEM_AGEND', 'TP_AGENDAMENTO']),
+    ag_cd_conv:   pick(ap, ['CD_CONVENIO', 'NR_SEQ_CONVENIO', 'CD_CONV', 'NR_CONVENIO', 'CD_PLANO_SAUDE', 'NR_SEQ_PLANO_SAUDE']),
     proc_table,
     proc_pk,
     proc_fk,
@@ -856,7 +842,7 @@ async function discoverAgendaExamesColMap(conn) {
 }
 
 /**
- * Consulta agenda de exames em tempo real via TASY.AGENDA.
+ * Consulta agenda de exames em tempo real via TASY.AGENDA_PACIENTE.
  * Faz JOIN com PROCEDIMENTO (nome do exame) e CONVENIO (nome do convênio).
  */
 async function queryAgendaExames({ dtInicio, dtFim } = {}) {
@@ -872,50 +858,50 @@ async function queryAgendaExames({ dtInicio, dtFim } = {}) {
     const cm = await discoverAgendaExamesColMap(conn);
 
     if (!cm.dt_agenda) {
-      throw new Error(`Coluna de data não encontrada em TASY.AGENDA. Verifique o log '[TasyAgendaExames] Colunas de TASY.AGENDA' para identificar o nome correto.`);
+      throw new Error(`Coluna de data não encontrada em TASY.AGENDA_PACIENTE. Verifique o log '[TasyAgendaExames] Colunas de TASY.AGENDA_PACIENTE' para identificar o nome correto.`);
     }
     const colDt = cm.dt_agenda;
 
     // JOIN com tabela de procedimento para nome do exame
     const joinProc = (cm.proc_table && cm.proc_pk && cm.proc_fk && cm.proc_nm)
-      ? `LEFT JOIN TASY.${cm.proc_table} PROC ON PROC.${cm.proc_pk} = AG.${cm.proc_fk}`
+      ? `LEFT JOIN TASY.${cm.proc_table} PROC ON PROC.${cm.proc_pk} = AP.${cm.proc_fk}`
       : '';
     const colProc = cm.proc_fk
       ? (cm.proc_table && cm.proc_pk && cm.proc_nm
-          ? `NVL(TO_CHAR(PROC.${cm.proc_nm}), NVL(TO_CHAR(AG.${cm.proc_fk}), '(Sem procedimento)'))`
-          : `NVL(TO_CHAR(AG.${cm.proc_fk}), '(Sem procedimento)')`)
+          ? `NVL(TO_CHAR(PROC.${cm.proc_nm}), NVL(TO_CHAR(AP.${cm.proc_fk}), '(Sem procedimento)'))`
+          : `NVL(TO_CHAR(AP.${cm.proc_fk}), '(Sem procedimento)')`)
       : `'(Sem procedimento)'`;
     const gbProc = cm.proc_fk
       ? (cm.proc_table && cm.proc_pk && cm.proc_nm
-          ? `TO_CHAR(PROC.${cm.proc_nm}), TO_CHAR(AG.${cm.proc_fk})`
-          : `TO_CHAR(AG.${cm.proc_fk})`)
+          ? `TO_CHAR(PROC.${cm.proc_nm}), TO_CHAR(AP.${cm.proc_fk})`
+          : `TO_CHAR(AP.${cm.proc_fk})`)
       : `'(Sem procedimento)'`;
 
-    // FK de AGENDA para convênio (pode ser null se coluna não existir)
+    // FK de AGENDA_PACIENTE para convênio (pode ser null se coluna não existir)
     const convFk = cm.ag_cd_conv || null;
 
-    // JOIN com CONVENIO para nome — omitido se não houver FK em AGENDA
+    // JOIN com CONVENIO para nome — omitido se não houver FK em AGENDA_PACIENTE
     const joinConvenio = (convFk && cm.conv_pk && cm.conv_nm)
-      ? `LEFT JOIN TASY.CONVENIO CONV ON CONV.${cm.conv_pk} = AG.${convFk}`
+      ? `LEFT JOIN TASY.CONVENIO CONV ON CONV.${cm.conv_pk} = AP.${convFk}`
       : '';
     const colConvenio = convFk
       ? (cm.conv_pk && cm.conv_nm
           ? `NVL(TO_CHAR(CONV.${cm.conv_nm}), 'Particular')`
-          : `NVL(TO_CHAR(AG.${convFk}), 'Particular')`)
+          : `NVL(TO_CHAR(AP.${convFk}), 'Particular')`)
       : `'(Sem convênio)'`;
     const gbConvenio = convFk
       ? (cm.conv_pk && cm.conv_nm
           ? `TO_CHAR(CONV.${cm.conv_nm})`
-          : `TO_CHAR(AG.${convFk})`)
+          : `TO_CHAR(AP.${convFk})`)
       : `'(Sem convênio)'`;
-    const colCdConvenio = convFk ? `TO_CHAR(AG.${convFk})` : `NULL`;
-    const gbCdConvenio  = convFk ? `, TO_CHAR(AG.${convFk})` : ``;
+    const colCdConvenio = convFk ? `TO_CHAR(AP.${convFk})` : `NULL`;
+    const gbCdConvenio  = convFk ? `, TO_CHAR(AP.${convFk})` : ``;
 
     // Situação e tipo
-    const colSituacao = cm.ie_situacao  ? `NVL(TO_CHAR(AG.${cm.ie_situacao}),  'N')` : `'N'`;
-    const colTipo     = cm.ie_tipo_agnd ? `NVL(TO_CHAR(AG.${cm.ie_tipo_agnd}), 'N')` : `'N'`;
-    const gbSituacao  = cm.ie_situacao  ? `TO_CHAR(AG.${cm.ie_situacao})`  : `'N'`;
-    const gbTipo      = cm.ie_tipo_agnd ? `TO_CHAR(AG.${cm.ie_tipo_agnd})` : `'N'`;
+    const colSituacao = cm.ie_situacao  ? `NVL(TO_CHAR(AP.${cm.ie_situacao}),  'N')` : `'N'`;
+    const colTipo     = cm.ie_tipo_agnd ? `NVL(TO_CHAR(AP.${cm.ie_tipo_agnd}), 'N')` : `'N'`;
+    const gbSituacao  = cm.ie_situacao  ? `TO_CHAR(AP.${cm.ie_situacao})`  : `'N'`;
+    const gbTipo      = cm.ie_tipo_agnd ? `TO_CHAR(AP.${cm.ie_tipo_agnd})` : `'N'`;
 
     const SITUACAO_LABEL = {
       A: 'Agendado',    R: 'Realizado',   C: 'Cancelado',
@@ -940,10 +926,10 @@ async function queryAgendaExames({ dtInicio, dtFim } = {}) {
            ${colTipo}                   AS IE_TIPO_AGENDAMENTO,
            ${colSituacao}               AS IE_SITUACAO,
            COUNT(*)                     AS QT
-         FROM TASY.AGENDA AG
+         FROM TASY.AGENDA_PACIENTE AP
          ${joinProc}
          ${joinConvenio}
-         WHERE TRUNC(AG.${colDt})
+         WHERE TRUNC(AP.${colDt})
                BETWEEN TO_DATE(:dtIni, 'YYYY-MM-DD')
                    AND TO_DATE(:dtFim, 'YYYY-MM-DD')
          GROUP BY ${gbProc}${gbCdConvenio}, ${gbConvenio}, ${gbTipo}, ${gbSituacao}
@@ -956,8 +942,8 @@ async function queryAgendaExames({ dtInicio, dtFim } = {}) {
         `SELECT
            ${colSituacao} AS IE_SITUACAO,
            COUNT(*)       AS QT
-         FROM TASY.AGENDA AG
-         WHERE TRUNC(AG.${colDt})
+         FROM TASY.AGENDA_PACIENTE AP
+         WHERE TRUNC(AP.${colDt})
                BETWEEN TO_DATE(:dtIni, 'YYYY-MM-DD')
                    AND TO_DATE(:dtFim, 'YYYY-MM-DD')
          GROUP BY ${gbSituacao}
