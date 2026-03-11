@@ -773,6 +773,10 @@ let _agendaExamesColMap = null;
  * Descobre colunas reais de AGENDA, PROCEDIMENTO/PROCEDIMENTO_INTERNO e CONVENIO.
  */
 async function discoverAgendaExamesColMap(conn) {
+  if (_agendaExamesColMap) {
+    // Reinicia cache se coluna de convênio não foi encontrada (pode ter candidatos novos)
+    if (_agendaExamesColMap.ag_cd_conv === null) _agendaExamesColMap = null;
+  }
   if (_agendaExamesColMap) return _agendaExamesColMap;
 
   const getTables = async (...names) => {
@@ -821,7 +825,7 @@ async function discoverAgendaExamesColMap(conn) {
     dt_agenda:    pick(ag, ['DT_AGENDA', 'DT_AGENDAMENTO', 'DT_EXAME']),
     ie_situacao:  pick(ag, ['IE_SITUACAO', 'IE_STATUS_AGENDA', 'IE_STATUS', 'IE_SITUACAO_AGENDA']),
     ie_tipo_agnd: pick(ag, ['IE_FORMA_AGENDAMENTO', 'IE_TIPO_AGENDAMENTO', 'IE_ORIGEM_AGEND', 'TP_AGENDAMENTO']),
-    ag_cd_conv:   pick(ag, ['CD_CONVENIO', 'NR_SEQ_CONVENIO']),
+    ag_cd_conv:   pick(ag, ['CD_CONVENIO', 'NR_SEQ_CONVENIO', 'CD_CONV', 'NR_CONVENIO', 'CD_PLANO_SAUDE', 'NR_SEQ_PLANO_SAUDE']),
     proc_table,
     proc_pk,
     proc_fk,
@@ -862,19 +866,25 @@ async function queryAgendaExames({ dtInicio, dtFim } = {}) {
       ? `TO_CHAR(PROC.${cm.proc_nm}), TO_CHAR(AG.${cm.proc_fk})`
       : `TO_CHAR(AG.${cm.proc_fk || 'CD_PROCEDIMENTO'})`;
 
-    // FK de AGENDA para CD_CONVENIO
-    const convFk = cm.ag_cd_conv || 'CD_CONVENIO';
+    // FK de AGENDA para convênio (pode ser null se coluna não existir)
+    const convFk = cm.ag_cd_conv || null;
 
-    // JOIN com CONVENIO para nome
-    const joinConvenio = (cm.conv_pk && cm.conv_nm)
+    // JOIN com CONVENIO para nome — omitido se não houver FK em AGENDA
+    const joinConvenio = (convFk && cm.conv_pk && cm.conv_nm)
       ? `LEFT JOIN TASY.CONVENIO CONV ON CONV.${cm.conv_pk} = AG.${convFk}`
       : '';
-    const colConvenio = (cm.conv_pk && cm.conv_nm)
-      ? `NVL(TO_CHAR(CONV.${cm.conv_nm}), 'Particular')`
-      : `NVL(TO_CHAR(AG.${convFk}), 'Particular')`;
-    const gbConvenio = (cm.conv_pk && cm.conv_nm)
-      ? `TO_CHAR(CONV.${cm.conv_nm})`
-      : `TO_CHAR(AG.${convFk})`;
+    const colConvenio = convFk
+      ? (cm.conv_pk && cm.conv_nm
+          ? `NVL(TO_CHAR(CONV.${cm.conv_nm}), 'Particular')`
+          : `NVL(TO_CHAR(AG.${convFk}), 'Particular')`)
+      : `'(Sem convênio)'`;
+    const gbConvenio = convFk
+      ? (cm.conv_pk && cm.conv_nm
+          ? `TO_CHAR(CONV.${cm.conv_nm})`
+          : `TO_CHAR(AG.${convFk})`)
+      : `'(Sem convênio)'`;
+    const colCdConvenio = convFk ? `TO_CHAR(AG.${convFk})` : `NULL`;
+    const gbCdConvenio  = convFk ? `, TO_CHAR(AG.${convFk})` : ``;
 
     // Situação e tipo
     const colSituacao = cm.ie_situacao  ? `NVL(TO_CHAR(AG.${cm.ie_situacao}),  'N')` : `'N'`;
@@ -900,7 +910,7 @@ async function queryAgendaExames({ dtInicio, dtFim } = {}) {
       conn.execute(
         `SELECT
            ${colProc}                   AS NM_PROCEDIMENTO,
-           TO_CHAR(AG.${convFk})        AS CD_CONVENIO,
+           ${colCdConvenio}             AS CD_CONVENIO,
            ${colConvenio}               AS DS_CONVENIO,
            ${colTipo}                   AS IE_TIPO_AGENDAMENTO,
            ${colSituacao}               AS IE_SITUACAO,
@@ -911,7 +921,7 @@ async function queryAgendaExames({ dtInicio, dtFim } = {}) {
          WHERE TRUNC(AG.${colDt})
                BETWEEN TO_DATE(:dtIni, 'YYYY-MM-DD')
                    AND TO_DATE(:dtFim, 'YYYY-MM-DD')
-         GROUP BY ${gbProc}, TO_CHAR(AG.${convFk}), ${gbConvenio}, ${gbTipo}, ${gbSituacao}
+         GROUP BY ${gbProc}${gbCdConvenio}, ${gbConvenio}, ${gbTipo}, ${gbSituacao}
          ORDER BY NM_PROCEDIMENTO, QT DESC`,
         { dtIni: from, dtFim: to },
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
