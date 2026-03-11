@@ -233,12 +233,12 @@
         }
         const agendasSorted = Object.entries(pivotAgenda).sort((a, b) => b[1]._total - a[1]._total);
 
-        // Pivot convênio × total (chave = cd_convenio para unicidade)
+        // Pivot convênio × total — ignora registros sem convênio (vagas disponíveis)
         const pivotConv = {};
         for (const row of resumo) {
-          const key = row.cd_convenio || '__particular__';
-          if (!pivotConv[key]) pivotConv[key] = { cd: row.cd_convenio, nm: row.ds_convenio, qt: 0 };
-          pivotConv[key].qt += row.qt;
+          if (!row.cd_convenio) continue;
+          if (!pivotConv[row.cd_convenio]) pivotConv[row.cd_convenio] = { cd: row.cd_convenio, nm: row.ds_convenio, qt: 0 };
+          pivotConv[row.cd_convenio].qt += row.qt;
         }
         const convSorted = Object.values(pivotConv).sort((a, b) => b.qt - a.qt);
         const maxConv = convSorted.length ? convSorted[0].qt : 1;
