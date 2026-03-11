@@ -9,7 +9,8 @@ const oracleCache   = { data: null, ts: 0, dtInicio: null, dtFim: null };
 exports.agenda = async (req, res) => {
   try {
     const hoje         = new Date().toISOString().slice(0, 10);
-    const dtInicio     = req.query.dtInicio || hoje;
+    const d60          = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const dtInicio     = req.query.dtInicio || d60;
     const dtFim        = req.query.dtFim   || hoje;
     const forceRefresh = req.query.refresh === '1';
     const now          = Date.now();

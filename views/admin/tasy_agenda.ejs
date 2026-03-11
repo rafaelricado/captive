@@ -6,11 +6,20 @@
   <title>Agenda de Consultas — Admin</title>
   <%- include('_head') %>
   <style>
+    /* ── Toolbar (padrão tasy.ejs) ───────────────────────────────────── */
+    .toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .toolbar-left  { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .toolbar-right { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .sync-info { font-size:.78rem; color:#9ca3af; }
+    .btn-sync   { padding:6px 14px; background:#fff; color:#0d4e8b; border:1px solid #0d4e8b; border-radius:6px; font-size:.82rem; cursor:pointer; font-weight:600; transition:all .15s; }
+    .btn-sync:hover    { background:#0d4e8b; color:#fff; }
+    .btn-sync:disabled { opacity:.5; cursor:not-allowed; }
+
     /* ── Filtro de datas ──────────────────────────────────────────────── */
     .filter-bar {
       display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;
       background: #fff; border-radius: 10px; padding: 16px 20px;
-      box-shadow: 0 1px 6px rgba(0,0,0,.08); margin-bottom: 24px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08); margin-bottom: 16px;
     }
     .filter-bar label { font-size: .8rem; color: #6b7280; display: block; margin-bottom: 4px; }
     .filter-bar input[type="date"] {
@@ -23,34 +32,34 @@
       cursor: pointer; transition: background .15s;
     }
     .btn-primary:hover { background: #0b4070; }
-    .btn-refresh {
-      background: none; border: 1px solid #d1d5db; color: #6b7280;
-      padding: 7px 14px; border-radius: 6px; font-size: .8rem;
-      cursor: pointer; transition: all .15s; text-decoration: none;
-      display: inline-flex; align-items: center; gap: 5px;
+
+    /* ── Barra de progresso de sync ───────────────────────────────────── */
+    #sync-progress {
+      display: none; margin-bottom: 12px; background: #fff;
+      border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.07); padding: 12px 16px;
     }
-    .btn-refresh:hover { border-color: #0d4e8b; color: #0d4e8b; }
+    #sync-progress-text { font-size: .8rem; color: #374151; margin-bottom: 6px; }
+    #sync-progress-bar  { background: #e5e7eb; border-radius: 4px; height: 8px; overflow: hidden; }
+    #sync-progress-fill { background: #0d4e8b; height: 100%; width: 0%; transition: width .3s ease; }
 
     /* ── Cards de situação ────────────────────────────────────────────── */
-    .cards-situacao {
-      display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px;
-    }
+    .cards-situacao { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
     .card-sit {
       flex: 1; min-width: 120px;
       background: #fff; border-radius: 10px; padding: 16px 18px;
       box-shadow: 0 1px 6px rgba(0,0,0,.08); text-align: center;
     }
-    .card-sit-total  { border-top: 4px solid #0d4e8b; }
-    .card-sit-A      { border-top: 4px solid #2563eb; }
-    .card-sit-R      { border-top: 4px solid #16a34a; }
-    .card-sit-C      { border-top: 4px solid #dc2626; }
-    .card-sit-F      { border-top: 4px solid #d97706; }
-    .card-sit-L      { border-top: 4px solid #7c3aed; }
-    .card-sit-S      { border-top: 4px solid #6b7280; }
-    .card-sit-val    { font-size: 2rem; font-weight: 700; color: #1f2937; line-height: 1; }
-    .card-sit-label  { font-size: .75rem; color: #6b7280; margin-top: 5px; }
+    .card-sit-total { border-top: 4px solid #0d4e8b; }
+    .card-sit-A     { border-top: 4px solid #2563eb; }
+    .card-sit-R     { border-top: 4px solid #16a34a; }
+    .card-sit-C     { border-top: 4px solid #dc2626; }
+    .card-sit-F     { border-top: 4px solid #d97706; }
+    .card-sit-L     { border-top: 4px solid #7c3aed; }
+    .card-sit-S     { border-top: 4px solid #6b7280; }
+    .card-sit-val   { font-size: 2rem; font-weight: 700; color: #1f2937; line-height: 1; }
+    .card-sit-label { font-size: .75rem; color: #6b7280; margin-top: 5px; }
 
-    /* ── Tabela de resumo ─────────────────────────────────────────────── */
+    /* ── Títulos de seção ─────────────────────────────────────────────── */
     .section-title {
       font-size: 1rem; font-weight: 700; color: #0d4e8b;
       margin: 28px 0 12px; display: flex; align-items: center; gap: 8px;
@@ -61,18 +70,12 @@
     }
 
     /* ── Badge forma agendamento ──────────────────────────────────────── */
-    .badge-P { background: #dbeafe; color: #1d4ed8; }
-    .badge-I { background: #d1fae5; color: #065f46; }
-    .badge-T { background: #fef3c7; color: #92400e; }
-    .badge-C { background: #ede9fe; color: #5b21b6; }
-    .badge-W { background: #dcfce7; color: #166534; }
-    .badge-N { background: #f3f4f6; color: #6b7280; }
-    /* numéricos mapeados para as mesmas classes */
-    .badge-1 { background: #dbeafe; color: #1d4ed8; }
-    .badge-2 { background: #d1fae5; color: #065f46; }
-    .badge-3 { background: #fef3c7; color: #92400e; }
-    .badge-4 { background: #ede9fe; color: #5b21b6; }
-    .badge-5 { background: #dcfce7; color: #166534; }
+    .badge-P, .badge-1 { background: #dbeafe; color: #1d4ed8; }
+    .badge-I, .badge-2 { background: #d1fae5; color: #065f46; }
+    .badge-T, .badge-3 { background: #fef3c7; color: #92400e; }
+    .badge-C, .badge-4 { background: #ede9fe; color: #5b21b6; }
+    .badge-W, .badge-5 { background: #dcfce7; color: #166534; }
+    .badge-N           { background: #f3f4f6; color: #6b7280; }
 
     /* ── Badge situação ───────────────────────────────────────────────── */
     .sit-A { background: #dbeafe; color: #1d4ed8; }
@@ -83,7 +86,7 @@
     .sit-S { background: #f3f4f6; color: #6b7280; }
     .sit-N { background: #f3f4f6; color: #6b7280; }
 
-    /* ── Aviso offline / cache ────────────────────────────────────────── */
+    /* ── Avisos cache / erro ──────────────────────────────────────────── */
     .cache-notice {
       background: #fefce8; border: 1px solid #fde047; border-radius: 8px;
       padding: 10px 16px; font-size: .8rem; color: #854d0e;
@@ -91,11 +94,10 @@
     }
     .error-notice {
       background: #fee2e2; border: 1px solid #fca5a5; border-radius: 8px;
-      padding: 10px 16px; font-size: .8rem; color: #991b1b;
-      margin-bottom: 16px;
+      padding: 10px 16px; font-size: .8rem; color: #991b1b; margin-bottom: 16px;
     }
 
-    /* ── Tabela pivot por agenda ──────────────────────────────────────── */
+    /* ── Grupos por agenda ────────────────────────────────────────────── */
     .agenda-group { margin-bottom: 28px; }
     .agenda-group-header {
       background: #f0f4f8; padding: 10px 14px; border-radius: 8px 8px 0 0;
@@ -103,8 +105,7 @@
       display: flex; align-items: center; justify-content: space-between;
     }
     .agenda-group-header .total-badge {
-      background: #0d4e8b; color: #fff;
-      border-radius: 99px; font-size: .75rem; padding: 2px 10px;
+      background: #0d4e8b; color: #fff; border-radius: 99px; font-size: .75rem; padding: 2px 10px;
     }
   </style>
 </head>
@@ -115,7 +116,7 @@
     <h1 class="page-title">Agenda de Consultas</h1>
 
     <!-- ── Filtro de período ──────────────────────────────────────────── -->
-    <form class="filter-bar" method="GET" action="/admin/tasy/agenda">
+    <form class="filter-bar" id="filter-form" method="GET" action="/admin/tasy/agenda">
       <div>
         <label for="dtInicio">Data início</label>
         <input type="date" id="dtInicio" name="dtInicio" value="<%= dtInicio %>">
@@ -125,19 +126,30 @@
         <input type="date" id="dtFim" name="dtFim" value="<%= dtFim %>">
       </div>
       <button type="submit" class="btn-primary">Filtrar</button>
-      <a href="/admin/tasy/agenda?dtInicio=<%= dtInicio %>&dtFim=<%= dtFim %>&refresh=1"
-         class="btn-refresh" title="Forçar atualização do Oracle">
-        &#8635; Atualizar
-      </a>
     </form>
 
-    <% if (oracleCached) { %>
-      <div class="cache-notice">
-        &#9432; Exibindo dados em cache
-        <% if (oracleCacheAge !== null) { %>(atualizado há <%= oracleCacheAge %> min)<% } %>.
-        <a href="/admin/tasy/agenda?dtInicio=<%= dtInicio %>&dtFim=<%= dtFim %>&refresh=1">Atualizar agora</a>
+    <!-- ── Toolbar: info de atualização + botão Sincronizar ─────────── -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <% if (oracleCached) { %>
+          <span class="sync-info">
+            &#9432; Dados em cache
+            <% if (oracleCacheAge !== null) { %>(atualizados há <%= oracleCacheAge %> min)<% } %>
+          </span>
+        <% } else if (oracleData) { %>
+          <span class="sync-info">Dados atualizados agora do Oracle</span>
+        <% } %>
       </div>
-    <% } %>
+      <div class="toolbar-right">
+        <button class="btn-sync" id="btn-sync">&#8635; Sincronizar agora</button>
+      </div>
+    </div>
+
+    <!-- ── Barra de progresso ─────────────────────────────────────────── -->
+    <div id="sync-progress">
+      <div id="sync-progress-text">Consultando Oracle...</div>
+      <div id="sync-progress-bar"><div id="sync-progress-fill"></div></div>
+    </div>
 
     <% if (oracleError && !oracleData) { %>
       <div class="error-notice">
@@ -150,9 +162,7 @@
         const situacaoMap = oracleData.situacaoMap;
         const total       = oracleData.total;
         const resumo      = oracleData.resumo;
-
-        // Agrupa resumo por agenda
-        const porAgenda = {};
+        const porAgenda   = {};
         for (const row of resumo) {
           if (!porAgenda[row.nm_agenda]) porAgenda[row.nm_agenda] = [];
           porAgenda[row.nm_agenda].push(row);
@@ -174,7 +184,7 @@
         <% } %>
       </div>
 
-      <!-- ── Tabela por agenda ─────────────────────────────────────────── -->
+      <!-- ── Tabelas por agenda ────────────────────────────────────────── -->
       <% if (agendas.length === 0) { %>
         <p class="meta">Nenhum agendamento encontrado para o período selecionado.</p>
       <% } else { %>
@@ -184,8 +194,8 @@
         </div>
 
         <% for (const nm of agendas) {
-             const linhas    = porAgenda[nm];
-             const totalAg   = linhas.reduce((s, r) => s + r.qt, 0);
+             const linhas  = porAgenda[nm];
+             const totalAg = linhas.reduce((s, r) => s + r.qt, 0);
         %>
           <div class="agenda-group">
             <div class="agenda-group-header">
@@ -232,5 +242,55 @@
   </div>
 
   <footer>Captive Portal Admin</footer>
+
+  <script>
+    (function () {
+      var btn      = document.getElementById('btn-sync');
+      var progress = document.getElementById('sync-progress');
+      var fill     = document.getElementById('sync-progress-fill');
+      var text     = document.getElementById('sync-progress-text');
+
+      btn.addEventListener('click', function () {
+        var dtInicio = document.getElementById('dtInicio').value;
+        var dtFim    = document.getElementById('dtFim').value;
+
+        btn.disabled = true;
+        btn.textContent = 'Sincronizando...';
+        fill.style.width = '0%';
+        text.textContent = 'Conectando ao Oracle...';
+        progress.style.display = 'block';
+
+        // Animação indeterminada enquanto aguarda Oracle
+        var pct = 0;
+        var interval = setInterval(function () {
+          pct = Math.min(pct + 3, 85);
+          fill.style.width = pct + '%';
+        }, 200);
+
+        fetch('/admin/tasy/agenda?dtInicio=' + dtInicio + '&dtFim=' + dtFim + '&refresh=1', {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) {
+          clearInterval(interval);
+          if (r.ok) {
+            fill.style.width = '100%';
+            text.textContent = 'Sincronizado com sucesso. Recarregando...';
+            setTimeout(function () {
+              window.location.href = '/admin/tasy/agenda?dtInicio=' + dtInicio + '&dtFim=' + dtFim;
+            }, 800);
+          } else {
+            throw new Error('Resposta ' + r.status);
+          }
+        })
+        .catch(function (err) {
+          clearInterval(interval);
+          progress.style.display = 'none';
+          btn.disabled = false;
+          btn.textContent = '\u21BB Sincronizar agora';
+          alert('Falha na sincronização: ' + err.message);
+        });
+      });
+    })();
+  </script>
 </body>
 </html>
