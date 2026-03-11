@@ -10,15 +10,7 @@ const dashboardController    = require('../controllers/admin/dashboardController
 const usersController        = require('../controllers/admin/usersController');
 const sessionsController     = require('../controllers/admin/sessionsController');
 const settingsController     = require('../controllers/admin/settingsController');
-const accessPointsController = require('../controllers/admin/accessPointsController');
-const networkController      = require('../controllers/admin/networkController');
-const devicesController      = require('../controllers/admin/devicesController');
 const securityController     = require('../controllers/admin/securityController');
-const managedIpsController   = require('../controllers/admin/managedIpsController');
-const tasyController         = require('../controllers/admin/tasyController');
-const tasyProtocoloController = require('../controllers/admin/tasyProtocoloController');
-const tasyAlertaController    = require('../controllers/admin/tasyAlertaController');
-const tasyOcupacaoController  = require('../controllers/admin/tasyOcupacaoController');
 const { Setting } = require('../models');
 const securityCountCache = require('../utils/securityCountCache');
 
@@ -113,44 +105,6 @@ router.get('/sessions', adminAuth, sessionsController.sessions);
 router.get('/sessions/export', adminAuth, exportLimiter, sessionsController.exportSessions);
 router.post('/sessions/:id/terminate', adminAuth, verifyCsrf, sessionsController.terminateSession);
 
-// Pontos de acesso (protegido)
-// IMPORTANTE: rota /ping deve vir antes de /:id/* para não ser capturada pelo param
-router.get('/access-points', adminAuth, accessPointsController.accessPoints);
-router.post('/access-points/ping', adminAuth, verifyCsrf, accessPointsController.pingAccessPoints);
-router.get('/access-points/:id/history', adminAuth, accessPointsController.apHistory);
-router.post('/access-points', adminAuth, verifyCsrf, accessPointsController.saveAccessPoint);
-router.post('/access-points/:id/delete', adminAuth, verifyCsrf, accessPointsController.deleteAccessPoint);
-
-// Rede / Tráfego Mikrotik (protegido)
-router.get('/traffic', adminAuth, networkController.traffic);
-router.get('/traffic/export', adminAuth, exportLimiter, networkController.exportTraffic);
-router.get('/wan', adminAuth, networkController.wan);
-router.get('/connections', adminAuth, networkController.connections);
-router.get('/dns', adminAuth, networkController.dns);
-
-// Histórico de dispositivos (protegido)
-// IMPORTANTE: rota estática '/devices' deve vir antes de '/devices/:mac'
-router.get('/devices',        adminAuth, devicesController.devices);
-router.get('/devices/export', adminAuth, exportLimiter, devicesController.exportDevices);
-router.get('/devices/:mac',   adminAuth, devicesController.deviceDetail);
-
-// IPs Gerenciados (protegido)
-// IMPORTANTE: rotas estáticas devem vir antes de /:id/*
-router.get('/managed-ips',                     adminAuth, managedIpsController.managedIps);
-router.post('/managed-ips',                    adminAuth, verifyCsrf, managedIpsController.saveManagedIp);
-router.get('/managed-ips/arp-table',           adminAuth, managedIpsController.arpTable);
-router.get('/managed-ips/:id',                 adminAuth, managedIpsController.managedIpDetail);
-router.post('/managed-ips/:id',                adminAuth, verifyCsrf, managedIpsController.saveManagedIp);
-router.post('/managed-ips/:id/delete',         adminAuth, verifyCsrf, managedIpsController.deleteManagedIp);
-router.get('/managed-ips/:id/live',            adminAuth, managedIpsController.managedIpLive);
-router.post('/managed-ips/:id/sync',           adminAuth, verifyCsrf, managedIpsController.syncManagedIp);
-router.post('/managed-ips/:id/identify',       adminAuth, verifyCsrf, managedIpsController.identifyManagedIp);
-
-// Endpoints JSON para auto-refresh das páginas (protegido)
-router.get('/traffic/data', adminAuth, networkController.trafficData);
-router.get('/wan/data', adminAuth, networkController.wanData);
-router.get('/connections/data', adminAuth, networkController.connectionsData);
-
 // Segurança — Eventos detectados (protegido)
 // IMPORTANTE: rotas estáticas devem vir antes de /:id/*
 router.get('/security', adminAuth, securityController.security);
@@ -158,26 +112,6 @@ router.get('/security/data', adminAuth, securityController.securityData);
 router.get('/security/export', adminAuth, exportLimiter, securityController.securityExport);
 router.post('/security/acknowledge-all', adminAuth, verifyCsrf, securityController.acknowledgeAllSecurityEvents);
 router.post('/security/:id/acknowledge', adminAuth, verifyCsrf, securityController.acknowledgeSecurityEvent);
-
-// Tasy — Contas de paciente (protegido)
-router.get('/tasy',              adminAuth, tasyController.dashboard);
-router.get('/tasy/data',         adminAuth, tasyController.data);
-router.get('/tasy/export',       adminAuth, exportLimiter, tasyController.export);
-router.post('/tasy/sync',        adminAuth, verifyCsrf, tasyController.sync);
-router.get('/tasy/sync/stream',  adminAuth, tasyController.syncStream);
-
-// Protocolo convênio (sincronizado do Oracle)
-router.get ('/tasy/protocolos',               adminAuth, csrfMiddleware, tasyProtocoloController.list);
-router.post('/tasy/protocolos/sync',          adminAuth, verifyCsrf,     tasyProtocoloController.sync);
-router.get ('/tasy/protocolos/sync/stream',   adminAuth,                 tasyProtocoloController.syncStream);
-router.get ('/tasy/protocolos/export',        adminAuth, exportLimiter,  tasyProtocoloController.export);
-router.get ('/tasy/resumo',                   adminAuth, csrfMiddleware,  tasyProtocoloController.resumo);
-router.get ('/tasy/resumo/export',            adminAuth, exportLimiter,   tasyProtocoloController.resumoExport);
-router.get ('/tasy/resumo/contas',            adminAuth, csrfMiddleware,  tasyProtocoloController.resumoContas);
-router.get ('/tasy/resumo/contas/export',     adminAuth, exportLimiter,   tasyProtocoloController.resumoContasExport);
-router.get ('/tasy/resumo/protocolos',        adminAuth, csrfMiddleware,  tasyProtocoloController.resumoProtocolos);
-router.get ('/tasy/alertas',                  adminAuth, csrfMiddleware,  tasyAlertaController.alertas);
-router.get ('/tasy/ocupacao',                 adminAuth, csrfMiddleware,  tasyOcupacaoController.ocupacao);
 
 // Configurações (protegido)
 router.get('/settings', adminAuth, settingsController.showSettings);

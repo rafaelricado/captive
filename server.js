@@ -27,15 +27,17 @@ const logger = require('./utils/logger');
 const { initDatabase, sequelize } = require('./models');
 const { expireSessions } = require('./services/sessionService');
 const { pingAllAccessPoints } = require('./services/pingService');
-const { startNetflowCollector } = require('./services/netflowCollector');
+const { startNetflowCollector } = require('./modules/network/services/netflowCollector');
 const { runAllDetectors } = require('./services/securityDetector');
-const { syncContas, discoverColumns } = require('./services/tasyService');
-const mikrotikService = require('./services/mikrotikService');
+const { syncContas, discoverColumns } = require('./modules/hospital/services/tasyService');
+const mikrotikService = require('./modules/network/services/mikrotikService');
 
-const portalRoutes = require('./routes/portal');
-const apiRoutes = require('./routes/api');
-const adminRoutes = require('./routes/admin');
-const mikrotikRoutes = require('./routes/mikrotik');
+const portalRoutes       = require('./routes/portal');
+const apiRoutes          = require('./routes/api');
+const adminRoutes        = require('./routes/admin');
+const hospitalRoutes     = require('./modules/hospital/routes');
+const networkAdminRoutes = require('./modules/network/routes');
+const networkDataRoutes  = require('./modules/network/dataRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -124,8 +126,10 @@ app.get('/health', async (req, res) => {
 // Rotas
 app.use('/', portalRoutes);
 app.use('/api', apiRoutes);
-app.use('/api/mikrotik', mikrotikRoutes);
+app.use('/api/mikrotik', networkDataRoutes);
 app.use('/admin', adminRoutes);
+app.use('/admin', hospitalRoutes);
+app.use('/admin', networkAdminRoutes);
 
 // Conexão ao banco com retry (até 5 tentativas com intervalo de 3s)
 async function connectDatabase(maxAttempts = 5, delayMs = 3000) {
