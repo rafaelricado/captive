@@ -728,7 +728,7 @@ async function queryAgendaConsulta({ dtInicio, dtFim } = {}) {
       F: 'Faltou',      L: 'Liberado',    S: 'Suspenso',
       E: 'Encaixe',     B: 'Bloqueado',   G: 'Aguardando',
       T: 'Atendido',    X: 'Transferido', P: 'Previsto',
-      O: 'Confirmado',  N: '(Sem status)',
+      O: 'Confirmado',  N: 'Disponível',
     };
     const TIPO_AGND_LABEL = {
       P: 'Presencial', I: 'Internet',  T: 'Telefone',
