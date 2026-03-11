@@ -724,8 +724,11 @@ async function queryAgendaConsulta({ dtInicio, dtFim } = {}) {
 
     // Mapeamentos de label
     const SITUACAO_LABEL = {
-      A: 'Agendado',  R: 'Realizado', C: 'Cancelado',
-      F: 'Faltou',    L: 'Liberado',  S: 'Suspenso',  N: '(Sem status)',
+      A: 'Agendado',    R: 'Realizado',   C: 'Cancelado',
+      F: 'Faltou',      L: 'Liberado',    S: 'Suspenso',
+      E: 'Encaixe',     B: 'Bloqueado',   G: 'Aguardando',
+      T: 'Atendido',    X: 'Transferido', P: 'Previsto',
+      O: 'Confirmado',  N: '(Sem status)',
     };
     const TIPO_AGND_LABEL = {
       P: 'Presencial', I: 'Internet',  T: 'Telefone',
