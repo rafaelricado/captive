@@ -334,7 +334,7 @@
 # Captura conexoes da rede interna (10.0.x.x) e da rede de visitantes (15.1.1.x)\r\
 :local connsInt [/ip firewall connection find where src-address~\"10.0.\"]\r\
 :local connsVis [/ip firewall connection find where src-address~\"15.1.\"]\r\
-:foreach c in=($connsInt,$connsVis) do={\r\
+:foreach c in=$connsInt do={\r\
     :if (\$connCount < \$maxConns) do={\r\
         :do {\r\
             :local src [:tostr [/ip firewall connection get \$c src-address]]\r\
@@ -369,6 +369,49 @@
             }\r\
             :local totalB (\$origB + \$replB)\r\
             # Inclui porta 53 (DNS) sem threshold de tamanho — necessario para detectar DNS tunneling\r\
+            :local isDns 0\r\
+            :if (\$dport = \"53\") do={ :set isDns 1 }\r\
+            :if ((\$totalB > 10000 or \$isDns = 1) and \$isLocal = 0) do={\r\
+                :set connData (\$connData . \$srcIP . \",\" . \$dstIP . \",\" . \$dport . \",\" . \$origB . \",\" . \$replB . \";\")\r\
+                :set connCount (\$connCount + 1)\r\
+            }\r\
+        } on-error={}\r\
+    }\r\
+}\r\
+:foreach c in=$connsVis do={\r\
+    :if (\$connCount < \$maxConns) do={\r\
+        :do {\r\
+            :local src [:tostr [/ip firewall connection get \$c src-address]]\r\
+            :local dst [:tostr [/ip firewall connection get \$c dst-address]]\r\
+            :local origB [/ip firewall connection get \$c orig-bytes]\r\
+            :local replB [/ip firewall connection get \$c repl-bytes]\r\
+\r\
+            :local srcIP \$src\r\
+            :local colonPos [:find \$src \":\"]\r\
+            :if ([:typeof \$colonPos] = \"num\" and \$colonPos > 1) do={\r\
+                :set srcIP [:pick \$src 0 \$colonPos]\r\
+            }\r\
+\r\
+            :local dstIP \$dst\r\
+            :local dport \"0\"\r\
+            :set colonPos [:find \$dst \":\"]\r\
+            :if ([:typeof \$colonPos] = \"num\" and \$colonPos > 1) do={\r\
+                :set dstIP [:pick \$dst 0 \$colonPos]\r\
+                :set dport [:pick \$dst (\$colonPos + 1) [:len \$dst]]\r\
+            }\r\
+\r\
+            :local isLocal 0\r\
+            :if ([:pick \$dstIP 0 3] = \"10.\") do={ :set isLocal 1 }\r\
+            :if ([:len \$dstIP] >= 8) do={\r\
+                :if ([:pick \$dstIP 0 8] = \"192.168.\") do={ :set isLocal 1 }\r\
+            }\r\
+            :if ([:len \$dstIP] >= 4) do={\r\
+                :if ([:pick \$dstIP 0 4] = \"172.\") do={\r\
+                    :local secondOctet [:pick \$dstIP 4 [:find \$dstIP \".\" 4]]\r\
+                    :if ([:tonum \$secondOctet] >= 16 and [:tonum \$secondOctet] <= 31) do={ :set isLocal 1 }\r\
+                }\r\
+            }\r\
+            :local totalB (\$origB + \$replB)\r\
             :local isDns 0\r\
             :if (\$dport = \"53\") do={ :set isDns 1 }\r\
             :if ((\$totalB > 10000 or \$isDns = 1) and \$isLocal = 0) do={\r\
