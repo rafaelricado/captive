@@ -233,13 +233,15 @@
         }
         const agendasSorted = Object.entries(pivotAgenda).sort((a, b) => b[1]._total - a[1]._total);
 
-        // Pivot convênio × total
+        // Pivot convênio × total (chave = cd_convenio para unicidade)
         const pivotConv = {};
         for (const row of resumo) {
-          pivotConv[row.ds_convenio] = (pivotConv[row.ds_convenio] || 0) + row.qt;
+          const key = row.cd_convenio || '__particular__';
+          if (!pivotConv[key]) pivotConv[key] = { cd: row.cd_convenio, nm: row.ds_convenio, qt: 0 };
+          pivotConv[key].qt += row.qt;
         }
-        const convSorted = Object.entries(pivotConv).sort((a, b) => b[1] - a[1]);
-        const maxConv = convSorted.length ? convSorted[0][1] : 1;
+        const convSorted = Object.values(pivotConv).sort((a, b) => b.qt - a.qt);
+        const maxConv = convSorted.length ? convSorted[0].qt : 1;
 
         // Pivot forma de agendamento × total
         const pivotForma = {};
@@ -322,13 +324,16 @@
           <!-- Convênios -->
           <div class="panel">
             <div class="panel-title">Por convênio</div>
-            <% for (const [nm, qt] of convSorted) { %>
+            <% for (const cv of convSorted) { %>
               <div class="conv-row">
-                <span class="conv-name"><%= nm %></span>
+                <span class="conv-name">
+                  <% if (cv.cd) { %><span style="color:#9ca3af;font-size:.75rem;margin-right:5px;"><%= cv.cd %></span><% } %>
+                  <%= cv.nm %>
+                </span>
                 <div class="conv-bar-wrap">
-                  <div class="conv-bar" style="width:<%= Math.round(qt / maxConv * 100) %>%"></div>
+                  <div class="conv-bar" style="width:<%= Math.round(cv.qt / maxConv * 100) %>%"></div>
                 </div>
-                <span class="conv-qt"><%= qt.toLocaleString('pt-BR') %></span>
+                <span class="conv-qt"><%= cv.qt.toLocaleString('pt-BR') %></span>
               </div>
             <% } %>
           </div>

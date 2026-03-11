@@ -690,18 +690,19 @@ async function queryAgendaConsulta({ dtInicio, dtFim } = {}) {
     const [rResumo, rSituacao] = await Promise.all([
       conn.execute(
         `SELECT
-           ${colAgenda}   AS NM_AGENDA,
-           ${colConvenio} AS DS_CONVENIO,
-           ${colTipo}     AS IE_TIPO_AGENDAMENTO,
-           ${colSituacao} AS IE_SITUACAO,
-           COUNT(*)       AS QT
+           ${colAgenda}                AS NM_AGENDA,
+           TO_CHAR(AC.CD_CONVENIO)     AS CD_CONVENIO,
+           ${colConvenio}              AS DS_CONVENIO,
+           ${colTipo}                  AS IE_TIPO_AGENDAMENTO,
+           ${colSituacao}              AS IE_SITUACAO,
+           COUNT(*)                    AS QT
          FROM TASY.AGENDA_CONSULTA AC
          ${joinAgenda}
          ${joinConvenio}
          WHERE TRUNC(AC.${colDt})
                BETWEEN TO_DATE(:dtIni, 'YYYY-MM-DD')
                    AND TO_DATE(:dtFim, 'YYYY-MM-DD')
-         GROUP BY ${gbAgenda}, ${gbConvenio}, ${gbTipo}, ${gbSituacao}
+         GROUP BY ${gbAgenda}, TO_CHAR(AC.CD_CONVENIO), ${gbConvenio}, ${gbTipo}, ${gbSituacao}
          ORDER BY NM_AGENDA, QT DESC`,
         { dtIni: from, dtFim: to },
         { outFormat: oracledb.OUT_FORMAT_OBJECT }
@@ -739,6 +740,7 @@ async function queryAgendaConsulta({ dtInicio, dtFim } = {}) {
 
     const resumo = rResumo.rows.map(r => ({
       nm_agenda:            String(r.NM_AGENDA   || '').trim(),
+      cd_convenio:          r.CD_CONVENIO ? String(r.CD_CONVENIO).trim() : null,
       ds_convenio:          String(r.DS_CONVENIO || '').trim(),
       ie_tipo_agendamento:  String(r.IE_TIPO_AGENDAMENTO || 'N'),
       ds_tipo_agendamento:  TIPO_AGND_LABEL[String(r.IE_TIPO_AGENDAMENTO || 'N')] || String(r.IE_TIPO_AGENDAMENTO),
