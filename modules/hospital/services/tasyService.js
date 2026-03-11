@@ -774,8 +774,10 @@ let _agendaExamesColMap = null;
  */
 async function discoverAgendaExamesColMap(conn) {
   if (_agendaExamesColMap) {
-    // Reinicia cache se coluna de convênio não foi encontrada (pode ter candidatos novos)
-    if (_agendaExamesColMap.ag_cd_conv === null) _agendaExamesColMap = null;
+    // Reinicia cache se colunas críticas não foram encontradas (pode ter candidatos novos)
+    if (_agendaExamesColMap.ag_cd_conv === null || _agendaExamesColMap.proc_fk === null) {
+      _agendaExamesColMap = null;
+    }
   }
   if (_agendaExamesColMap) return _agendaExamesColMap;
 
@@ -816,10 +818,10 @@ async function discoverAgendaExamesColMap(conn) {
     proc_nm = pick(procI, ['NM_PROCEDIMENTO', 'DS_PROCEDIMENTO', 'DS_DESCRICAO', 'NM_DESCRICAO']);
     if (proc_pk && proc_nm) proc_table = 'PROCEDIMENTO_INTERNO';
   }
-  // FK de AGENDA para o procedimento
-  if (proc_table) {
-    proc_fk = pick(ag, ['CD_PROCEDIMENTO', 'NR_SEQ_PROCEDIMENTO', 'CD_EXAME']);
-  }
+  // FK de AGENDA para o procedimento — busca independente de proc_table
+  proc_fk = pick(ag, ['CD_PROCEDIMENTO', 'NR_SEQ_PROCEDIMENTO', 'CD_EXAME', 'NR_SEQ_EXAME',
+                       'CD_SERVICO', 'NR_SEQ_SERVICO', 'CD_ITEM_AGENDAMENTO',
+                       'NR_SEQ_PROCEDIMENTO_INTERNO', 'CD_PROCEDIMENTO_INTERNO']);
 
   _agendaExamesColMap = {
     dt_agenda:    pick(ag, ['DT_AGENDA', 'DT_AGENDAMENTO', 'DT_EXAME']),
@@ -859,12 +861,16 @@ async function queryAgendaExames({ dtInicio, dtFim } = {}) {
     const joinProc = (cm.proc_table && cm.proc_pk && cm.proc_fk && cm.proc_nm)
       ? `LEFT JOIN TASY.${cm.proc_table} PROC ON PROC.${cm.proc_pk} = AG.${cm.proc_fk}`
       : '';
-    const colProc = (cm.proc_table && cm.proc_pk && cm.proc_fk && cm.proc_nm)
-      ? `NVL(TO_CHAR(PROC.${cm.proc_nm}), NVL(TO_CHAR(AG.${cm.proc_fk}), '(Sem procedimento)'))`
-      : `NVL(TO_CHAR(AG.${cm.proc_fk || 'CD_PROCEDIMENTO'}), '(Sem procedimento)')`;
-    const gbProc = (cm.proc_table && cm.proc_pk && cm.proc_fk && cm.proc_nm)
-      ? `TO_CHAR(PROC.${cm.proc_nm}), TO_CHAR(AG.${cm.proc_fk})`
-      : `TO_CHAR(AG.${cm.proc_fk || 'CD_PROCEDIMENTO'})`;
+    const colProc = cm.proc_fk
+      ? (cm.proc_table && cm.proc_pk && cm.proc_nm
+          ? `NVL(TO_CHAR(PROC.${cm.proc_nm}), NVL(TO_CHAR(AG.${cm.proc_fk}), '(Sem procedimento)'))`
+          : `NVL(TO_CHAR(AG.${cm.proc_fk}), '(Sem procedimento)')`)
+      : `'(Sem procedimento)'`;
+    const gbProc = cm.proc_fk
+      ? (cm.proc_table && cm.proc_pk && cm.proc_nm
+          ? `TO_CHAR(PROC.${cm.proc_nm}), TO_CHAR(AG.${cm.proc_fk})`
+          : `TO_CHAR(AG.${cm.proc_fk})`)
+      : `'(Sem procedimento)'`;
 
     // FK de AGENDA para convênio (pode ser null se coluna não existir)
     const convFk = cm.ag_cd_conv || null;
