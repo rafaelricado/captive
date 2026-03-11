@@ -775,7 +775,7 @@ let _agendaExamesColMap = null;
 async function discoverAgendaExamesColMap(conn) {
   if (_agendaExamesColMap) {
     // Reinicia cache se colunas críticas não foram encontradas (pode ter candidatos novos)
-    if (_agendaExamesColMap.ag_cd_conv === null || _agendaExamesColMap.proc_fk === null) {
+    if (!_agendaExamesColMap.dt_agenda || _agendaExamesColMap.ag_cd_conv === null || _agendaExamesColMap.proc_fk === null) {
       _agendaExamesColMap = null;
     }
   }
@@ -800,6 +800,9 @@ async function discoverAgendaExamesColMap(conn) {
   const proc  = tables['PROCEDIMENTO'];
   const procI = tables['PROCEDIMENTO_INTERNO'];
   const conv  = tables['CONVENIO'];
+
+  // Loga todas as colunas de AGENDA para facilitar diagnóstico
+  logger.info(`[TasyAgendaExames] Colunas de TASY.AGENDA: ${[...ag].join(', ')}`);
 
   function pick(cols, candidates) {
     for (const c of candidates) if (cols.has(c)) return c;
@@ -855,7 +858,10 @@ async function queryAgendaExames({ dtInicio, dtFim } = {}) {
 
     const cm = await discoverAgendaExamesColMap(conn);
 
-    const colDt = cm.dt_agenda || 'DT_AGENDA';
+    if (!cm.dt_agenda) {
+      throw new Error(`Coluna de data não encontrada em TASY.AGENDA. Verifique o log '[TasyAgendaExames] Colunas de TASY.AGENDA' para identificar o nome correto.`);
+    }
+    const colDt = cm.dt_agenda;
 
     // JOIN com tabela de procedimento para nome do exame
     const joinProc = (cm.proc_table && cm.proc_pk && cm.proc_fk && cm.proc_nm)
