@@ -244,3 +244,20 @@
   .filter-tab:hover { border-color: #0d4e8b; color: #0d4e8b; }
   .filter-tab.active { background: #0d4e8b; color: #fff; border-color: #0d4e8b; }
 </style>
+
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0d4e8b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CP Admin">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js', { scope: '/admin/' })
+        .catch(function () {}); // falha silenciosa — não afeta a app
+    });
+  }
+</script>
