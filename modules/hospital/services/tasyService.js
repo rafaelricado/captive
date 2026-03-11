@@ -765,4 +765,197 @@ async function queryAgendaConsulta({ dtInicio, dtFim } = {}) {
   }
 }
 
-module.exports = { discoverColumns, syncContas, syncProtocolos, lookupPessoaFisica, queryItensSemValor, queryOcupacaoHospitalar, queryAgendaConsulta };
+// ─── Agenda de Exames ────────────────────────────────────────────────────────
+
+let _agendaExamesColMap = null;
+
+/**
+ * Descobre colunas reais de AGENDA, PROCEDIMENTO/PROCEDIMENTO_INTERNO e CONVENIO.
+ */
+async function discoverAgendaExamesColMap(conn) {
+  if (_agendaExamesColMap) return _agendaExamesColMap;
+
+  const getTables = async (...names) => {
+    const result = {};
+    for (const tbl of names) {
+      const r = await conn.execute(
+        `SELECT COLUMN_NAME FROM ALL_TAB_COLUMNS
+          WHERE OWNER = 'TASY' AND TABLE_NAME = :tbl ORDER BY COLUMN_ID`,
+        { tbl },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      );
+      result[tbl] = new Set(r.rows.map(row => row.COLUMN_NAME));
+    }
+    return result;
+  };
+
+  const tables = await getTables('AGENDA', 'PROCEDIMENTO', 'PROCEDIMENTO_INTERNO', 'CONVENIO');
+  const ag    = tables['AGENDA'];
+  const proc  = tables['PROCEDIMENTO'];
+  const procI = tables['PROCEDIMENTO_INTERNO'];
+  const conv  = tables['CONVENIO'];
+
+  function pick(cols, candidates) {
+    for (const c of candidates) if (cols.has(c)) return c;
+    return null;
+  }
+
+  // Determina qual tabela de procedimento usar
+  let proc_table = null, proc_pk = null, proc_fk = null, proc_nm = null;
+  if (proc.size > 0) {
+    proc_pk = pick(proc, ['CD_PROCEDIMENTO', 'NR_SEQ_PROCEDIMENTO']);
+    proc_nm = pick(proc, ['NM_PROCEDIMENTO', 'DS_PROCEDIMENTO', 'DS_DESCRICAO', 'NM_DESCRICAO']);
+    if (proc_pk && proc_nm) proc_table = 'PROCEDIMENTO';
+  }
+  if (!proc_table && procI.size > 0) {
+    proc_pk = pick(procI, ['CD_PROCEDIMENTO', 'NR_SEQ_PROCEDIMENTO', 'CD_PROCEDIMENTO_INTERNO']);
+    proc_nm = pick(procI, ['NM_PROCEDIMENTO', 'DS_PROCEDIMENTO', 'DS_DESCRICAO', 'NM_DESCRICAO']);
+    if (proc_pk && proc_nm) proc_table = 'PROCEDIMENTO_INTERNO';
+  }
+  // FK de AGENDA para o procedimento
+  if (proc_table) {
+    proc_fk = pick(ag, ['CD_PROCEDIMENTO', 'NR_SEQ_PROCEDIMENTO', 'CD_EXAME']);
+  }
+
+  _agendaExamesColMap = {
+    dt_agenda:    pick(ag, ['DT_AGENDA', 'DT_AGENDAMENTO', 'DT_EXAME']),
+    ie_situacao:  pick(ag, ['IE_SITUACAO', 'IE_STATUS_AGENDA', 'IE_STATUS', 'IE_SITUACAO_AGENDA']),
+    ie_tipo_agnd: pick(ag, ['IE_FORMA_AGENDAMENTO', 'IE_TIPO_AGENDAMENTO', 'IE_ORIGEM_AGEND', 'TP_AGENDAMENTO']),
+    ag_cd_conv:   pick(ag, ['CD_CONVENIO', 'NR_SEQ_CONVENIO']),
+    proc_table,
+    proc_pk,
+    proc_fk,
+    proc_nm,
+    conv_pk:      pick(conv, ['CD_CONVENIO', 'NR_SEQ_CONVENIO']),
+    conv_nm:      pick(conv, ['NM_CONVENIO', 'DS_CONVENIO', 'NM_PLANO', 'DS_PLANO']),
+  };
+  logger.info(`[TasyAgendaExames] Mapeamento: ${JSON.stringify(_agendaExamesColMap)}`);
+  return _agendaExamesColMap;
+}
+
+/**
+ * Consulta agenda de exames em tempo real via TASY.AGENDA.
+ * Faz JOIN com PROCEDIMENTO (nome do exame) e CONVENIO (nome do convênio).
+ */
+async function queryAgendaExames({ dtInicio, dtFim } = {}) {
+  let conn;
+  try {
+    const hoje = new Date().toISOString().slice(0, 10);
+    const from = dtInicio || hoje;
+    const to   = dtFim   || hoje;
+
+    conn = await oracledb.getConnection({ ...ORACLE_CONFIG, connectTimeout: 8 });
+    conn.callTimeout = 20000;
+
+    const cm = await discoverAgendaExamesColMap(conn);
+
+    const colDt = cm.dt_agenda || 'DT_AGENDA';
+
+    // JOIN com tabela de procedimento para nome do exame
+    const joinProc = (cm.proc_table && cm.proc_pk && cm.proc_fk && cm.proc_nm)
+      ? `LEFT JOIN TASY.${cm.proc_table} PROC ON PROC.${cm.proc_pk} = AG.${cm.proc_fk}`
+      : '';
+    const colProc = (cm.proc_table && cm.proc_pk && cm.proc_fk && cm.proc_nm)
+      ? `NVL(TO_CHAR(PROC.${cm.proc_nm}), NVL(TO_CHAR(AG.${cm.proc_fk}), '(Sem procedimento)'))`
+      : `NVL(TO_CHAR(AG.${cm.proc_fk || 'CD_PROCEDIMENTO'}), '(Sem procedimento)')`;
+    const gbProc = (cm.proc_table && cm.proc_pk && cm.proc_fk && cm.proc_nm)
+      ? `TO_CHAR(PROC.${cm.proc_nm}), TO_CHAR(AG.${cm.proc_fk})`
+      : `TO_CHAR(AG.${cm.proc_fk || 'CD_PROCEDIMENTO'})`;
+
+    // FK de AGENDA para CD_CONVENIO
+    const convFk = cm.ag_cd_conv || 'CD_CONVENIO';
+
+    // JOIN com CONVENIO para nome
+    const joinConvenio = (cm.conv_pk && cm.conv_nm)
+      ? `LEFT JOIN TASY.CONVENIO CONV ON CONV.${cm.conv_pk} = AG.${convFk}`
+      : '';
+    const colConvenio = (cm.conv_pk && cm.conv_nm)
+      ? `NVL(TO_CHAR(CONV.${cm.conv_nm}), 'Particular')`
+      : `NVL(TO_CHAR(AG.${convFk}), 'Particular')`;
+    const gbConvenio = (cm.conv_pk && cm.conv_nm)
+      ? `TO_CHAR(CONV.${cm.conv_nm})`
+      : `TO_CHAR(AG.${convFk})`;
+
+    // Situação e tipo
+    const colSituacao = cm.ie_situacao  ? `NVL(TO_CHAR(AG.${cm.ie_situacao}),  'N')` : `'N'`;
+    const colTipo     = cm.ie_tipo_agnd ? `NVL(TO_CHAR(AG.${cm.ie_tipo_agnd}), 'N')` : `'N'`;
+    const gbSituacao  = cm.ie_situacao  ? `TO_CHAR(AG.${cm.ie_situacao})`  : `'N'`;
+    const gbTipo      = cm.ie_tipo_agnd ? `TO_CHAR(AG.${cm.ie_tipo_agnd})` : `'N'`;
+
+    const SITUACAO_LABEL = {
+      A: 'Agendado',    R: 'Realizado',   C: 'Cancelado',
+      F: 'Faltou',      L: 'Liberado',    S: 'Suspenso',
+      E: 'Encaixe',     B: 'Bloqueado',   G: 'Aguardando',
+      T: 'Atendido',    X: 'Transferido', P: 'Previsto',
+      O: 'Confirmado',  N: 'Disponível',
+    };
+    const TIPO_AGND_LABEL = {
+      P: 'Presencial', I: 'Internet',  T: 'Telefone',
+      C: 'Central',    W: 'WhatsApp',  N: '(Não informado)',
+      '1': 'Presencial', '2': 'Internet', '3': 'Telefone',
+      '4': 'Central',    '5': 'WhatsApp',
+    };
+
+    const [rResumo, rSituacao] = await Promise.all([
+      conn.execute(
+        `SELECT
+           ${colProc}                   AS NM_PROCEDIMENTO,
+           TO_CHAR(AG.${convFk})        AS CD_CONVENIO,
+           ${colConvenio}               AS DS_CONVENIO,
+           ${colTipo}                   AS IE_TIPO_AGENDAMENTO,
+           ${colSituacao}               AS IE_SITUACAO,
+           COUNT(*)                     AS QT
+         FROM TASY.AGENDA AG
+         ${joinProc}
+         ${joinConvenio}
+         WHERE TRUNC(AG.${colDt})
+               BETWEEN TO_DATE(:dtIni, 'YYYY-MM-DD')
+                   AND TO_DATE(:dtFim, 'YYYY-MM-DD')
+         GROUP BY ${gbProc}, TO_CHAR(AG.${convFk}), ${gbConvenio}, ${gbTipo}, ${gbSituacao}
+         ORDER BY NM_PROCEDIMENTO, QT DESC`,
+        { dtIni: from, dtFim: to },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      ),
+
+      conn.execute(
+        `SELECT
+           ${colSituacao} AS IE_SITUACAO,
+           COUNT(*)       AS QT
+         FROM TASY.AGENDA AG
+         WHERE TRUNC(AG.${colDt})
+               BETWEEN TO_DATE(:dtIni, 'YYYY-MM-DD')
+                   AND TO_DATE(:dtFim, 'YYYY-MM-DD')
+         GROUP BY ${gbSituacao}
+         ORDER BY QT DESC`,
+        { dtIni: from, dtFim: to },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+      ),
+    ]);
+
+    const resumo = rResumo.rows.map(r => ({
+      nm_procedimento:      String(r.NM_PROCEDIMENTO || '').trim(),
+      cd_convenio:          r.CD_CONVENIO ? String(r.CD_CONVENIO).trim() : null,
+      ds_convenio:          String(r.DS_CONVENIO || '').trim(),
+      ie_tipo_agendamento:  String(r.IE_TIPO_AGENDAMENTO || 'N'),
+      ds_tipo_agendamento:  TIPO_AGND_LABEL[String(r.IE_TIPO_AGENDAMENTO || 'N')] || String(r.IE_TIPO_AGENDAMENTO),
+      ie_situacao:          String(r.IE_SITUACAO || 'N'),
+      ds_situacao:          SITUACAO_LABEL[String(r.IE_SITUACAO || 'N')]  || String(r.IE_SITUACAO),
+      qt:                   Number(r.QT || 0),
+    }));
+
+    const situacaoMap = {};
+    let total = 0;
+    for (const r of rSituacao.rows) {
+      const key = String(r.IE_SITUACAO || 'N');
+      const qt  = Number(r.QT || 0);
+      situacaoMap[key] = { label: SITUACAO_LABEL[key] || key, qt };
+      total += qt;
+    }
+
+    return { resumo, situacaoMap, total, dtInicio: from, dtFim: to };
+  } finally {
+    if (conn) await conn.close().catch(() => {});
+  }
+}
+
+module.exports = { discoverColumns, syncContas, syncProtocolos, lookupPessoaFisica, queryItensSemValor, queryOcupacaoHospitalar, queryAgendaConsulta, queryAgendaExames };

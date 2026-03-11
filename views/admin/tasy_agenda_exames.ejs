@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agenda de Exames — Admin</title>
+  <%- include('_head') %>
+  <style>
+    /* ── Toolbar ──────────────────────────────────────────────────────────── */
+    .toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .toolbar-left  { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .toolbar-right { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .sync-info { font-size:.78rem; color:#9ca3af; }
+    .btn-sync   { padding:6px 14px; background:#fff; color:#0d4e8b; border:1px solid #0d4e8b; border-radius:6px; font-size:.82rem; cursor:pointer; font-weight:600; transition:all .15s; }
+    .btn-sync:hover    { background:#0d4e8b; color:#fff; }
+    .btn-sync:disabled { opacity:.5; cursor:not-allowed; }
+
+    /* ── Filtro de datas ──────────────────────────────────────────────────── */
+    .filter-bar {
+      display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;
+      background: #fff; border-radius: 10px; padding: 16px 20px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08); margin-bottom: 16px;
+    }
+    .filter-bar label { font-size: .8rem; color: #6b7280; display: block; margin-bottom: 4px; }
+    .filter-bar input[type="date"] {
+      padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+      font-size: .875rem; color: #374151;
+    }
+    .btn-primary {
+      background: #0d4e8b; color: #fff; border: none;
+      padding: 8px 20px; border-radius: 6px; font-size: .875rem;
+      cursor: pointer; transition: background .15s;
+    }
+    .btn-primary:hover { background: #0b4070; }
+
+    /* ── Barra de progresso ───────────────────────────────────────────────── */
+    #sync-progress {
+      display: none; margin-bottom: 12px; background: #fff;
+      border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.07); padding: 12px 16px;
+    }
+    #sync-progress-text { font-size: .8rem; color: #374151; margin-bottom: 6px; }
+    #sync-progress-bar  { background: #e5e7eb; border-radius: 4px; height: 8px; overflow: hidden; }
+    #sync-progress-fill { background: #0d4e8b; height: 100%; width: 0%; transition: width .3s ease; }
+
+    /* ── Cards de situação ────────────────────────────────────────────────── */
+    .cards-situacao { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+    .card-sit {
+      flex: 1; min-width: 120px;
+      background: #fff; border-radius: 10px; padding: 16px 18px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08); text-align: center;
+    }
+    .card-sit-total { border-top: 4px solid #0d4e8b; }
+    .card-sit-A     { border-top: 4px solid #2563eb; }
+    .card-sit-R     { border-top: 4px solid #16a34a; }
+    .card-sit-T     { border-top: 4px solid #15803d; }
+    .card-sit-O     { border-top: 4px solid #059669; }
+    .card-sit-P     { border-top: 4px solid #0284c7; }
+    .card-sit-C     { border-top: 4px solid #dc2626; }
+    .card-sit-F     { border-top: 4px solid #d97706; }
+    .card-sit-E     { border-top: 4px solid #ca8a04; }
+    .card-sit-B     { border-top: 4px solid #b91c1c; }
+    .card-sit-X     { border-top: 4px solid #7c3aed; }
+    .card-sit-G     { border-top: 4px solid #ea580c; }
+    .card-sit-L     { border-top: 4px solid #8b5cf6; }
+    .card-sit-S     { border-top: 4px solid #6b7280; }
+    .card-sit-N     { border-top: 4px solid #86efac; }
+    .card-sit-val   { font-size: 2rem; font-weight: 700; color: #1f2937; line-height: 1; }
+    .card-sit-label { font-size: .75rem; color: #6b7280; margin-top: 5px; }
+
+    /* ── Títulos de seção ─────────────────────────────────────────────────── */
+    .section-title {
+      font-size: 1rem; font-weight: 700; color: #0d4e8b;
+      margin: 28px 0 12px; display: flex; align-items: center; gap: 8px;
+    }
+    .section-title span.count {
+      background: #e0f2fe; color: #0d4e8b; border-radius: 99px;
+      font-size: .75rem; padding: 2px 10px;
+    }
+
+    /* ── Badge forma agendamento ──────────────────────────────────────────── */
+    .badge-P, .badge-1 { background: #dbeafe; color: #1d4ed8; }
+    .badge-I, .badge-2 { background: #d1fae5; color: #065f46; }
+    .badge-T, .badge-3 { background: #fef3c7; color: #92400e; }
+    .badge-C, .badge-4 { background: #ede9fe; color: #5b21b6; }
+    .badge-W, .badge-5 { background: #dcfce7; color: #166534; }
+    .badge-N           { background: #f3f4f6; color: #6b7280; }
+
+    /* ── Badge situação ───────────────────────────────────────────────────── */
+    .sit-A { background: #dbeafe; color: #1d4ed8; }
+    .sit-R { background: #dcfce7; color: #166534; }
+    .sit-T { background: #bbf7d0; color: #14532d; }
+    .sit-O { background: #d1fae5; color: #065f46; }
+    .sit-P { background: #e0f2fe; color: #0369a1; }
+    .sit-C { background: #fee2e2; color: #991b1b; }
+    .sit-F { background: #fef3c7; color: #92400e; }
+    .sit-E { background: #fef9c3; color: #713f12; }
+    .sit-B { background: #fecaca; color: #7f1d1d; }
+    .sit-X { background: #f3e8ff; color: #581c87; }
+    .sit-G { background: #fff7ed; color: #9a3412; }
+    .sit-L { background: #ede9fe; color: #5b21b6; }
+    .sit-S { background: #f3f4f6; color: #6b7280; }
+    .sit-N { background: #f0fdf4; color: #166534; }
+
+    /* ── Avisos cache / erro ──────────────────────────────────────────────── */
+    .cache-notice {
+      background: #fefce8; border: 1px solid #fde047; border-radius: 8px;
+      padding: 10px 16px; font-size: .8rem; color: #854d0e;
+      margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    }
+    .error-notice {
+      background: #fee2e2; border: 1px solid #fca5a5; border-radius: 8px;
+      padding: 10px 16px; font-size: .8rem; color: #991b1b; margin-bottom: 16px;
+    }
+
+    /* ── Layout de duas colunas ───────────────────────────────────────────── */
+    .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 4px; }
+    @media (max-width: 900px) { .grid-2col { grid-template-columns: 1fr; } }
+
+    /* ── Painel genérico ──────────────────────────────────────────────────── */
+    .panel { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.08); overflow: hidden; }
+    .panel-title {
+      font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+      color: #6b7280; padding: 12px 16px 8px; border-bottom: 1px solid #f3f4f6;
+    }
+
+    /* ── Tabela pivot ─────────────────────────────────────────────────────── */
+    .pivot-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    .pivot-table thead th {
+      background: #0d4e8b; color: #fff; padding: 8px 10px;
+      text-align: center; font-weight: 600; white-space: nowrap;
+    }
+    .pivot-table thead th:first-child { text-align: left; min-width: 140px; }
+    .pivot-table tbody td { padding: 8px 10px; border-bottom: 1px solid #f3f4f6; text-align: center; }
+    .pivot-table tbody td:first-child { text-align: left; font-weight: 600; color: #1f2937; }
+    .pivot-table tbody tr:last-child td { border-bottom: none; }
+    .pivot-table tbody tr:hover td { background: #f9fafb; }
+    .pivot-table tfoot td {
+      background: #f0f4f8; padding: 8px 10px; text-align: center;
+      font-weight: 700; font-size: .8rem; color: #374151;
+    }
+    .pivot-table tfoot td:first-child { text-align: left; }
+    .cell-val  { font-weight: 700; color: #0d4e8b; }
+    .cell-zero { color: #d1d5db; }
+
+    /* ── Lista convênios ──────────────────────────────────────────────────── */
+    .conv-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 16px; border-bottom: 1px solid #f3f4f6; font-size: .85rem;
+    }
+    .conv-row:last-child { border-bottom: none; }
+    .conv-row:hover { background: #f9fafb; }
+    .conv-name { color: #374151; flex: 1; padding-right: 12px; }
+    .conv-bar-wrap { flex: 2; background: #f3f4f6; border-radius: 4px; height: 8px; overflow: hidden; margin-right: 10px; }
+    .conv-bar { background: #0d4e8b; height: 100%; border-radius: 4px; }
+    .conv-qt { font-weight: 700; color: #0d4e8b; min-width: 36px; text-align: right; font-size: .8rem; }
+
+    /* ── Lista forma de agendamento ───────────────────────────────────────── */
+    .forma-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 16px; border-bottom: 1px solid #f3f4f6; font-size: .85rem;
+    }
+    .forma-row:last-child { border-bottom: none; }
+    .forma-row:hover { background: #f9fafb; }
+  </style>
+</head>
+<body>
+  <%- include('_nav', { page }) %>
+
+  <div class="container">
+    <h1 class="page-title">Agenda de Exames</h1>
+
+    <!-- ── Filtro de período ──────────────────────────────────────────────── -->
+    <form class="filter-bar" id="filter-form" method="GET" action="/admin/tasy/agenda/exames">
+      <div>
+        <label for="dtInicio">Data início</label>
+        <input type="date" id="dtInicio" name="dtInicio" value="<%= dtInicio %>">
+      </div>
+      <div>
+        <label for="dtFim">Data fim</label>
+        <input type="date" id="dtFim" name="dtFim" value="<%= dtFim %>">
+      </div>
+      <button type="submit" class="btn-primary">Filtrar</button>
+    </form>
+
+    <!-- ── Toolbar ──────────────────────────────────────────────────────────── -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <% if (oracleCached) { %>
+          <span class="sync-info">
+            &#9432; Dados em cache
+            <% if (oracleCacheAge !== null) { %>(atualizados há <%= oracleCacheAge %> min)<% } %>
+          </span>
+        <% } else if (oracleData) { %>
+          <span class="sync-info">Dados atualizados agora do Oracle</span>
+        <% } %>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn-sync" id="btn-sync">&#8635; Sincronizar agora</button>
+      </div>
+    </div>
+
+    <!-- ── Barra de progresso ─────────────────────────────────────────────── -->
+    <div id="sync-progress">
+      <div id="sync-progress-text">Consultando Oracle...</div>
+      <div id="sync-progress-bar"><div id="sync-progress-fill"></div></div>
+    </div>
+
+    <% if (oracleError && !oracleData) { %>
+      <div class="error-notice">
+        <strong>Oracle indisponível:</strong> <%= oracleError %>
+      </div>
+    <% } %>
+
+    <% if (oracleData) { %>
+      <%
+        const situacaoMap = oracleData.situacaoMap;
+        const total       = oracleData.total;
+        const resumo      = oracleData.resumo;
+
+        // Colunas de status presentes (ordenadas por total desc, Disponível por último)
+        const statusPresentes = Object.entries(situacaoMap)
+          .filter(([k]) => k !== 'N')
+          .sort((a, b) => b[1].qt - a[1].qt)
+          .map(([k, v]) => ({ key: k, label: v.label }));
+        if (situacaoMap['N']) statusPresentes.push({ key: 'N', label: situacaoMap['N'].label });
+
+        // Pivot procedimento × status
+        const pivotProc = {};
+        for (const row of resumo) {
+          if (!pivotProc[row.nm_procedimento]) pivotProc[row.nm_procedimento] = { _total: 0 };
+          pivotProc[row.nm_procedimento][row.ie_situacao] = (pivotProc[row.nm_procedimento][row.ie_situacao] || 0) + row.qt;
+          pivotProc[row.nm_procedimento]._total += row.qt;
+        }
+        const procSorted = Object.entries(pivotProc).sort((a, b) => b[1]._total - a[1]._total);
+
+        // Pivot convênio × total — ignora registros sem convênio (vagas disponíveis)
+        const pivotConv = {};
+        for (const row of resumo) {
+          if (!row.cd_convenio) continue;
+          if (!pivotConv[row.cd_convenio]) pivotConv[row.cd_convenio] = { cd: row.cd_convenio, nm: row.ds_convenio, qt: 0 };
+          pivotConv[row.cd_convenio].qt += row.qt;
+        }
+        const convSorted = Object.values(pivotConv).sort((a, b) => b.qt - a.qt);
+        const maxConv = convSorted.length ? convSorted[0].qt : 1;
+
+        // Pivot forma de agendamento × total
+        const pivotForma = {};
+        for (const row of resumo) {
+          if (!pivotForma[row.ie_tipo_agendamento]) {
+            pivotForma[row.ie_tipo_agendamento] = { label: row.ds_tipo_agendamento, qt: 0 };
+          }
+          pivotForma[row.ie_tipo_agendamento].qt += row.qt;
+        }
+        const formaSorted = Object.values(pivotForma).sort((a, b) => b.qt - a.qt);
+      %>
+
+      <!-- ── Cards de situação ──────────────────────────────────────────── -->
+      <div class="cards-situacao">
+        <div class="card-sit card-sit-total">
+          <div class="card-sit-val"><%= total.toLocaleString('pt-BR') %></div>
+          <div class="card-sit-label">Total no período</div>
+        </div>
+        <% for (const [key, sit] of Object.entries(situacaoMap)) { %>
+          <div class="card-sit card-sit-<%= key %>">
+            <div class="card-sit-val"><%= sit.qt.toLocaleString('pt-BR') %></div>
+            <div class="card-sit-label"><%= sit.label %></div>
+          </div>
+        <% } %>
+      </div>
+
+      <% if (procSorted.length === 0) { %>
+        <p class="meta">Nenhum agendamento encontrado para o período selecionado.</p>
+      <% } else { %>
+
+        <!-- ── Pivot: Procedimento × Situação ────────────────────────────── -->
+        <div class="section-title">
+          Agendamentos por procedimento
+          <span class="count"><%= procSorted.length %> procedimento<%= procSorted.length !== 1 ? 's' : '' %></span>
+        </div>
+        <div class="table-wrap panel">
+          <table class="pivot-table">
+            <thead>
+              <tr>
+                <th>Procedimento / Exame</th>
+                <% for (const s of statusPresentes) { %>
+                  <th><span class="badge sit-<%= s.key %>"><%= s.label %></span></th>
+                <% } %>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% for (const [nm, dados] of procSorted) { %>
+                <tr>
+                  <td><%= nm %></td>
+                  <% for (const s of statusPresentes) { %>
+                    <td>
+                      <% const v = dados[s.key] || 0; %>
+                      <% if (v > 0) { %>
+                        <span class="cell-val"><%= v.toLocaleString('pt-BR') %></span>
+                      <% } else { %>
+                        <span class="cell-zero">—</span>
+                      <% } %>
+                    </td>
+                  <% } %>
+                  <td><strong><%= dados._total.toLocaleString('pt-BR') %></strong></td>
+                </tr>
+              <% } %>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td><strong>Total</strong></td>
+                <% for (const s of statusPresentes) { %>
+                  <td><strong><%= (situacaoMap[s.key]?.qt || 0).toLocaleString('pt-BR') %></strong></td>
+                <% } %>
+                <td><strong><%= total.toLocaleString('pt-BR') %></strong></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- ── Convênios + Forma de agendamento ──────────────────────────── -->
+        <div class="grid-2col" style="margin-top:20px;">
+
+          <!-- Convênios -->
+          <div class="panel">
+            <div class="panel-title">Por convênio</div>
+            <% for (const cv of convSorted) { %>
+              <div class="conv-row">
+                <span class="conv-name">
+                  <% if (cv.cd) { %><span style="color:#9ca3af;font-size:.75rem;margin-right:5px;"><%= cv.cd %></span><% } %>
+                  <%= cv.nm %>
+                </span>
+                <div class="conv-bar-wrap">
+                  <div class="conv-bar" style="width:<%= Math.round(cv.qt / maxConv * 100) %>%"></div>
+                </div>
+                <span class="conv-qt"><%= cv.qt.toLocaleString('pt-BR') %></span>
+              </div>
+            <% } %>
+          </div>
+
+          <!-- Forma de agendamento -->
+          <div class="panel">
+            <div class="panel-title">Por forma de agendamento</div>
+            <% for (const f of formaSorted) { %>
+              <div class="forma-row">
+                <span class="badge badge-<%= Object.keys(pivotForma).find(k => pivotForma[k] === f) %>">
+                  <%= f.label %>
+                </span>
+                <div class="conv-bar-wrap">
+                  <div class="conv-bar" style="width:<%= Math.round(f.qt / total * 100) %>%"></div>
+                </div>
+                <span class="conv-qt"><%= f.qt.toLocaleString('pt-BR') %></span>
+              </div>
+            <% } %>
+          </div>
+
+        </div><!-- /grid-2col -->
+
+      <% } %>
+
+    <% } /* oracleData */ %>
+  </div>
+
+  <footer>Captive Portal Admin</footer>
+
+  <script>
+    (function () {
+      var btn      = document.getElementById('btn-sync');
+      var progress = document.getElementById('sync-progress');
+      var fill     = document.getElementById('sync-progress-fill');
+      var text     = document.getElementById('sync-progress-text');
+
+      btn.addEventListener('click', function () {
+        var dtInicio = document.getElementById('dtInicio').value;
+        var dtFim    = document.getElementById('dtFim').value;
+
+        btn.disabled = true;
+        btn.textContent = 'Sincronizando...';
+        fill.style.width = '0%';
+        text.textContent = 'Conectando ao Oracle...';
+        progress.style.display = 'block';
+
+        var pct = 0;
+        var interval = setInterval(function () {
+          pct = Math.min(pct + 3, 85);
+          fill.style.width = pct + '%';
+        }, 200);
+
+        fetch('/admin/tasy/agenda/exames?dtInicio=' + dtInicio + '&dtFim=' + dtFim + '&refresh=1', {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) {
+          clearInterval(interval);
+          if (r.ok) {
+            fill.style.width = '100%';
+            text.textContent = 'Sincronizado com sucesso. Recarregando...';
+            setTimeout(function () {
+              window.location.href = '/admin/tasy/agenda/exames?dtInicio=' + dtInicio + '&dtFim=' + dtFim;
+            }, 800);
+          } else {
+            throw new Error('Resposta ' + r.status);
+          }
+        })
+        .catch(function (err) {
+          clearInterval(interval);
+          progress.style.display = 'none';
+          btn.disabled = false;
+          btn.textContent = '\u21BB Sincronizar agora';
+          alert('Falha na sincronização: ' + err.message);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
