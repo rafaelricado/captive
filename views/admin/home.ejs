@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= locals.orgName %> &mdash; Admin</title>
+  <%- include('_head') %>
+  <style>
+    body { background: #f0f4f8; }
+
+    .home-wrap {
+      min-height: calc(100vh - 52px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+    }
+
+    .home-greeting {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #0d4e8b;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .home-sub {
+      font-size: .95rem;
+      color: #6b7280;
+      margin-bottom: 48px;
+      text-align: center;
+    }
+
+    .section-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+      width: 100%;
+      max-width: 860px;
+    }
+
+    .section-card {
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 2px 16px rgba(0,0,0,.08);
+      padding: 40px 28px 32px;
+      text-align: center;
+      text-decoration: none;
+      color: inherit;
+      transition: transform .18s, box-shadow .18s;
+      position: relative;
+      overflow: hidden;
+    }
+    .section-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 5px;
+    }
+    .section-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 32px rgba(0,0,0,.13);
+    }
+
+    .section-card.card-captive::before { background: #0d4e8b; }
+    .section-card.card-network::before { background: #0891b2; }
+    .section-card.card-hospital::before { background: #16a34a; }
+
+    .card-icon {
+      font-size: 3.2rem;
+      line-height: 1;
+      margin-bottom: 18px;
+      display: block;
+    }
+    .card-captive .card-icon  { filter: drop-shadow(0 2px 6px rgba(13,78,139,.25)); }
+    .card-network .card-icon  { filter: drop-shadow(0 2px 6px rgba(8,145,178,.25)); }
+    .card-hospital .card-icon { filter: drop-shadow(0 2px 6px rgba(22,163,74,.25)); }
+
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 10px;
+    }
+    .card-desc {
+      font-size: .82rem;
+      color: #6b7280;
+      line-height: 1.55;
+    }
+
+    .card-links {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      text-align: left;
+    }
+    .card-link-item {
+      font-size: .78rem;
+      color: #6b7280;
+      padding: 4px 0;
+      border-bottom: 1px solid #f3f4f6;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .card-link-item:last-child { border-bottom: none; }
+    .card-link-item::before { content: '›'; color: #9ca3af; font-weight: 700; }
+
+    .card-cta {
+      display: inline-block;
+      margin-top: 22px;
+      font-size: .8rem;
+      font-weight: 700;
+      padding: 8px 22px;
+      border-radius: 20px;
+      color: #fff;
+      transition: opacity .15s;
+    }
+    .card-cta:hover { opacity: .85; }
+    .card-captive  .card-cta { background: #0d4e8b; }
+    .card-network  .card-cta { background: #0891b2; }
+    .card-hospital .card-cta { background: #16a34a; }
+
+    <% if (locals.securityUnreadCount > 0) { %>
+    .security-badge {
+      position: absolute;
+      top: 14px; right: 14px;
+      background: #dc2626;
+      color: #fff;
+      border-radius: 99px;
+      font-size: .65rem;
+      font-weight: 700;
+      padding: 2px 8px;
+    }
+    <% } %>
+
+    @media (max-width: 768px) {
+      .section-cards { grid-template-columns: 1fr; max-width: 400px; gap: 18px; }
+      .home-wrap { padding: 32px 16px; }
+      .section-card { padding: 28px 22px 22px; }
+    }
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .section-cards { max-width: 680px; gap: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Nav minimalista para a home -->
+  <nav>
+    <span class="brand">
+      <% if (locals.orgLogo) { %>
+        <img src="/<%= locals.orgLogo %>" alt="Logo" style="height:26px;vertical-align:middle;margin-right:8px;border-radius:4px;">
+      <% } %>
+      <%= locals.orgName %> &mdash; Admin
+    </span>
+    <div class="nav-links" id="nav-links">
+      <div class="spacer"></div>
+      <form method="POST" action="/admin/logout">
+        <input type="hidden" name="_csrf" value="<%= locals.csrfToken || '' %>">
+        <button type="submit">Sair</button>
+      </form>
+    </div>
+    <button class="hamburger" id="nav-toggle" aria-label="Menu" aria-expanded="false">&#9776;</button>
+  </nav>
+  <script>
+    (function () {
+      var btn = document.getElementById('nav-toggle');
+      var links = document.getElementById('nav-links');
+      if (btn && links) {
+        btn.addEventListener('click', function () {
+          var open = links.classList.toggle('open');
+          btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+      }
+    })();
+  </script>
+
+  <div class="home-wrap">
+    <div class="home-greeting">Bem-vindo ao painel de administração</div>
+    <div class="home-sub">Selecione o módulo que deseja acessar</div>
+
+    <div class="section-cards">
+
+      <!-- Captive Portal -->
+      <a href="/admin/captive" class="section-card card-captive">
+        <% if (locals.securityUnreadCount > 0) { %>
+          <span class="security-badge"><%= locals.securityUnreadCount %></span>
+        <% } %>
+        <span class="card-icon">🛂</span>
+        <div class="card-title">Captive Portal</div>
+        <div class="card-desc">Gestão de usuários, sessões e configurações do portal de autenticação.</div>
+        <div class="card-links">
+          <span class="card-link-item">Usuários cadastrados</span>
+          <span class="card-link-item">Sessões ativas</span>
+          <span class="card-link-item">Eventos de segurança</span>
+          <span class="card-link-item">Configurações</span>
+        </div>
+        <span class="card-cta">Acessar &rarr;</span>
+      </a>
+
+      <!-- Rede -->
+      <a href="/admin/traffic" class="section-card card-network">
+        <span class="card-icon">🌐</span>
+        <div class="card-title">Rede</div>
+        <div class="card-desc">Monitoramento de tráfego, WAN, dispositivos e pontos de acesso.</div>
+        <div class="card-links">
+          <span class="card-link-item">Tráfego em tempo real</span>
+          <span class="card-link-item">Status das interfaces WAN</span>
+          <span class="card-link-item">Histórico de dispositivos</span>
+          <span class="card-link-item">IPs gerenciados</span>
+        </div>
+        <span class="card-cta">Acessar &rarr;</span>
+      </a>
+
+      <!-- Hospitalar -->
+      <a href="/admin/tasy" class="section-card card-hospital">
+        <span class="card-icon">🏥</span>
+        <div class="card-title">Hospitalar</div>
+        <div class="card-desc">Contas e protocolos do Tasy, alertas e ocupação hospitalar.</div>
+        <div class="card-links">
+          <span class="card-link-item">Contas Tasy</span>
+          <span class="card-link-item">Protocolos</span>
+          <span class="card-link-item">Alertas de itens sem valor</span>
+          <span class="card-link-item">Ocupação hospitalar</span>
+        </div>
+        <span class="card-cta">Acessar &rarr;</span>
+      </a>
+
+    </div>
+  </div>
+
+  <%- include('_footer') %>
+</body>
+</html>

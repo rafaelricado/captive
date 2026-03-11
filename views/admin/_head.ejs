@@ -25,11 +25,17 @@
   }
   nav .nav-links a:hover, nav .nav-links a.active { color: #fff; }
   nav .nav-links .spacer { flex: 1; }
+  nav .nav-links .nav-home-link {
+    color: rgba(255,255,255,.6); text-decoration: none;
+    padding: 14px 16px 14px 0; font-size: .8rem; white-space: nowrap;
+    border-right: 1px solid rgba(255,255,255,.2);
+    margin-right: 4px; transition: color .15s;
+  }
+  nav .nav-links .nav-home-link:hover { color: #fff; }
   nav .nav-links .nav-section {
     color: rgba(255,255,255,.4); font-size: .7rem; font-weight: 700;
     text-transform: uppercase; letter-spacing: .06em;
-    padding: 0 8px 0 16px; border-left: 1px solid rgba(255,255,255,.2);
-    margin-left: 4px; white-space: nowrap;
+    padding: 0 8px; white-space: nowrap;
   }
   nav .nav-links form button {
     background: none; border: 1px solid rgba(255,255,255,.4);

@@ -97,7 +97,8 @@ router.post('/logout', verifyCsrf, authController.logout);
 router.use(adminAuth, csrfMiddleware);
 
 // Painel (protegido)
-router.get('/', adminAuth, dashboardController.dashboard);
+router.get('/',        adminAuth, dashboardController.home);
+router.get('/captive', adminAuth, dashboardController.dashboard);
 router.get('/users', adminAuth, usersController.users);
 router.get('/users/export', adminAuth, exportLimiter, usersController.exportUsers);
 router.post('/users/:id/delete', adminAuth, verifyCsrf, usersController.deleteUser);

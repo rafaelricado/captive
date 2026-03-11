@@ -1,23 +1,54 @@
+<%
+  const _captivePages  = new Set(['captive','users','sessions','security','settings']);
+  const _networkPages  = new Set(['access-points','traffic','wan','connections','dns','devices','managed-ips']);
+  const _hospitalPages = new Set(['tasy','tasy-protocolos','tasy-resumo','tasy-alertas','tasy-ocupacao']);
+
+  const _section = _captivePages.has(page)  ? 'captive'
+                 : _networkPages.has(page)   ? 'network'
+                 : _hospitalPages.has(page)  ? 'hospital'
+                 : null;
+%>
 <nav>
-  <span class="brand"><%= locals.orgName %> &mdash; Admin</span>
+  <span class="brand">
+    <% if (locals.orgLogo) { %>
+      <img src="/<%= locals.orgLogo %>" alt="Logo" style="height:24px;vertical-align:middle;margin-right:7px;border-radius:3px;">
+    <% } %>
+    <%= locals.orgName %>
+  </span>
 
   <div class="nav-links" id="nav-links">
-    <a href="/admin" class="<%= page === 'dashboard' ? 'active' : '' %>">Dashboard</a>
-    <a href="/admin/users" class="<%= page === 'users' ? 'active' : '' %>">Usuários</a>
-    <a href="/admin/sessions" class="<%= page === 'sessions' ? 'active' : '' %>">Sessões</a>
-    <a href="/admin/access-points" class="<%= page === 'access-points' ? 'active' : '' %>">Pontos de Acesso</a>
-    <span class="nav-section">Rede</span>
-    <a href="/admin/traffic" class="<%= page === 'traffic' ? 'active' : '' %>">Tráfego</a>
-    <a href="/admin/wan" class="<%= page === 'wan' ? 'active' : '' %>">WAN</a>
-    <a href="/admin/connections" class="<%= page === 'connections' ? 'active' : '' %>">Conexões</a>
-    <a href="/admin/dns" class="<%= page === 'dns' ? 'active' : '' %>">DNS</a>
-    <a href="/admin/devices" class="<%= page === 'devices' ? 'active' : '' %>">Dispositivos</a>
-    <a href="/admin/managed-ips" class="<%= page === 'managed-ips' ? 'active' : '' %>">IPs Gerenciados</a>
-    <a href="/admin/security" class="<%= page === 'security' ? 'active' : '' %>">Segurança<% if (locals.securityUnreadCount > 0) { %> <span style="background:#dc2626;color:#fff;border-radius:99px;font-size:.65rem;padding:1px 6px;font-weight:700;vertical-align:middle;"><%= locals.securityUnreadCount %></span><% } %></a>
-    <span class="nav-section">Hospitalar</span>
-    <a href="/admin/tasy" class="<%= page === 'tasy' ? 'active' : '' %>">Contas Tasy</a>
-    <a href="/admin/tasy/ocupacao" class="<%= page === 'tasy-ocupacao' ? 'active' : '' %>">Ocupação</a>
-    <a href="/admin/settings" class="<%= page === 'settings' ? 'active' : '' %>">Configurações</a>
+
+    <!-- Voltar ao início -->
+    <a href="/admin" class="nav-home-link" title="Início">&#8592; Início</a>
+
+    <% if (_section === 'captive') { %>
+      <span class="nav-section">Captive Portal</span>
+      <a href="/admin/captive"   class="<%= page === 'captive'   ? 'active' : '' %>">Dashboard</a>
+      <a href="/admin/users"     class="<%= page === 'users'     ? 'active' : '' %>">Usuários</a>
+      <a href="/admin/sessions"  class="<%= page === 'sessions'  ? 'active' : '' %>">Sessões</a>
+      <a href="/admin/security"  class="<%= page === 'security'  ? 'active' : '' %>">Segurança<% if (locals.securityUnreadCount > 0) { %> <span style="background:#dc2626;color:#fff;border-radius:99px;font-size:.65rem;padding:1px 6px;font-weight:700;vertical-align:middle;"><%= locals.securityUnreadCount %></span><% } %></a>
+      <a href="/admin/settings"  class="<%= page === 'settings'  ? 'active' : '' %>">Configurações</a>
+
+    <% } else if (_section === 'network') { %>
+      <span class="nav-section">Rede</span>
+      <a href="/admin/access-points" class="<%= page === 'access-points' ? 'active' : '' %>">Pontos de Acesso</a>
+      <a href="/admin/traffic"       class="<%= page === 'traffic'       ? 'active' : '' %>">Tráfego</a>
+      <a href="/admin/wan"           class="<%= page === 'wan'           ? 'active' : '' %>">WAN</a>
+      <a href="/admin/connections"   class="<%= page === 'connections'   ? 'active' : '' %>">Conexões</a>
+      <a href="/admin/dns"           class="<%= page === 'dns'           ? 'active' : '' %>">DNS</a>
+      <a href="/admin/devices"       class="<%= page === 'devices'       ? 'active' : '' %>">Dispositivos</a>
+      <a href="/admin/managed-ips"   class="<%= page === 'managed-ips'   ? 'active' : '' %>">IPs Gerenciados</a>
+
+    <% } else if (_section === 'hospital') { %>
+      <span class="nav-section">Hospitalar</span>
+      <a href="/admin/tasy"                   class="<%= page === 'tasy'              ? 'active' : '' %>">Contas Tasy</a>
+      <a href="/admin/tasy/protocolos"        class="<%= page === 'tasy-protocolos'   ? 'active' : '' %>">Protocolos</a>
+      <a href="/admin/tasy/resumo"            class="<%= page === 'tasy-resumo'       ? 'active' : '' %>">Resumo</a>
+      <a href="/admin/tasy/alertas"           class="<%= page === 'tasy-alertas'      ? 'active' : '' %>">Alertas</a>
+      <a href="/admin/tasy/ocupacao"          class="<%= page === 'tasy-ocupacao'     ? 'active' : '' %>">Ocupação</a>
+
+    <% } %>
+
     <div class="spacer"></div>
     <form method="POST" action="/admin/logout">
       <input type="hidden" name="_csrf" value="<%= locals.csrfToken || '' %>">

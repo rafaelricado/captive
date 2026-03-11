@@ -3,6 +3,10 @@ const { User, Session, DeviceHistory, WanStat, sequelize } = require('../../mode
 const logger = require('../../utils/logger');
 const { DISPLAY_TIMEZONE, formatDate, formatBytes, startOfDay, startOfWeek } = require('./helpers');
 
+exports.home = (req, res) => {
+  res.render('admin/home', { page: 'home' });
+};
+
 exports.dashboard = async (req, res) => {
   try {
     const now = new Date();
@@ -92,7 +96,7 @@ exports.dashboard = async (req, res) => {
       totalUsers, activeSessions, novosHoje, novosSemana, totalDevices,
       registrosChart: { labels: registrosLabels, data: registrosData },
       wanCards,
-      page: 'dashboard'
+      page: 'captive'
     });
   } catch (err) {
     logger.error(`[Admin] Erro no dashboard: ${err.message}`);
