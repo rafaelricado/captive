@@ -601,6 +601,7 @@ let _agendaColMap = null;
  */
 async function discoverAgendaColMap(conn) {
   if (_agendaColMap) return _agendaColMap;
+  _agendaColMap = null; // garante reset em caso de erro abaixo
 
   const r = await conn.execute(
     `SELECT COLUMN_NAME FROM ALL_TAB_COLUMNS
@@ -644,18 +645,18 @@ async function queryAgendaConsulta({ dtInicio, dtFim } = {}) {
 
     const cm = await discoverAgendaColMap(conn);
 
-    // Monta expressões seguras para cada campo (NULL se coluna não existir)
-    const colAgenda   = cm.nm_agenda   ? `NVL(AC.${cm.nm_agenda}, '(Sem agenda)')` : `'(Sem agenda)'`;
-    const colConvenio = cm.ds_convenio ? `NVL(AC.${cm.ds_convenio}, '(Sem convênio)')` : `'(Sem convênio)'`;
-    const colSituacao = cm.ie_situacao ? `NVL(AC.${cm.ie_situacao}, 'N')` : `'N'`;
-    const colTipo     = cm.ie_tipo_agnd ? `NVL(AC.${cm.ie_tipo_agnd}, 'N')` : `'N'`;
+    // TO_CHAR() garante VARCHAR antes do NVL — evita ORA-01722 quando a coluna é NUMBER
+    const colAgenda   = cm.nm_agenda   ? `NVL(TO_CHAR(AC.${cm.nm_agenda}),   '(Sem agenda)')` : `'(Sem agenda)'`;
+    const colConvenio = cm.ds_convenio ? `NVL(TO_CHAR(AC.${cm.ds_convenio}), '(Sem convênio)')` : `'(Sem convênio)'`;
+    const colSituacao = cm.ie_situacao ? `NVL(TO_CHAR(AC.${cm.ie_situacao}), 'N')` : `'N'`;
+    const colTipo     = cm.ie_tipo_agnd ? `NVL(TO_CHAR(AC.${cm.ie_tipo_agnd}), 'N')` : `'N'`;
     const colDt       = cm.dt_agenda || 'DT_AGENDA';
 
-    // GROUP BY usa só os nomes de coluna reais (sem NVL)
-    const gbAgenda   = cm.nm_agenda   || `'(Sem agenda)'`;
-    const gbConvenio = cm.ds_convenio || `'(Sem convênio)'`;
-    const gbSituacao = cm.ie_situacao || `'N'`;
-    const gbTipo     = cm.ie_tipo_agnd || `'N'`;
+    // GROUP BY usa TO_CHAR da coluna base — deve ser idêntico ao SELECT
+    const gbAgenda   = cm.nm_agenda   ? `TO_CHAR(AC.${cm.nm_agenda})`   : `'(Sem agenda)'`;
+    const gbConvenio = cm.ds_convenio ? `TO_CHAR(AC.${cm.ds_convenio})` : `'(Sem convênio)'`;
+    const gbSituacao = cm.ie_situacao ? `TO_CHAR(AC.${cm.ie_situacao})` : `'N'`;
+    const gbTipo     = cm.ie_tipo_agnd ? `TO_CHAR(AC.${cm.ie_tipo_agnd})` : `'N'`;
 
     const [rResumo, rSituacao] = await Promise.all([
       conn.execute(
